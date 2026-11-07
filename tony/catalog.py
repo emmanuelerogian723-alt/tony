@@ -323,8 +323,25 @@ class Catalog:
                 if not all(tok in text for tok in q.split()):
                     continue
             out.append(app)
-        out.sort(key=lambda a: (0 if a.tier == "actions" else 1 if a.tier == "proxy" else 2,
-                                a.category, a.name.lower()))
+        def rank(a: AppSpec) -> tuple:
+            name = a.name.lower()
+            slug = a.slug.lower()
+            if not q:
+                rel = 0
+            elif slug == q or name == q:
+                rel = 0
+            elif slug.startswith(q) or name.startswith(q):
+                rel = 1
+            elif q in name:
+                rel = 2
+            elif q in slug:
+                rel = 3
+            else:
+                rel = 4
+            tier_rank = 0 if a.tier == "actions" else 1 if a.tier == "proxy" else 2
+            return (rel, tier_rank, len(a.name), a.name.lower())
+
+        out.sort(key=rank)
         if offset:
             out = out[offset:]
         if limit:

@@ -130,9 +130,10 @@ def meta() -> dict[str, Any]:
 
 
 @router.get("/apps")
-def list_apps(search: str = "", category: str = "", tier: str = "", source: str = "",
+def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "", source: str = "",
               with_actions: bool = False, limit: int = 60, offset: int = 0) -> dict[str, Any]:
     """Paginated catalogue search. `limit=0` returns everything (use with care)."""
+    search = (search or q).strip()
     matched = catalog.search(search, category, tier=tier, source=source)
     total = len(matched)
     window = matched[offset: offset + limit] if limit else matched[offset:]

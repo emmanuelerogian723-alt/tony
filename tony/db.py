@@ -11,17 +11,36 @@ from .config import settings
 from .crypto import new_api_key
 from .models import ApiKey, Base, Workspace
 
-_connect_args = {"check_same_thread": False} if settings.sqlalchemy_url.startswith("sqlite") else {}
-engine = create_engine(
-    settings.sqlalchemy_url,
-    connect_args=_connect_args,
-    pool_pre_ping=True,
-    future=True,
-)
-SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
-
-
 DB_STATUS: dict[str, str] = {"backend": "unknown", "error": ""}
+
+
+def _sqlite_engine():
+    from sqlalchemy import create_engine as _ce
+
+    from .config import DATA_DIR
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    return _ce(f"sqlite:///{(DATA_DIR / 'tony.db').as_posix()}",
+               connect_args={"check_same_thread": False}, pool_pre_ping=True, future=True)
+
+
+def _primary_engine():
+    """Build the configured engine, falling back to sqlite if the driver is missing."""
+    _args = {"check_same_thread": False} if settings.sqlalchemy_url.startswith("sqlite") else {}
+    try:
+        return create_engine(settings.sqlalchemy_url, connect_args=_args, pool_pre_ping=True, future=True), \
+               ("postgres" if settings.is_postgres else "sqlite")
+    except Exception as exc:  # driver not installed for this Python build
+        import logging
+
+        logging.getLogger("tony").error("cannot open %s (%s); using sqlite", settings.sqlalchemy_url.split("@")[-1], exc)
+        DB_STATUS["error"] = f"{type(exc).__name__}: {exc}"[:300]
+        return _sqlite_engine(), "sqlite-fallback"
+
+
+engine, _backend = _primary_engine()
+DB_STATUS.setdefault("backend", _backend)
+SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
 
 
 def init_db() -> None:

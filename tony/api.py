@@ -20,7 +20,7 @@ from .catalog import catalog
 from .config import settings
 from .db import session
 from .executor import ExecutionError, execute, needs_base_url
-from .models import ActionRun, ConnectedAccount, Entity, Trigger, WebhookDelivery
+from .models import ActionRun, ApiKey, ConnectedAccount, Entity, Trigger, WebhookDelivery
 from .oauth import (
     OAuthError,
     credentials_for,

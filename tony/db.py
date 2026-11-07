@@ -21,8 +21,34 @@ engine = create_engine(
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
 
 
+DB_STATUS: dict[str, str] = {"backend": "unknown", "error": ""}
+
+
 def init_db() -> None:
-    Base.metadata.create_all(engine)
+    """Create tables. Never kills the process: a DB problem is reported, not fatal."""
+    global engine, SessionLocal
+    backend = "postgres" if settings.is_postgres else "sqlite"
+    try:
+        Base.metadata.create_all(engine)
+    except Exception as exc:  # pragma: no cover - depends on deployment network
+        if backend == "postgres":
+            import logging
+
+            logging.getLogger("tony").error("postgres unavailable (%s); falling back to sqlite", exc)
+            DB_STATUS.update(backend="sqlite-fallback", error=f"{type(exc).__name__}: {exc}"[:300])
+            from sqlalchemy import create_engine as _ce
+            from sqlalchemy.orm import sessionmaker as _sm
+
+            from .config import DATA_DIR
+
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            engine = _ce(f"sqlite:///{(DATA_DIR / 'tony.db').as_posix()}",
+                         connect_args={"check_same_thread": False}, pool_pre_ping=True, future=True)
+            SessionLocal = _sm(bind=engine, expire_on_commit=False, future=True)
+            Base.metadata.create_all(engine)
+            return
+        raise
+    DB_STATUS.update(backend=backend, error="")
 
 
 @contextmanager

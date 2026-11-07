@@ -19,7 +19,7 @@ from .mcp import router as mcp_router
 from . import __version__
 from .catalog import catalog
 from .config import settings
-from .db import ensure_demo_workspace, init_db
+from .db import DB_STATUS, ensure_demo_workspace, init_db
 from .oauth import OAuthError, complete_oauth
 from .triggers import poller
 from .ui import dashboard_html
@@ -130,6 +130,8 @@ def manifest():
 def health() -> dict:
     return {
         "status": "ok",
+        "db": DB_STATUS.get("backend"),
+        "db_error": DB_STATUS.get("error", "")[:300],
         "version": __version__,
         "apps": catalog.stats()["apps"],
         "actions": catalog.stats()["actions"],

@@ -350,9 +350,11 @@ h2 em{font-style:italic;color:var(--signal)}
 .kicker .bar{background:var(--line-3)}
 hr,.rule{background:var(--line)}
 /* pricing */
-.pricing{display:grid;gap:16px;grid-template-columns:1fr;margin-top:26px}
-@media (min-width:820px){.pricing{grid-template-columns:repeat(3,1fr)}}
-.tier{position:relative;display:flex;flex-direction:column;gap:14px;padding:26px 24px 24px;
+.pricing{display:grid;gap:16px;grid-template-columns:minmax(0,1fr);margin-top:26px;min-width:0}
+@media (min-width:820px){.pricing{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.pricing .tier{min-width:0}
+.pricing .tier .tag,.pricing .tier li,.pricing .tier .tname{overflow-wrap:anywhere}
+.tier{position:relative;display:flex;flex-direction:column;gap:14px;min-width:0;padding:26px 24px 24px;
   border:1px solid var(--line);border-radius:16px;background:#fff}
 .tier.hot{border-color:var(--ink)!important;box-shadow:0 2px 4px rgba(9,9,11,.05),0 26px 60px -22px rgba(9,9,11,.28)!important}
 .tier .tname{font-family:var(--serif);font-size:21px;letter-spacing:-.02em}

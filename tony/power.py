@@ -222,16 +222,32 @@ async def _run_one(ws: str, entity: str, app_slug: str, action_slug: str | None,
         return {"ok": False, "error": f"{spec.name} is not connected", "needs_connection": spec.slug}
     check_run(ws)
     started = time.perf_counter()
+    status, code, error, body = "error", 0, "", None
     try:
         result = await asyncio.wait_for(execute(spec, action, args or {}, creds, dry_run=dry_run), timeout=30)
         ms = int((time.perf_counter() - started) * 1000)
         data = result.as_dict() if hasattr(result, "as_dict") else result
-        return {"ok": True, "app": spec.slug, "action": action.slug, "tier": action.tier,
-                "status_code": getattr(result, "status_code", 200), "latency_ms": ms, "data": data}
+        status = "success"
+        code = getattr(result, "status_code", 200)
+        out = {"ok": True, "app": spec.slug, "action": action.slug, "tier": action.tier,
+               "status_code": code, "latency_ms": ms, "data": data}
+        body = json.dumps(data, default=str)
+        return out
     except Exception as exc:  # noqa: BLE001 - the agent reports, never crashes
         ms = int((time.perf_counter() - started) * 1000)
-        return {"ok": False, "app": spec.slug, "action": action.slug, "latency_ms": ms,
-                "error": f"{type(exc).__name__}: {exc}"[:400]}
+        error = f"{type(exc).__name__}: {exc}"[:400]
+        return {"ok": False, "app": spec.slug, "action": action.slug, "latency_ms": ms, "error": error}
+    finally:
+        try:
+            with session() as s:
+                s.add(ActionRun(workspace_id=ws, entity_id=entity, app_slug=spec.slug,
+                                action_slug=action.slug, tier=action.tier, status=status,
+                                status_code=code, latency_ms=ms, chars_out=len(body or ""),
+                                request_json=json.dumps(args or {}, default=str)[:2000],
+                                response_json=(body or "")[:6000], error=error))
+                s.commit()
+        except Exception:
+            pass
 
 
 def _compact(data: Any) -> Any:
@@ -242,6 +258,21 @@ def _compact(data: Any) -> Any:
             blob[:MAX_TOOL_RESULT_CHARS]}
 
 
+def _items_of(step: dict[str, Any]) -> list[dict[str, Any]]:
+    data = (step.get("data") or {})
+    inner = data.get("data", data) if isinstance(data, dict) else data
+    if isinstance(inner, list):
+        return [x for x in inner if isinstance(x, dict)]
+    return []
+
+
+def _headline(item: dict[str, Any]) -> str:
+    for key in ("title", "name", "description", "login", "full_name", "subject", "text"):
+        if item.get(key):
+            return str(item[key])[:140]
+    return ""
+
+
 def _summarise(goal: str, steps: list[dict[str, Any]]) -> str:
     good = [s for s in steps if s.get("ok")]
     if not good:
@@ -249,22 +280,19 @@ def _summarise(goal: str, steps: list[dict[str, Any]]) -> str:
         return (f"I could not finish that: {err}. The plan is still on record, so you can retry with a "
                 f"connected app or a narrower goal.")
     last = good[-1]
-    data = last.get("data")
-    lines = [f"{last['app']}.{last['action']} returned a result in {last.get('latency_ms', 0)} ms."]
-    if isinstance(data, dict):
-        inner = data.get("data", data)
-        if isinstance(inner, list):
-            lines.append(f"{len(inner)} item(s).")
-            sample = inner[:3]
-            for item in sample:
-                if isinstance(item, dict):
-                    headline = next((str(v) for k, v in item.items()
-                                     if k in {"title", "name", "description", "login", "full_name", "text"} and v), "")
-                    if headline:
-                        lines.append(f"- {headline[:110]}")
-        elif isinstance(inner, dict):
-            keys = ", ".join(list(inner)[:6])
-            lines.append(f"Fields: {keys}.")
+    lines = [f"{last['app']}.{last['action']} answered in {last.get('latency_ms', 0)} ms."]
+    items = _items_of(last)
+    if items:
+        lines.append(f"{len(items)} result(s).")
+        for item in items[:5]:
+            head = _headline(item)
+            if head:
+                lines.append(f"• {head}")
+    elif isinstance((last.get("data") or {}).get("data", last.get("data")), dict):
+        inner = (last.get("data") or {}).get("data", last.get("data"))
+        lines.append("Fields: " + ", ".join(list(inner)[:8]) + ".")
+    if len(good) > 1:
+        lines.append(f"{len(good) - 1} extra step(s) ran before that.")
     return "\n".join(lines)
 
 
@@ -362,6 +390,22 @@ async def agent(body: AgentIn, request: Request) -> dict[str, Any]:
                               "error": f"{action.tier} action needs approve_writes=true"})
             else:
                 steps.append(await _run_one(ws, entity, spec.slug, action.slug, {}, body.dry_run))
+
+    if engine == "heuristic" and steps and steps[0].get("ok") and body.max_steps > 1:
+        first = steps[0]
+        spec = next((x for x in specs if x.slug == first["app"]), specs[0])
+        items = _items_of(first)
+        if items:
+            id_key = next((k for k in ("id", "key", "uuid", "number") if items[0].get(k) is not None), "")
+            value = items[0].get(id_key) if id_key else None
+            if value not in (None, ""):
+                follow = next((a for a in spec.actions
+                               if a.tier == "read" and a.slug != first["action"]
+                               and len(a.required or []) == 1
+                               and (a.required[0] in {"id", "item_id", "story_id", "issue_number", "number"})), None)
+                if follow is not None:
+                    steps.append(await _run_one(ws, entity, spec.slug, follow.slug,
+                                                {follow.required[0]: value}, body.dry_run))
 
     if not answer:
         answer = _summarise(goal, steps)

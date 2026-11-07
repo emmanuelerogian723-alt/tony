@@ -93,7 +93,7 @@ def manifest():
     return JSONResponse({
         "name": "Tony — every app, one port",
         "short_name": "Tony",
-        "description": "Open-source integration gateway. 7,854 apps, 20,084 actions.",
+        "description": "Open-source integration gateway. 9,877 apps, 22,107 actions.",
         "start_url": "/app",
         "display": "standalone",
         "background_color": "#F3F0E9",

@@ -33,7 +33,7 @@ the OAuth apps to their own client IDs. Tony takes the opposite position:
 
 ## What is in the box
 
-- **7,854 apps / 20,084 actions** out of the box — the largest open integration
+- **9,877 apps / 22,107 actions** out of the box — the largest open integration
   catalogue you can self-host. It is built from four layers, and the UI labels every app
   with the layer it came from:
 
@@ -237,5 +237,5 @@ python -m tony.cli apps --tier actions      # see what works with zero setup
 ```
 
 Why it is split this way: a catalogue that claims 7,000 integrations and delivers 200 real
-ones is a demo. Tony ships all 7,854, but tells you which layer each app is in, so an agent
+ones is a demo. Tony ships all 9,877, but tells you which layer each app is in, so an agent
 (or a human) never wonders why an action failed.

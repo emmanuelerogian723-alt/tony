@@ -763,6 +763,11 @@ def console_html(user: Any = None) -> str:
         'stroke-dasharray="62 19.7" stroke-linecap="round" transform="rotate(45 32 32)"/>'
         '<circle cx="33.5" cy="30.5" r="4.6" fill="#E2542B"/></svg>'
     )
+    from .catalog import catalog as _cat
+
+    _st = _cat.stats()
+    apps = f"{_st['apps']:,}"
+    acts = f"{_st['actions']:,}"
     nav = ""
     return f"""<!DOCTYPE html>
 <html lang="en"><head>
@@ -782,7 +787,7 @@ def console_html(user: Any = None) -> str:
   <div class="auth-l">
     <div class="brand" style="padding:0">{mark}<b style="font-family:var(--serif);font-size:20px">Tony</b><i>v0.2</i></div>
     <h1>Every app.<br>One port.</h1>
-    <p>The console for your integration gateway: 9,877 apps, OAuth in the browser, keys sealed on this server, and a human gate on anything that writes.</p>
+    <p>The console for your integration gateway: {apps} apps, {acts} actions, OAuth in the browser, keys sealed on this server, and a human gate on anything that writes.</p>
     <ul class="lst">
       <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12.5 9 17.5 20 6.5"/></svg>Your workspace, your keys, no vendor cloud</li>
       <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12.5 9 17.5 20 6.5"/></svg>Run, dry-run and inspect every call</li>

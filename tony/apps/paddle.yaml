@@ -1,0 +1,28 @@
+slug: paddle
+name: Paddle
+category: Commerce
+description: Customers and transactions on Paddle.
+docs: https://developer.paddle.com/api-reference/overview
+logo: https://cdn.simpleicons.org/paddle/FDDD35
+verified: false
+auth:
+  type: bearer
+  static_env: PADDLE_API_KEY
+base_url: https://api.paddle.com
+actions:
+- slug: list_customers
+  name: List customers
+  description: Customers on the account.
+  method: GET
+  url: https://api.paddle.com/customers
+  response:
+    path: data
+    max_items: 25
+- slug: list_transactions
+  name: List transactions
+  description: Recent transactions.
+  method: GET
+  url: https://api.paddle.com/transactions
+  response:
+    path: data
+    max_items: 25

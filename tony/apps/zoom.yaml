@@ -1,0 +1,36 @@
+slug: zoom
+name: Zoom
+category: Communication
+description: Meetings and recordings for a Zoom account.
+docs: https://developers.zoom.us/docs/api/
+logo: https://cdn.simpleicons.org/zoom/2D8CFF
+verified: false
+auth:
+  type: oauth2
+  authorize_url: https://zoom.us/oauth/authorize
+  token_url: https://zoom.us/oauth/token
+  scopes:
+  - user:read
+  - meeting:read
+  client_id_env: ZOOM_CLIENT_ID
+  client_secret_env: ZOOM_CLIENT_SECRET
+base_url: https://api.zoom.us/v2
+actions:
+- slug: me
+  name: Current user
+  description: Profile of the signed-in user.
+  method: GET
+  url: https://api.zoom.us/v2/users/me
+- slug: list_meetings
+  name: List meetings
+  description: Scheduled meetings for the user.
+  method: GET
+  url: https://api.zoom.us/v2/users/me/meetings
+  params:
+    type:
+      type: string
+      description: ''
+      default: upcoming
+  response:
+    path: meetings
+    max_items: 20

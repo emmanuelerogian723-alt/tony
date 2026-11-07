@@ -1,0 +1,48 @@
+slug: finnhub
+name: Finnhub
+category: Finance
+description: Stock quotes, company news and market data.
+docs: https://finnhub.io/docs/api
+logo: https://cdn.simpleicons.org/finnhub/0B7C3E
+verified: false
+auth:
+  type: api_key
+  query_name: token
+  header_name: ''
+  value_template: '{token}'
+base_url: https://finnhub.io/api/v1
+actions:
+- slug: quote
+  name: Stock quote
+  description: Current price and change for a ticker.
+  method: GET
+  url: https://finnhub.io/api/v1/quote
+  params:
+    symbol:
+      type: string
+      description: e.g. AAPL
+      required: true
+  required:
+  - symbol
+- slug: company_news
+  name: Company news
+  description: Recent news for a ticker.
+  method: GET
+  url: https://finnhub.io/api/v1/company-news
+  params:
+    symbol:
+      type: string
+      description: ''
+      required: true
+    from:
+      type: string
+      description: YYYY-MM-DD
+      required: true
+    to:
+      type: string
+      description: YYYY-MM-DD
+      required: true
+  required:
+  - symbol
+  response:
+    max_items: 15

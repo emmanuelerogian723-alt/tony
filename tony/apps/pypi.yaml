@@ -1,0 +1,24 @@
+slug: pypi
+name: PyPI
+category: Developer
+description: Python package metadata and release history.
+docs: https://warehouse.pypa.io/api-reference/json.html
+logo: https://cdn.simpleicons.org/pypi/3775A9
+verified: true
+auth:
+  type: none
+base_url: https://pypi.org/pypi
+actions:
+- slug: package
+  name: Package info
+  description: Metadata and latest release for a project.
+  method: GET
+  url: https://pypi.org/pypi/{package}/json
+  params:
+    package:
+      type: string
+      description: ''
+      required: true
+      in: path
+  required:
+  - package

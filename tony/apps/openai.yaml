@@ -1,0 +1,59 @@
+slug: openai
+name: OpenAI
+category: AI
+description: Models, chat completions and embeddings from OpenAI.
+docs: https://platform.openai.com/docs/api-reference
+logo: https://cdn.simpleicons.org/openai/412991
+verified: false
+auth:
+  type: bearer
+  static_env: OPENAI_API_KEY
+base_url: https://api.openai.com/v1
+actions:
+- slug: list_models
+  name: List models
+  description: Models available to the key.
+  method: GET
+  url: https://api.openai.com/v1/models
+  response:
+    path: data
+    max_items: 40
+- slug: chat
+  name: Chat completion
+  description: One chat completion.
+  method: POST
+  url: https://api.openai.com/v1/chat/completions
+  params:
+    model:
+      type: string
+      description: ''
+      default: gpt-4o-mini
+    messages:
+      type: array
+      description: Chat messages
+    temperature:
+      type: number
+      default: 0.7
+    max_tokens:
+      type: integer
+      description: ''
+      default: 800
+  required:
+  - messages
+  tier: write
+- slug: embed
+  name: Embeddings
+  description: Embed text into vectors.
+  method: POST
+  url: https://api.openai.com/v1/embeddings
+  params:
+    model:
+      type: string
+      description: ''
+      default: text-embedding-3-small
+    input:
+      type: string
+      required: true
+  required:
+  - input
+  tier: write

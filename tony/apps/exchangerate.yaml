@@ -1,0 +1,18 @@
+slug: exchangerate
+name: ExchangeRate.host
+category: Finance
+verified: true
+description: Live FX rates for 160+ currencies, no key required.
+docs: https://exchangerate.host/
+logo: https://cdn.simpleicons.org/currencyexchange/1F7A8C
+auth:
+  type: none
+actions:
+  - slug: latest
+    name: Latest rates
+    description: Current exchange rates for one base currency.
+    method: GET
+    url: https://open.er-api.com/v6/latest/{base}
+    params:
+      base: {type: string, default: USD, required: true, in: path}
+    required: [base]

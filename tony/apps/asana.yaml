@@ -1,0 +1,68 @@
+slug: asana
+name: Asana
+category: Productivity
+description: Projects, tasks and workspaces in Asana.
+docs: https://developers.asana.com/reference
+logo: https://cdn.simpleicons.org/asana/F06A6A
+verified: false
+auth:
+  type: bearer
+  static_env: ASANA_ACCESS_TOKEN
+base_url: https://app.asana.com/api/1.0
+actions:
+- slug: me
+  name: Current user
+  description: Profile of the token owner.
+  method: GET
+  url: https://app.asana.com/api/1.0/users/me
+- slug: list_projects
+  name: List projects
+  description: Projects visible to the user.
+  method: GET
+  url: https://app.asana.com/api/1.0/projects
+  params:
+    limit:
+      type: integer
+      description: ''
+      default: 20
+  response:
+    path: data
+    max_items: 25
+- slug: list_tasks
+  name: List tasks
+  description: Tasks in a project.
+  method: GET
+  url: https://app.asana.com/api/1.0/tasks
+  params:
+    project:
+      type: string
+      description: ''
+      required: true
+    limit:
+      type: integer
+      description: ''
+      default: 20
+  required:
+  - project
+  response:
+    path: data
+    max_items: 25
+- slug: create_task
+  name: Create task
+  description: Add a task to a project.
+  method: POST
+  url: https://app.asana.com/api/1.0/tasks
+  params:
+    name:
+      type: string
+      description: ''
+      required: true
+    projects:
+      type: array
+      description: Project gids
+    notes:
+      type: string
+      description: ''
+  required:
+  - name
+  tier: write

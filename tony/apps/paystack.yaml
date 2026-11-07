@@ -1,0 +1,56 @@
+slug: paystack
+name: Paystack
+category: Commerce
+description: Transactions, customers and balance for a Paystack account.
+docs: https://paystack.com/docs/api/
+logo: https://cdn.simpleicons.org/paystack/09A5DB
+verified: false
+auth:
+  type: bearer
+  static_env: PAYSTACK_SECRET_KEY
+base_url: https://api.paystack.co
+actions:
+- slug: balance
+  name: Balance
+  description: Merchant balance by currency.
+  method: GET
+  url: https://api.paystack.co/balance
+- slug: list_transactions
+  name: List transactions
+  description: Recent transactions with status.
+  method: GET
+  url: https://api.paystack.co/transaction
+  params:
+    perPage:
+      type: integer
+      description: ''
+      default: 20
+  response:
+    path: data
+    max_items: 25
+- slug: list_customers
+  name: List customers
+  description: Customers on the account.
+  method: GET
+  url: https://api.paystack.co/customer
+  params:
+    perPage:
+      type: integer
+      description: ''
+      default: 20
+  response:
+    path: data
+    max_items: 25
+- slug: verify_transaction
+  name: Verify transaction
+  description: Confirm a transaction by reference.
+  method: GET
+  url: https://api.paystack.co/transaction/verify/{reference}
+  params:
+    reference:
+      type: string
+      description: ''
+      required: true
+      in: path
+  required:
+  - reference

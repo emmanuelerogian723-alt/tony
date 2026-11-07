@@ -1,0 +1,41 @@
+slug: vercel
+name: Vercel
+category: Developer
+description: Deployments, projects and domains on Vercel.
+docs: https://vercel.com/docs/rest-api
+logo: https://cdn.simpleicons.org/vercel/000000
+verified: false
+auth:
+  type: bearer
+  static_env: VERCEL_TOKEN
+base_url: https://api.vercel.com
+actions:
+- slug: me
+  name: Current user
+  description: Authenticated Vercel user.
+  method: GET
+  url: https://api.vercel.com/v2/user
+- slug: list_projects
+  name: List projects
+  description: Projects in the account.
+  method: GET
+  url: https://api.vercel.com/v9/projects
+  params:
+    limit:
+      type: integer
+      description: ''
+      default: 20
+  response:
+    max_items: 30
+- slug: list_deployments
+  name: List deployments
+  description: Recent deployments with state and URL.
+  method: GET
+  url: https://api.vercel.com/v6/deployments
+  params:
+    limit:
+      type: integer
+      description: ''
+      default: 20
+  response:
+    max_items: 30

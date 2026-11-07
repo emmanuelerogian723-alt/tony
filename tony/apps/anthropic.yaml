@@ -1,0 +1,38 @@
+slug: anthropic
+name: Anthropic
+category: AI
+description: Claude models and messages.
+docs: https://docs.anthropic.com/en/api/getting-started
+logo: https://cdn.simpleicons.org/anthropic/191919
+verified: false
+auth:
+  type: api_key
+  header_name: x-api-key
+  value_template: '{token}'
+base_url: https://api.anthropic.com/v1
+default_headers:
+  anthropic-version: '2023-06-01'
+actions:
+- slug: messages
+  name: Create message
+  description: One Claude completion.
+  method: POST
+  url: https://api.anthropic.com/v1/messages
+  params:
+    model:
+      type: string
+      description: ''
+      default: claude-sonnet-4-5
+    max_tokens:
+      type: integer
+      description: ''
+      default: 800
+    messages:
+      type: array
+      description: Messages array
+    system:
+      type: string
+      description: System prompt
+  required:
+  - messages
+  tier: write

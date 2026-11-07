@@ -1,0 +1,44 @@
+slug: elevenlabs
+name: ElevenLabs
+category: AI
+description: Voices and text-to-speech from ElevenLabs.
+docs: https://elevenlabs.io/docs/api-reference
+logo: https://cdn.simpleicons.org/elevenlabs/000000
+verified: false
+auth:
+  type: api_key
+  header_name: xi-api-key
+  value_template: '{token}'
+base_url: https://api.elevenlabs.io/v1
+actions:
+- slug: list_voices
+  name: List voices
+  description: Voices on the account.
+  method: GET
+  url: https://api.elevenlabs.io/v1/voices
+  response:
+    path: voices
+    max_items: 30
+- slug: tts
+  name: Text to speech
+  description: Synthesise speech for a voice.
+  method: POST
+  url: https://api.elevenlabs.io/v1/text-to-speech/{voice_id}
+  params:
+    voice_id:
+      type: string
+      description: ''
+      required: true
+      in: path
+    text:
+      type: string
+      description: ''
+      required: true
+    model_id:
+      type: string
+      description: ''
+      default: eleven_multilingual_v2
+  required:
+  - voice_id
+  - text
+  tier: write

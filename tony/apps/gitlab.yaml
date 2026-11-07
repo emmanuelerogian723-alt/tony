@@ -1,0 +1,80 @@
+slug: gitlab
+name: GitLab
+category: Developer
+description: Projects, merge requests and pipelines in GitLab.
+docs: https://docs.gitlab.com/ee/api/rest/
+logo: https://cdn.simpleicons.org/gitlab/FC6D26
+verified: false
+auth:
+  type: api_key
+  header_name: PRIVATE-TOKEN
+  value_template: '{token}'
+base_url: https://gitlab.com/api/v4
+actions:
+- slug: me
+  name: Current user
+  description: Profile of the token owner.
+  method: GET
+  url: https://gitlab.com/api/v4/user
+- slug: list_projects
+  name: List projects
+  description: Projects the token can see.
+  method: GET
+  url: https://gitlab.com/api/v4/projects
+  params:
+    membership:
+      type: boolean
+      description: Only projects you are a member of
+      default: true
+    per_page:
+      type: integer
+      description: ''
+      default: 20
+    order_by:
+      type: string
+      description: ''
+      enum:
+      - last_activity_at
+      - name
+      default: last_activity_at
+  response:
+    max_items: 25
+- slug: list_merge_requests
+  name: Merge requests
+  description: Merge requests in a project.
+  method: GET
+  url: https://gitlab.com/api/v4/projects/{project_id}/merge_requests
+  params:
+    project_id:
+      type: integer
+      description: Project id
+      required: true
+      in: path
+    state:
+      type: string
+      description: ''
+      enum:
+      - opened
+      - closed
+      - merged
+      - all
+      default: opened
+  required:
+  - project_id
+  response:
+    max_items: 25
+- slug: list_pipelines
+  name: Pipelines
+  description: Recent CI pipelines.
+  method: GET
+  url: https://gitlab.com/api/v4/projects/{project_id}/pipelines
+  params:
+    project_id:
+      type: integer
+      description: ''
+      required: true
+      in: path
+  required:
+  - project_id
+  response:
+    max_items: 20

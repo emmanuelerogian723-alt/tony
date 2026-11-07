@@ -1,0 +1,62 @@
+slug: twilio
+name: Twilio
+category: Communication
+description: Send SMS and inspect message history.
+docs: https://www.twilio.com/docs/usage/api
+logo: https://cdn.simpleicons.org/twilio/F22F46
+verified: false
+auth:
+  type: basic
+  static_env: ''
+base_url: https://api.twilio.com/2010-04-01
+actions:
+- slug: list_messages
+  name: List messages
+  description: Recent messages on the account.
+  method: GET
+  url: https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json
+  params:
+    account_sid:
+      type: string
+      description: ''
+      required: true
+      in: path
+    PageSize:
+      type: integer
+      description: ''
+      default: 20
+  required:
+  - account_sid
+  response:
+    path: messages
+    max_items: 25
+- slug: send_sms
+  name: Send SMS
+  description: Send an SMS from an account number.
+  method: POST
+  url: https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json
+  params:
+    account_sid:
+      type: string
+      description: ''
+      required: true
+      in: path
+    To:
+      type: string
+      description: E.164 number
+      required: true
+    From:
+      type: string
+      description: E.164 sender
+      required: true
+    Body:
+      type: string
+      description: ''
+      required: true
+  required:
+  - account_sid
+  - To
+  - From
+  - Body
+  tier: write
+  danger_note: Sends a real, billable SMS.

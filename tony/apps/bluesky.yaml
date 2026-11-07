@@ -1,0 +1,43 @@
+slug: bluesky
+name: Bluesky
+category: Social
+description: Public Bluesky search and profiles — no account needed.
+docs: https://docs.bsky.app/
+logo: https://cdn.simpleicons.org/bluesky/0285FF
+verified: false
+auth:
+  type: none
+base_url: https://public.api.bsky.app/xrpc
+actions:
+- slug: search_posts
+  name: Search posts
+  description: Search public Bluesky posts.
+  method: GET
+  url: https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts
+  params:
+    q:
+      type: string
+      description: ''
+      required: true
+    limit:
+      type: integer
+      description: ''
+      default: 20
+      maximum: 100
+  required:
+  - q
+  response:
+    path: posts
+    max_items: 20
+- slug: profile
+  name: Profile
+  description: Public profile for a handle.
+  method: GET
+  url: https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile
+  params:
+    actor:
+      type: string
+      description: handle, e.g. bsky.app
+      required: true
+  required:
+  - actor

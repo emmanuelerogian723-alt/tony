@@ -1,0 +1,26 @@
+slug: calcom
+name: Cal.com
+category: Communication
+description: Bookings and availability from Cal.com.
+docs: https://cal.com/docs/api-reference
+logo: https://cdn.simpleicons.org/caldotcom/292929
+verified: false
+auth:
+  type: api_key
+  header_name: Authorization
+  value_template: Bearer {token}
+base_url: https://api.cal.com/v2
+actions:
+- slug: me
+  name: Current user
+  description: Signed-in Cal.com user.
+  method: GET
+  url: https://api.cal.com/v2/me
+- slug: list_bookings
+  name: List bookings
+  description: Bookings on the account.
+  method: GET
+  url: https://api.cal.com/v2/bookings
+  response:
+    path: data
+    max_items: 25

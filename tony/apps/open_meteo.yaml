@@ -1,0 +1,31 @@
+slug: open_meteo
+name: Open-Meteo
+category: Data
+verified: true
+description: Free weather forecasts and current conditions for any coordinate.
+docs: https://open-meteo.com/en/docs
+logo: https://cdn.simpleicons.org/openstreetmap/7EBC6F
+auth:
+  type: none
+actions:
+  - slug: current
+    name: Current weather
+    description: Temperature, wind and condition code right now.
+    method: GET
+    url: https://api.open-meteo.com/v1/forecast
+    params:
+      latitude: {type: number, required: true}
+      longitude: {type: number, required: true}
+      current: {type: string, default: "temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code"}
+      timezone: {type: string, default: auto}
+  - slug: forecast
+    name: Daily forecast
+    description: Up to 16 days of highs, lows and precipitation.
+    method: GET
+    url: https://api.open-meteo.com/v1/forecast
+    params:
+      latitude: {type: number, required: true}
+      longitude: {type: number, required: true}
+      daily: {type: string, default: "temperature_2m_max,temperature_2m_min,precipitation_probability_max"}
+      forecast_days: {type: integer, default: 5, minimum: 1, maximum: 16}
+      timezone: {type: string, default: auto}

@@ -1,0 +1,70 @@
+slug: airtable
+name: Airtable
+category: Productivity
+description: Records from an Airtable base.
+docs: https://airtable.com/developers/web/api/introduction
+logo: https://cdn.simpleicons.org/airtable/18BFFF
+verified: false
+auth:
+  type: api_key
+  header_name: Authorization
+  value_template: Bearer {token}
+base_url: https://api.airtable.com/v0
+actions:
+- slug: list_records
+  name: List records
+  description: Records in a table.
+  method: GET
+  url: https://api.airtable.com/v0/{base_id}/{table}
+  params:
+    base_id:
+      type: string
+      description: ''
+      required: true
+      in: path
+    table:
+      type: string
+      description: ''
+      required: true
+      in: path
+    maxRecords:
+      type: integer
+      description: ''
+      default: 20
+    view:
+      type: string
+      description: ''
+    filterByFormula:
+      type: string
+      description: ''
+  required:
+  - base_id
+  - table
+  response:
+    path: records
+    max_items: 25
+- slug: create_record
+  name: Create record
+  description: Add a row to a table.
+  method: POST
+  url: https://api.airtable.com/v0/{base_id}/{table}
+  params:
+    base_id:
+      type: string
+      description: ''
+      required: true
+      in: path
+    table:
+      type: string
+      description: ''
+      required: true
+      in: path
+    fields:
+      type: object
+      description: Column values
+      required: true
+  required:
+  - base_id
+  - table
+  - fields
+  tier: write

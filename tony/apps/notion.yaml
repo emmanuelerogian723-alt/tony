@@ -1,0 +1,72 @@
+slug: notion
+name: Notion
+category: Productivity
+verified: false
+description: Search pages, read databases and create pages in a Notion workspace.
+docs: https://developers.notion.com/reference/intro
+logo: https://cdn.simpleicons.org/notion/000000
+base_url: https://api.notion.com/v1
+default_headers:
+  Notion-Version: "2022-06-28"
+auth:
+  type: oauth2
+  authorize_url: https://api.notion.com/v1/oauth/authorize
+  token_url: https://api.notion.com/v1/oauth/token
+  scopes: []
+  client_id_env: NOTION_CLIENT_ID
+  client_secret_env: NOTION_CLIENT_SECRET
+  authorize_params: {owner: "user"}
+  token_params: {grant_type: authorization_code}
+actions:
+  - slug: search
+    name: Search
+    description: Search pages and databases shared with the integration.
+    method: POST
+    url: https://api.notion.com/v1/search
+    params:
+      query: {type: string}
+      page_size: {type: integer, default: 20, maximum: 100}
+      filter_type: {type: string, enum: [page, database]}
+    response:
+      path: results
+      max_items: 20
+  - slug: get_page
+    name: Get page
+    description: Page properties and metadata.
+    method: GET
+    url: https://api.notion.com/v1/pages/{page_id}
+    params:
+      page_id: {type: string, required: true, in: path}
+    required: [page_id]
+  - slug: query_database
+    name: Query database
+    description: Rows from a Notion database, newest first.
+    method: POST
+    url: https://api.notion.com/v1/databases/{database_id}/query
+    params:
+      database_id: {type: string, required: true, in: path}
+      page_size: {type: integer, default: 25, maximum: 100}
+      sorts: {type: array, description: "Notion sort objects, e.g. [{\"timestamp\":\"created_time\",\"direction\":\"descending\"}]"}
+    required: [database_id]
+    response:
+      path: results
+      max_items: 25
+  - slug: create_page
+    name: Create page
+    description: Create a page inside a parent page or database.
+    method: POST
+    url: https://api.notion.com/v1/pages
+    tier: write
+    params:
+      parent: {type: object, description: 'e.g. {"database_id":"..."} or {"page_id":"..."}', required: true}
+      properties: {type: object, description: Notion properties object, required: true}
+      children: {type: array, description: Optional blocks}
+    required: [parent, properties]
+  - slug: list_users
+    name: List users
+    description: People in the workspace.
+    method: GET
+    url: https://api.notion.com/v1/users
+    response:
+      path: results
+      max_items: 30

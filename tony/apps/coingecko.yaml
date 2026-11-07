@@ -1,0 +1,41 @@
+slug: coingecko
+name: CoinGecko
+category: Finance
+verified: true
+description: Live crypto prices, market caps and 24h moves. No API key for the public tier.
+docs: https://docs.coingecko.com/reference/introduction
+logo: https://cdn.simpleicons.org/coingecko/8DC63F
+auth:
+  type: none
+actions:
+  - slug: price
+    name: Coin price
+    description: Current price of a coin in one or more currencies.
+    method: GET
+    url: https://api.coingecko.com/api/v3/simple/price
+    params:
+      ids: {type: string, description: "Comma separated coin ids, e.g. bitcoin,ethereum", default: "bitcoin", required: true}
+      vs_currencies: {type: string, description: "Comma separated currencies, e.g. usd,ngn,eur", default: "usd", required: true}
+      include_24hr_change: {type: boolean, default: true}
+      include_market_cap: {type: boolean, default: true}
+  - slug: markets
+    name: Top markets
+    description: Ranked coins with price, market cap and 24h change.
+    method: GET
+    url: https://api.coingecko.com/api/v3/coins/markets
+    params:
+      vs_currency: {type: string, default: usd, required: true}
+      order: {type: string, enum: [market_cap_desc, volume_desc, id_asc], default: market_cap_desc}
+      per_page: {type: integer, default: 10, minimum: 1, maximum: 100}
+      page: {type: integer, default: 1}
+      price_change_percentage: {type: string, default: "24h"}
+    response:
+      max_items: 20
+  - slug: trending
+    name: Trending coins
+    description: Coins trending in search on CoinGecko right now.
+    method: GET
+    url: https://api.coingecko.com/api/v3/search/trending
+    response:
+      path: coins
+      max_items: 15

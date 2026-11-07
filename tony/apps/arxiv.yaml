@@ -1,0 +1,34 @@
+slug: arxiv
+name: arXiv
+category: Data
+description: Search preprints in physics, maths and computer science.
+docs: https://info.arxiv.org/help/api/index.html
+logo: https://cdn.simpleicons.org/arxiv/B31B1B
+verified: true
+auth:
+  type: none
+base_url: https://export.arxiv.org/api
+actions:
+- slug: search
+  name: Search papers
+  description: Query the arXiv API.
+  method: GET
+  url: https://export.arxiv.org/api/query
+  params:
+    search_query:
+      type: string
+      description: ''
+      required: true
+    max_results:
+      type: integer
+      description: ''
+      default: 10
+    sortBy:
+      type: string
+      description: ''
+      default: relevance
+  required:
+  - search_query
+  response:
+    transform: rss
+    max_items: 15

@@ -1,0 +1,45 @@
+slug: todoist
+name: Todoist
+category: Productivity
+description: Tasks and projects in Todoist.
+docs: https://developer.todoist.com/rest/v2/
+logo: https://cdn.simpleicons.org/todoist/E44332
+verified: false
+auth:
+  type: bearer
+  static_env: TODOIST_API_TOKEN
+base_url: https://api.todoist.com/rest/v2
+actions:
+- slug: list_tasks
+  name: List tasks
+  description: Active tasks.
+  method: GET
+  url: https://api.todoist.com/rest/v2/tasks
+  response:
+    max_items: 40
+- slug: list_projects
+  name: List projects
+  description: Projects in the account.
+  method: GET
+  url: https://api.todoist.com/rest/v2/projects
+  response:
+    max_items: 25
+- slug: create_task
+  name: Create task
+  description: Add a task.
+  method: POST
+  url: https://api.todoist.com/rest/v2/tasks
+  params:
+    content:
+      type: string
+      description: ''
+      required: true
+    due_string:
+      type: string
+      description: ''
+    priority:
+      type: integer
+      description: ''
+  required:
+  - content
+  tier: write

@@ -1,0 +1,87 @@
+slug: twitter
+name: X (Twitter)
+category: Social
+description: Post, read timelines and search on X.
+docs: https://developer.x.com/en/docs
+logo: https://cdn.simpleicons.org/x/000000
+verified: false
+auth:
+  type: oauth2
+  authorize_url: https://twitter.com/i/oauth2/authorize
+  token_url: https://api.twitter.com/2/oauth2/token
+  scopes:
+  - tweet.read
+  - tweet.write
+  - users.read
+  - offline.access
+  client_id_env: TWITTER_CLIENT_ID
+  client_secret_env: TWITTER_CLIENT_SECRET
+  pkce: true
+base_url: https://api.twitter.com/2
+actions:
+- slug: me
+  name: Current user
+  description: Profile of the authorised account.
+  method: GET
+  url: https://api.twitter.com/2/users/me
+  response:
+    path: data
+- slug: search_recent
+  name: Search posts
+  description: Search the last seven days.
+  method: GET
+  url: https://api.twitter.com/2/tweets/search/recent
+  params:
+    query:
+      type: string
+      description: ''
+      required: true
+    max_results:
+      type: integer
+      description: ''
+      default: 20
+      minimum: 10
+      maximum: 100
+    tweet.fields:
+      type: string
+      description: ''
+      default: created_at,public_metrics,author_id
+  required:
+  - query
+  response:
+    path: data
+    max_items: 25
+- slug: post_tweet
+  name: Post
+  description: Publish a post as the user.
+  method: POST
+  url: https://api.twitter.com/2/tweets
+  params:
+    text:
+      type: string
+      description: ''
+      required: true
+  required:
+  - text
+  tier: write
+  danger_note: Publishes publicly under the user's handle.
+- slug: user_tweets
+  name: User posts
+  description: Recent posts from one account.
+  method: GET
+  url: https://api.twitter.com/2/users/{id}/tweets
+  params:
+    id:
+      type: string
+      description: ''
+      required: true
+      in: path
+    max_results:
+      type: integer
+      description: ''
+      default: 10
+  required:
+  - id
+  response:
+    path: data
+    max_items: 20

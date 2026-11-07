@@ -1,0 +1,43 @@
+slug: groq
+name: Groq
+category: AI
+description: Fast inference on Groq (OpenAI-compatible).
+docs: https://console.groq.com/docs/api-reference
+logo: https://cdn.simpleicons.org/groq/F55036
+verified: false
+auth:
+  type: bearer
+  static_env: GROQ_API_KEY
+base_url: https://api.groq.com/openai/v1
+actions:
+- slug: list_models
+  name: List models
+  description: Models served by Groq.
+  method: GET
+  url: https://api.groq.com/openai/v1/models
+  response:
+    path: data
+    max_items: 30
+- slug: chat
+  name: Chat completion
+  description: One chat completion.
+  method: POST
+  url: https://api.groq.com/openai/v1/chat/completions
+  params:
+    model:
+      type: string
+      description: ''
+      default: llama-3.3-70b-versatile
+    messages:
+      type: array
+      description: Chat messages
+    temperature:
+      type: number
+      default: 0.6
+    max_tokens:
+      type: integer
+      description: ''
+      default: 800
+  required:
+  - messages
+  tier: write

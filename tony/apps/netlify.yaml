@@ -1,0 +1,34 @@
+slug: netlify
+name: Netlify
+category: Developer
+description: Sites, deploys and build status on Netlify.
+docs: https://docs.netlify.com/api/get-started/
+logo: https://cdn.simpleicons.org/netlify/00C7B7
+verified: false
+auth:
+  type: bearer
+  static_env: NETLIFY_AUTH_TOKEN
+base_url: https://api.netlify.com/api/v1
+actions:
+- slug: list_sites
+  name: List sites
+  description: All sites with URLs and repo info.
+  method: GET
+  url: https://api.netlify.com/api/v1/sites
+  response:
+    max_items: 30
+- slug: list_deploys
+  name: List deploys
+  description: Deploys for a site.
+  method: GET
+  url: https://api.netlify.com/api/v1/sites/{site_id}/deploys
+  params:
+    site_id:
+      type: string
+      description: ''
+      required: true
+      in: path
+  required:
+  - site_id
+  response:
+    max_items: 20

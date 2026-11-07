@@ -1,0 +1,41 @@
+slug: nasa
+name: NASA
+category: Data
+description: Astronomy picture of the day and near-Earth objects (DEMO_KEY works).
+docs: https://api.nasa.gov/
+logo: https://cdn.simpleicons.org/nasa/FC3D21
+verified: true
+auth:
+  type: api_key
+  query_name: api_key
+  header_name: ''
+  value_template: '{token}'
+base_url: https://api.nasa.gov
+actions:
+- slug: apod
+  name: Picture of the day
+  description: NASA's astronomy picture of the day.
+  method: GET
+  url: https://api.nasa.gov/planetary/apod
+  params:
+    api_key:
+      type: string
+      description: ''
+      default: DEMO_KEY
+- slug: mars_photos
+  name: Mars photos
+  description: Photos from a rover on a sol.
+  method: GET
+  url: https://api.nasa.gov/mars-photos/api/v1/rovers/curiosity/photos
+  params:
+    sol:
+      type: integer
+      description: ''
+      default: 1000
+    api_key:
+      type: string
+      description: ''
+      default: DEMO_KEY
+  response:
+    path: photos
+    max_items: 10

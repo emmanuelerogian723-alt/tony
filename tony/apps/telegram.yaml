@@ -1,0 +1,56 @@
+slug: telegram
+name: Telegram
+category: Communication
+description: Send messages and inspect updates through a Telegram bot.
+docs: https://core.telegram.org/bots/api
+logo: https://cdn.simpleicons.org/telegram/26A5E4
+verified: false
+auth:
+  type: path
+  static_env: TELEGRAM_BOT_TOKEN
+base_url: https://api.telegram.org
+actions:
+- slug: get_me
+  name: Bot info
+  description: Identity of the bot behind the token.
+  method: GET
+  url: https://api.telegram.org/bot{token}/getMe
+- slug: send_message
+  name: Send message
+  description: Send a message to a chat.
+  method: POST
+  url: https://api.telegram.org/bot{token}/sendMessage
+  params:
+    chat_id:
+      type: string
+      description: ''
+      required: true
+    text:
+      type: string
+      description: ''
+      required: true
+    parse_mode:
+      type: string
+      description: ''
+      enum:
+      - MarkdownV2
+      - HTML
+      default: HTML
+  required:
+  - chat_id
+  - text
+  tier: write
+  danger_note: Sends a real message to the chat.
+- slug: get_updates
+  name: Get updates
+  description: Recent updates waiting for the bot.
+  method: GET
+  url: https://api.telegram.org/bot{token}/getUpdates
+  params:
+    limit:
+      type: integer
+      description: ''
+      default: 20
+  response:
+    path: result
+    max_items: 20

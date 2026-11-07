@@ -1,0 +1,46 @@
+slug: web
+name: Web (universal)
+category: Utility
+verified: true
+description: Fetch any public URL, extract readable text, or run a web search — for sites that have no API.
+docs: https://github.com/emmanuelerogian723-alt/tony
+logo: https://cdn.simpleicons.org/googlechrome/4285F4
+auth:
+  type: none
+actions:
+  - slug: fetch
+    name: Fetch URL
+    description: GET any public URL and return JSON or text. Useful for open data endpoints and RSS-to-JSON proxies.
+    method: GET
+    url: "{url}"
+    params:
+      url: {type: string, description: Absolute http(s) URL, required: true, in: path}
+    required: [url]
+    response:
+      max_chars: 8000
+  - slug: read_page
+    name: Read page text
+    description: Fetch a web page and return its readable text (tags and scripts stripped).
+    method: GET
+    url: "{url}"
+    params:
+      url: {type: string, description: Page to read, required: true, in: path}
+    required: [url]
+    response:
+      max_chars: 9000
+      transform: html_text
+    headers:
+      Accept: text/html,application/xhtml+xml
+  - slug: search
+    name: Web search
+    description: Search the web through a keyless engine and get titles, URLs and snippets.
+    method: GET
+    url: https://html.duckduckgo.com/html/
+    params:
+      q: {type: string, description: Search query, required: true}
+    required: [q]
+    response:
+      max_chars: 9000
+      transform: ddg
+    headers:
+      Accept: text/html

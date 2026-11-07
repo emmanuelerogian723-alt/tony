@@ -1,0 +1,30 @@
+slug: lemonsqueezy
+name: Lemon Squeezy
+category: Commerce
+description: Orders and products from Lemon Squeezy.
+docs: https://docs.lemonsqueezy.com/api
+logo: https://cdn.simpleicons.org/lemonsqueezy/FFC233
+verified: false
+auth:
+  type: bearer
+  static_env: LEMONSQUEEZY_API_KEY
+base_url: https://api.lemonsqueezy.com/v1
+default_headers:
+  Accept: application/vnd.api+json
+actions:
+- slug: list_orders
+  name: List orders
+  description: Recent orders.
+  method: GET
+  url: https://api.lemonsqueezy.com/v1/orders
+  response:
+    path: data
+    max_items: 25
+- slug: list_products
+  name: List products
+  description: Products in the store.
+  method: GET
+  url: https://api.lemonsqueezy.com/v1/products
+  response:
+    path: data
+    max_items: 25

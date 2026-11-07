@@ -1,0 +1,35 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: ruff check tony tests
+      - run: python -m pytest tests/ -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t tony:ci .
+      - run: docker run -d --name tony -p 8000:8000 -e TONY_SECRET_KEY=ci-test tony:ci
+      - run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health; then break; fi
+            sleep 1
+          done
+          curl -sf http://localhost:8000/health | grep '"status":"ok"'
+      - run: docker logs tony

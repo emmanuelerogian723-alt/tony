@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: tony
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn tony.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: TONY_DEMO_OPEN
+        value: "1"
+      - key: TONY_REQUIRE_APPROVAL
+        value: "1"
+      - key: TONY_SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: "3.11.9"

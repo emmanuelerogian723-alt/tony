@@ -1,0 +1,55 @@
+slug: gmail
+name: Gmail
+category: Communication
+verified: false
+description: Read, search and send email from a Google account.
+docs: https://developers.google.com/gmail/api/reference/rest
+logo: https://cdn.simpleicons.org/gmail/EA4335
+base_url: https://gmail.googleapis.com/gmail/v1
+auth:
+  type: oauth2
+  authorize_url: https://accounts.google.com/o/oauth2/v2/auth
+  token_url: https://oauth2.googleapis.com/token
+  scopes: [https://www.googleapis.com/auth/gmail.readonly, https://www.googleapis.com/auth/gmail.send, https://www.googleapis.com/auth/gmail.modify]
+  client_id_env: GOOGLE_CLIENT_ID
+  client_secret_env: GOOGLE_CLIENT_SECRET
+  authorize_params: {access_type: offline, prompt: consent}
+actions:
+  - slug: list_messages
+    name: List messages
+    description: Message ids matching a Gmail search query.
+    method: GET
+    url: https://gmail.googleapis.com/gmail/v1/users/me/messages
+    params:
+      q: {type: string, description: "Gmail query, e.g. from:boss@company.com is:unread", default: ""}
+      maxResults: {type: integer, default: 20, maximum: 100}
+    response:
+      path: messages
+      max_items: 25
+  - slug: get_message
+    name: Get message
+    description: Full headers and snippet for a message id.
+    method: GET
+    url: https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}
+    params:
+      message_id: {type: string, required: true, in: path}
+      format: {type: string, enum: [full, metadata, minimal], default: metadata}
+    required: [message_id]
+  - slug: send_message
+    name: Send email
+    description: Send a plain-text email (RFC822 encoded automatically is not supported; pass a base64url raw MIME message).
+    method: POST
+    url: https://gmail.googleapis.com/gmail/v1/users/me/messages/send
+    tier: write
+    params:
+      raw: {type: string, description: base64url-encoded MIME message, required: true}
+    required: [raw]
+    danger_note: Sends real email from the user's address.
+  - slug: list_labels
+    name: List labels
+    description: Labels and ids in the mailbox.
+    method: GET
+    url: https://gmail.googleapis.com/gmail/v1/users/me/labels
+    response:
+      path: labels
+      max_items: 40

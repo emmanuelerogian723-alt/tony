@@ -1,0 +1,89 @@
+slug: google_calendar
+name: Google Calendar
+category: Productivity
+description: Calendars and events for a Google account.
+docs: https://developers.google.com/calendar/api
+logo: https://cdn.simpleicons.org/googlecalendar/4285F4
+verified: false
+auth:
+  type: oauth2
+  authorize_url: https://accounts.google.com/o/oauth2/v2/auth
+  token_url: https://oauth2.googleapis.com/token
+  scopes:
+  - https://www.googleapis.com/auth/calendar.readonly
+  - https://www.googleapis.com/auth/calendar.events
+  client_id_env: GOOGLE_CLIENT_ID
+  client_secret_env: GOOGLE_CLIENT_SECRET
+  authorize_params:
+    access_type: offline
+    prompt: consent
+base_url: https://www.googleapis.com/calendar/v3
+actions:
+- slug: list_calendars
+  name: List calendars
+  description: Calendars visible to the user.
+  method: GET
+  url: https://www.googleapis.com/calendar/v3/users/me/calendarList
+  response:
+    path: items
+    max_items: 25
+- slug: list_events
+  name: List events
+  description: Events on a calendar in a window.
+  method: GET
+  url: https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events
+  params:
+    calendar_id:
+      type: string
+      description: ''
+      default: primary
+      in: path
+    maxResults:
+      type: integer
+      description: ''
+      default: 20
+    timeMin:
+      type: string
+      description: RFC3339 start
+    singleEvents:
+      type: boolean
+      description: ''
+      default: true
+    orderBy:
+      type: string
+      description: ''
+      default: startTime
+  response:
+    path: items
+    max_items: 25
+- slug: create_event
+  name: Create event
+  description: Add an event to a calendar.
+  method: POST
+  url: https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events
+  params:
+    calendar_id:
+      type: string
+      description: ''
+      default: primary
+      in: path
+    summary:
+      type: string
+      description: ''
+      required: true
+    start:
+      type: object
+      description: '{"dateTime":"2026-01-01T10:00:00+01:00"}'
+    end:
+      type: object
+      description: '{"dateTime":"2026-01-01T11:00:00+01:00"}'
+    description:
+      type: string
+      description: ''
+    attendees:
+      type: array
+  required:
+  - summary
+  - start
+  - end
+  tier: write

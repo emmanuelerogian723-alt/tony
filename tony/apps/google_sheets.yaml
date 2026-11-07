@@ -1,0 +1,65 @@
+slug: google_sheets
+name: Google Sheets
+category: Productivity
+description: Read and write spreadsheet ranges.
+docs: https://developers.google.com/sheets/api
+logo: https://cdn.simpleicons.org/googlesheets/34A853
+verified: false
+auth:
+  type: oauth2
+  authorize_url: https://accounts.google.com/o/oauth2/v2/auth
+  token_url: https://oauth2.googleapis.com/token
+  scopes:
+  - https://www.googleapis.com/auth/spreadsheets
+  client_id_env: GOOGLE_CLIENT_ID
+  client_secret_env: GOOGLE_CLIENT_SECRET
+  authorize_params:
+    access_type: offline
+    prompt: consent
+base_url: https://sheets.googleapis.com/v4
+actions:
+- slug: read_range
+  name: Read range
+  description: Values from an A1 range.
+  method: GET
+  url: https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{range}
+  params:
+    spreadsheet_id:
+      type: string
+      description: ''
+      required: true
+      in: path
+    range:
+      type: string
+      description: ''
+      default: Sheet1
+      in: path
+  required:
+  - spreadsheet_id
+- slug: append_row
+  name: Append row
+  description: Append values to a sheet.
+  method: POST
+  url: https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{range}:append
+  params:
+    spreadsheet_id:
+      type: string
+      description: ''
+      required: true
+      in: path
+    range:
+      type: string
+      description: ''
+      default: Sheet1
+      in: path
+    values:
+      type: array
+      description: Rows to append
+    valueInputOption:
+      type: string
+      description: ''
+      default: USER_ENTERED
+  required:
+  - spreadsheet_id
+  - values
+  tier: write

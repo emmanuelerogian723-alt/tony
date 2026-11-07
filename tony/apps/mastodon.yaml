@@ -1,0 +1,35 @@
+slug: mastodon
+name: Mastodon
+category: Social
+description: Public timelines and trending tags on mastodon.social.
+docs: https://docs.joinmastodon.org/api/
+logo: https://cdn.simpleicons.org/mastodon/6364FF
+verified: true
+auth:
+  type: none
+base_url: https://mastodon.social/api/v1
+actions:
+- slug: trending_tags
+  name: Trending tags
+  description: Hashtags trending on the instance.
+  method: GET
+  url: https://mastodon.social/api/v1/trends/tags
+  params:
+    limit:
+      type: integer
+      description: ''
+      default: 20
+  response:
+    max_items: 25
+- slug: timeline
+  name: Public timeline
+  description: Latest public posts.
+  method: GET
+  url: https://mastodon.social/api/v1/timelines/public
+  params:
+    limit:
+      type: integer
+      description: ''
+      default: 20
+  response:
+    max_items: 25

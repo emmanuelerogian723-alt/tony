@@ -1,0 +1,40 @@
+slug: linear
+name: Linear
+category: Developer
+description: Issues, projects and teams through the Linear GraphQL API.
+docs: https://developers.linear.app/
+logo: https://cdn.simpleicons.org/linear/5E6AD2
+verified: false
+auth:
+  type: api_key
+  header_name: Authorization
+  value_template: '{token}'
+base_url: https://api.linear.app/graphql
+actions:
+- slug: viewer
+  name: Current user
+  description: The authenticated Linear user.
+  method: POST
+  url: https://api.linear.app/graphql
+  params:
+    query:
+      type: string
+      description: ''
+      default: '{ viewer { id name email } }'
+      in: body
+  response:
+    path: data.viewer
+- slug: issues
+  name: List issues
+  description: Recent issues with state and assignee.
+  method: POST
+  url: https://api.linear.app/graphql
+  params:
+    query:
+      type: string
+      description: ''
+      default: '{ issues(first: 20) { nodes { identifier title state { name } assignee { name } } } }'
+      in: body
+  response:
+    path: data.issues.nodes
+    max_items: 25

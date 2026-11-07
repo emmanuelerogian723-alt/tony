@@ -1,0 +1,30 @@
+slug: flutterwave
+name: Flutterwave
+category: Commerce
+description: Transactions and balances for a Flutterwave account.
+docs: https://developer.flutterwave.com/docs
+logo: https://cdn.simpleicons.org/flutterwave/F5A623
+verified: false
+auth:
+  type: bearer
+  static_env: FLUTTERWAVE_SECRET_KEY
+base_url: https://api.flutterwave.com/v3
+actions:
+- slug: list_transactions
+  name: List transactions
+  description: Recent transactions.
+  method: GET
+  url: https://api.flutterwave.com/v3/transactions
+  params:
+    page:
+      type: integer
+      description: ''
+      default: 1
+  response:
+    path: data
+    max_items: 25
+- slug: balances
+  name: Balances
+  description: Wallet balances by currency.
+  method: GET
+  url: https://api.flutterwave.com/v3/balances

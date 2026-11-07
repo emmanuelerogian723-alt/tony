@@ -1,0 +1,32 @@
+slug: hackernews
+name: Hacker News
+category: Data
+verified: true
+description: Top stories, search and comment threads from Hacker News. No credentials needed.
+docs: https://github.com/HackerNews/API
+logo: https://cdn.simpleicons.org/ycombinator/FF6600
+auth:
+  type: none
+actions:
+  - slug: top_stories
+    name: Top stories
+    description: Current front-page story IDs, ranked.
+    method: GET
+    url: https://hacker-news.firebaseio.com/v0/topstories.json
+    response:
+      max_items: 30
+  - slug: story
+    name: Story detail
+    description: Title, score, author, URL and comment count for one story.
+    method: GET
+    url: https://hacker-news.firebaseio.com/v0/item/{id}.json
+    params:
+      id: {type: integer, description: HN item id, required: true, in: path}
+    required: [id]
+  - slug: newest
+    name: Newest stories
+    description: Most recently submitted story IDs.
+    method: GET
+    url: https://hacker-news.firebaseio.com/v0/newstories.json
+    response:
+      max_items: 30

@@ -1,0 +1,48 @@
+slug: alpha_vantage
+name: Alpha Vantage
+category: Finance
+description: Global quotes, FX and technical indicators.
+docs: https://www.alphavantage.co/documentation/
+logo: https://cdn.simpleicons.org/alpha/1F5A97
+verified: false
+auth:
+  type: api_key
+  query_name: apikey
+  header_name: ''
+  value_template: '{token}'
+base_url: https://www.alphavantage.co/query
+actions:
+- slug: global_quote
+  name: Global quote
+  description: Latest price for an equity symbol.
+  method: GET
+  url: https://www.alphavantage.co/query
+  params:
+    function:
+      type: string
+      description: ''
+      default: GLOBAL_QUOTE
+    symbol:
+      type: string
+      description: e.g. IBM
+      required: true
+  required:
+  - symbol
+- slug: fx_rate
+  name: FX rate
+  description: Exchange rate between two currencies.
+  method: GET
+  url: https://www.alphavantage.co/query
+  params:
+    function:
+      type: string
+      description: ''
+      default: CURRENCY_EXCHANGE_RATE
+    from_currency:
+      type: string
+      description: ''
+      default: USD
+    to_currency:
+      type: string
+      description: ''
+      default: NGN

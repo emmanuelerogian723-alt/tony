@@ -1,0 +1,57 @@
+slug: google_drive
+name: Google Drive
+category: Productivity
+description: Files and folders in Google Drive.
+docs: https://developers.google.com/drive/api/reference/rest/v3
+logo: https://cdn.simpleicons.org/googledrive/4285F4
+verified: false
+auth:
+  type: oauth2
+  authorize_url: https://accounts.google.com/o/oauth2/v2/auth
+  token_url: https://oauth2.googleapis.com/token
+  scopes:
+  - https://www.googleapis.com/auth/drive.readonly
+  client_id_env: GOOGLE_CLIENT_ID
+  client_secret_env: GOOGLE_CLIENT_SECRET
+  authorize_params:
+    access_type: offline
+    prompt: consent
+base_url: https://www.googleapis.com/drive/v3
+actions:
+- slug: list_files
+  name: List files
+  description: Recent files, newest first.
+  method: GET
+  url: https://www.googleapis.com/drive/v3/files
+  params:
+    pageSize:
+      type: integer
+      description: ''
+      default: 20
+    q:
+      type: string
+      description: Drive query, e.g. mimeType='application/pdf'
+    fields:
+      type: string
+      description: ''
+      default: files(id,name,mimeType,modifiedTime,size,webViewLink)
+  response:
+    path: files
+    max_items: 30
+- slug: file_info
+  name: File info
+  description: Metadata for one file.
+  method: GET
+  url: https://www.googleapis.com/drive/v3/files/{file_id}
+  params:
+    file_id:
+      type: string
+      description: ''
+      required: true
+      in: path
+    fields:
+      type: string
+      description: ''
+      default: id,name,mimeType,size,modifiedTime,webViewLink
+  required:
+  - file_id

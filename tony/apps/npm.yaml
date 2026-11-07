@@ -1,0 +1,56 @@
+slug: npm
+name: npm
+category: Developer
+description: Package metadata, versions and downloads from the npm registry.
+docs: https://github.com/npm/registry/blob/master/docs/REGISTRY-API.md
+logo: https://cdn.simpleicons.org/npm/CB3837
+verified: true
+auth:
+  type: none
+base_url: https://registry.npmjs.org
+actions:
+- slug: package
+  name: Package info
+  description: Latest version, description and maintainers.
+  method: GET
+  url: https://registry.npmjs.org/{package}
+  params:
+    package:
+      type: string
+      description: ''
+      required: true
+      in: path
+  required:
+  - package
+- slug: search
+  name: Search packages
+  description: Search the registry.
+  method: GET
+  url: https://registry.npmjs.org/-/v1/search
+  params:
+    text:
+      type: string
+      description: ''
+      required: true
+    size:
+      type: integer
+      description: ''
+      default: 10
+  required:
+  - text
+  response:
+    path: objects
+    max_items: 15
+- slug: downloads
+  name: Download counts
+  description: Last-week downloads for a package.
+  method: GET
+  url: https://api.npmjs.org/downloads/point/last-week/{package}
+  params:
+    package:
+      type: string
+      description: ''
+      required: true
+      in: path
+  required:
+  - package

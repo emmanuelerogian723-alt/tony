@@ -1,0 +1,31 @@
+services:
+  tony:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      TONY_BASE_URL: ${TONY_BASE_URL:-http://localhost:8000}
+      DATABASE_URL: postgresql://tony:tony@db:5432/tony
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tony
+      POSTGRES_PASSWORD: tony
+      POSTGRES_DB: tony
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tony"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

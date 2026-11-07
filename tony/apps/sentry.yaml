@@ -1,0 +1,44 @@
+slug: sentry
+name: Sentry
+category: Developer
+description: Projects and unresolved issues from Sentry.
+docs: https://docs.sentry.io/api/
+logo: https://cdn.simpleicons.org/sentry/362D59
+verified: false
+auth:
+  type: bearer
+  static_env: SENTRY_AUTH_TOKEN
+base_url: https://sentry.io/api/0
+actions:
+- slug: list_projects
+  name: List projects
+  description: Projects in the organisation.
+  method: GET
+  url: https://sentry.io/api/0/projects/
+  response:
+    max_items: 30
+- slug: list_issues
+  name: List issues
+  description: Unresolved issues for a project.
+  method: GET
+  url: https://sentry.io/api/0/projects/{org}/{project}/issues/
+  params:
+    org:
+      type: string
+      description: ''
+      required: true
+      in: path
+    project:
+      type: string
+      description: ''
+      required: true
+      in: path
+    query:
+      type: string
+      description: ''
+      default: is:unresolved
+  required:
+  - org
+  - project
+  response:
+    max_items: 25

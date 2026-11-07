@@ -1,0 +1,24 @@
+slug: linkedin
+name: LinkedIn
+category: Social
+description: Profile and posts for a LinkedIn member.
+docs: https://learn.microsoft.com/linkedin/
+logo: https://cdn.simpleicons.org/linkedin/0A66C2
+verified: false
+auth:
+  type: oauth2
+  authorize_url: https://www.linkedin.com/oauth/v2/authorization
+  token_url: https://www.linkedin.com/oauth/v2/accessToken
+  scopes:
+  - openid
+  - profile
+  - w_member_social
+  client_id_env: LINKEDIN_CLIENT_ID
+  client_secret_env: LINKEDIN_CLIENT_SECRET
+base_url: https://api.linkedin.com/v2
+actions:
+- slug: me
+  name: Current user
+  description: OpenID profile of the member.
+  method: GET
+  url: https://api.linkedin.com/v2/userinfo

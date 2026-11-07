@@ -1,0 +1,64 @@
+slug: tiktok
+name: TikTok
+category: Social
+verified: false
+description: TikTok profile data and video lists for a signed-in creator, plus trending discovery through the open web.
+docs: https://developers.tiktok.com/doc/login-kit-web
+logo: https://cdn.simpleicons.org/tiktok/000000
+base_url: https://open.tiktokapis.com/v2
+auth:
+  type: oauth2
+  authorize_url: https://www.tiktok.com/v2/auth/authorize/
+  token_url: https://open.tiktokapis.com/v2/oauth/token/
+  scopes: [user.info.basic, video.list]
+  client_id_env: TIKTOK_CLIENT_ID
+  client_secret_env: TIKTOK_CLIENT_SECRET
+  authorize_params: {response_type: code}
+actions:
+  - slug: profile
+    name: Creator profile
+    description: Display name, avatar, follower count and bio for the connected creator.
+    method: GET
+    url: https://open.tiktokapis.com/v2/user/info/
+    params:
+      fields: {type: string, default: "open_id,union_id,avatar_url,display_name,bio_description,is_verified,follower_count,following_count,likes_count,video_count"}
+  - slug: list_videos
+    name: List videos
+    description: The creator's recent videos with captions, views, likes and shares.
+    method: POST
+    url: https://open.tiktokapis.com/v2/video/list/
+    params:
+      max_count: {type: integer, default: 10, maximum: 20}
+      cursor: {type: integer}
+      fields: {type: string, default: "id,title,video_description,duration,cover_image_url,share_url,view_count,like_count,comment_count,share_count,create_time"}
+    response:
+      path: data.videos
+      max_items: 20
+  - slug: trending_web
+    name: Trending (open web)
+    description: What is trending on TikTok right now, read from the public trending pages — works without a TikTok developer account.
+    method: GET
+    url: https://www.tiktok.com/api/recommend/item_list/
+    params:
+      aid: {type: integer, default: 1988}
+      count: {type: integer, default: 20, maximum: 30}
+    response:
+      path: itemList
+      max_items: 20
+      max_chars: 9000
+    headers:
+      Accept: application/json
+      Referer: https://www.tiktok.com/
+    notes: Unofficial endpoint; may need cookies from the region.
+  - slug: trending_search
+    name: Trend discovery (web search)
+    description: Discover trending TikTok hashtags through search results when the unofficial endpoint is blocked.
+    method: GET
+    url: https://html.duckduckgo.com/html/
+    params:
+      q: {type: string, default: "trending tiktok hashtags this week"}
+    response:
+      transform: ddg
+      max_chars: 9000
+    headers:
+      Accept: text/html

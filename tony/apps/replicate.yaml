@@ -1,0 +1,36 @@
+slug: replicate
+name: Replicate
+category: AI
+description: Run and inspect models hosted on Replicate.
+docs: https://replicate.com/docs/reference/http
+logo: https://cdn.simpleicons.org/replicate/000000
+verified: false
+auth:
+  type: bearer
+  static_env: REPLICATE_API_TOKEN
+base_url: https://api.replicate.com/v1
+actions:
+- slug: list_predictions
+  name: List predictions
+  description: Recent prediction runs and their status.
+  method: GET
+  url: https://api.replicate.com/v1/predictions
+  response:
+    path: results
+    max_items: 20
+- slug: create_prediction
+  name: Run a model
+  description: Start a prediction with an input object.
+  method: POST
+  url: https://api.replicate.com/v1/predictions
+  params:
+    version:
+      type: string
+      description: Model version id
+      required: true
+    input:
+      type: object
+      description: Model inputs
+  required:
+  - version
+  tier: write

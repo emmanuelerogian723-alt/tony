@@ -1,0 +1,57 @@
+slug: shopify
+name: Shopify
+category: Commerce
+description: Orders, products and customers from a Shopify store.
+docs: https://shopify.dev/docs/api/admin-rest
+logo: https://cdn.simpleicons.org/shopify/7AB55C
+verified: false
+auth:
+  type: api_key
+  header_name: X-Shopify-Access-Token
+  value_template: '{token}'
+base_url: https://{shop}/admin/api/2024-10
+actions:
+- slug: list_orders
+  name: List orders
+  description: Recent orders.
+  method: GET
+  url: https://{shop}/admin/api/2024-10/orders.json
+  params:
+    shop:
+      type: string
+      description: your-store.myshopify.com
+      required: true
+      in: path
+    limit:
+      type: integer
+      description: ''
+      default: 20
+    status:
+      type: string
+      description: ''
+      default: any
+  required:
+  - shop
+  response:
+    path: orders
+    max_items: 25
+- slug: list_products
+  name: List products
+  description: Products in the store.
+  method: GET
+  url: https://{shop}/admin/api/2024-10/products.json
+  params:
+    shop:
+      type: string
+      description: ''
+      required: true
+      in: path
+    limit:
+      type: integer
+      description: ''
+      default: 20
+  required:
+  - shop
+  response:
+    path: products
+    max_items: 25

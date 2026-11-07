@@ -1,0 +1,64 @@
+slug: newsapi
+name: NewsAPI
+category: Data
+description: Headlines and article search from 80,000 sources.
+docs: https://newsapi.org/docs
+logo: https://cdn.simpleicons.org/news/FF0000
+verified: false
+auth:
+  type: api_key
+  query_name: apiKey
+  header_name: ''
+  value_template: '{token}'
+base_url: https://newsapi.org/v2
+actions:
+- slug: top_headlines
+  name: Top headlines
+  description: Current headlines by country or category.
+  method: GET
+  url: https://newsapi.org/v2/top-headlines
+  params:
+    country:
+      type: string
+      description: ''
+      default: us
+    category:
+      type: string
+      description: ''
+      enum:
+      - business
+      - technology
+      - science
+      - health
+      - sports
+      - general
+    pageSize:
+      type: integer
+      description: ''
+      default: 20
+  response:
+    path: articles
+    max_items: 20
+- slug: search
+  name: Search articles
+  description: Search news by keyword.
+  method: GET
+  url: https://newsapi.org/v2/everything
+  params:
+    q:
+      type: string
+      description: ''
+      required: true
+    pageSize:
+      type: integer
+      description: ''
+      default: 20
+    sortBy:
+      type: string
+      description: ''
+      default: publishedAt
+  required:
+  - q
+  response:
+    path: articles
+    max_items: 20

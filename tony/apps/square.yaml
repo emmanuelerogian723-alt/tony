@@ -1,0 +1,28 @@
+slug: square
+name: Square
+category: Commerce
+description: Locations and payments for a Square account.
+docs: https://developer.squareup.com/reference/square
+logo: https://cdn.simpleicons.org/square/000000
+verified: false
+auth:
+  type: bearer
+  static_env: SQUARE_ACCESS_TOKEN
+base_url: https://connect.squareup.com/v2
+actions:
+- slug: list_locations
+  name: List locations
+  description: Locations on the account.
+  method: GET
+  url: https://connect.squareup.com/v2/locations
+  response:
+    path: locations
+    max_items: 20
+- slug: list_payments
+  name: List payments
+  description: Recent payments.
+  method: GET
+  url: https://connect.squareup.com/v2/payments
+  response:
+    path: payments
+    max_items: 25

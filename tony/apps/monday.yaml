@@ -1,0 +1,40 @@
+slug: monday
+name: monday.com
+category: Productivity
+description: Boards and items through the monday.com GraphQL API.
+docs: https://developer.monday.com/api-reference/
+logo: https://cdn.simpleicons.org/mondaydotcom/6161FF
+verified: false
+auth:
+  type: api_key
+  header_name: Authorization
+  value_template: '{token}'
+base_url: https://api.monday.com/v2
+actions:
+- slug: me
+  name: Current user
+  description: The token owner.
+  method: POST
+  url: https://api.monday.com/v2
+  params:
+    query:
+      type: string
+      description: ''
+      default: '{ me { id name email } }'
+      in: body
+  response:
+    path: data.me
+- slug: boards
+  name: List boards
+  description: Boards in the account.
+  method: POST
+  url: https://api.monday.com/v2
+  params:
+    query:
+      type: string
+      description: ''
+      default: '{ boards(limit: 20) { id name state } }'
+      in: body
+  response:
+    path: data.boards
+    max_items: 25

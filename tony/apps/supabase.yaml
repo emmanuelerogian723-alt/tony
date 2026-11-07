@@ -1,0 +1,26 @@
+slug: supabase
+name: Supabase
+category: Developer
+description: Projects and organisations on Supabase.
+docs: https://supabase.com/docs/reference/api/introduction
+logo: https://cdn.simpleicons.org/supabase/3FCF8E
+verified: false
+auth:
+  type: bearer
+  static_env: SUPABASE_ACCESS_TOKEN
+base_url: https://api.supabase.com/v1
+actions:
+- slug: list_projects
+  name: List projects
+  description: All Supabase projects.
+  method: GET
+  url: https://api.supabase.com/v1/projects
+  response:
+    max_items: 30
+- slug: list_organizations
+  name: List organisations
+  description: Organisations for this token.
+  method: GET
+  url: https://api.supabase.com/v1/organizations
+  response:
+    max_items: 20

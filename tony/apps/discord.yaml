@@ -1,0 +1,45 @@
+slug: discord
+name: Discord
+category: Communication
+description: Servers, channels and messages for a Discord account or bot.
+docs: https://discord.com/developers/docs/intro
+logo: https://cdn.simpleicons.org/discord/5865F2
+verified: false
+auth:
+  type: oauth2
+  authorize_url: https://discord.com/oauth2/authorize
+  token_url: https://discord.com/api/oauth2/token
+  scopes:
+  - identify
+  - guilds
+  client_id_env: DISCORD_CLIENT_ID
+  client_secret_env: DISCORD_CLIENT_SECRET
+base_url: https://discord.com/api/v10
+actions:
+- slug: me
+  name: Current user
+  description: Profile of the signed-in user.
+  method: GET
+  url: https://discord.com/api/v10/users/@me
+- slug: list_guilds
+  name: List servers
+  description: Servers the user belongs to.
+  method: GET
+  url: https://discord.com/api/v10/users/@me/guilds
+  response:
+    max_items: 40
+- slug: list_channels
+  name: List channels
+  description: Channels in a server.
+  method: GET
+  url: https://discord.com/api/v10/guilds/{guild_id}/channels
+  params:
+    guild_id:
+      type: string
+      description: ''
+      required: true
+      in: path
+  required:
+  - guild_id
+  response:
+    max_items: 40

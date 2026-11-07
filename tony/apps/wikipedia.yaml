@@ -1,0 +1,44 @@
+slug: wikipedia
+name: Wikipedia
+category: Data
+verified: true
+description: Search and read encyclopedia content in any language.
+docs: https://www.mediawiki.org/wiki/API:Main_page
+logo: https://cdn.simpleicons.org/wikipedia/000000
+auth:
+  type: none
+actions:
+  - slug: search
+    name: Search articles
+    description: Full-text search across Wikipedia.
+    method: GET
+    url: https://en.wikipedia.org/w/api.php
+    params:
+      action: {type: string, default: query, in: query}
+      list: {type: string, default: search, in: query}
+      srsearch: {type: string, description: What to search for, required: true, in: query}
+      srlimit: {type: integer, default: 10, in: query}
+      format: {type: string, default: json, in: query}
+    response:
+      path: query.search
+      max_items: 20
+  - slug: summary
+    name: Article summary
+    description: Short extract plus thumbnail for a page title.
+    method: GET
+    url: https://en.wikipedia.org/api/rest_v1/page/summary/{title}
+    params:
+      title: {type: string, description: Exact page title, required: true, in: path}
+    required: [title]
+  - slug: on_this_day
+    name: On this day
+    description: Historical events for a date (MM/DD).
+    method: GET
+    url: https://en.wikipedia.org/api/rest_v1/feed/onthisday/events/{month}/{day}
+    params:
+      month: {type: integer, required: true, in: path}
+      day: {type: integer, required: true, in: path}
+    required: [month, day]
+    response:
+      path: events
+      max_items: 10

@@ -1,0 +1,32 @@
+slug: sendgrid
+name: SendGrid
+category: Communication
+description: Email stats and account profile for SendGrid.
+docs: https://www.twilio.com/docs/sendgrid/api-reference
+logo: https://cdn.simpleicons.org/sendgrid/1A82E2
+verified: false
+auth:
+  type: bearer
+  static_env: SENDGRID_API_KEY
+base_url: https://api.sendgrid.com/v3
+actions:
+- slug: profile
+  name: Account profile
+  description: Account details for the API key.
+  method: GET
+  url: https://api.sendgrid.com/v3/user/profile
+- slug: stats
+  name: Email stats
+  description: Aggregated delivery stats for a date range.
+  method: GET
+  url: https://api.sendgrid.com/v3/stats
+  params:
+    start_date:
+      type: string
+      description: ''
+      required: true
+    end_date:
+      type: string
+      description: ''
+  required:
+  - start_date

@@ -1,0 +1,35 @@
+slug: dropbox
+name: Dropbox
+category: Productivity
+description: Files and folders in Dropbox.
+docs: https://www.dropbox.com/developers/documentation/http/overview
+logo: https://cdn.simpleicons.org/dropbox/0061FF
+verified: false
+auth:
+  type: bearer
+  static_env: DROPBOX_ACCESS_TOKEN
+base_url: https://api.dropboxapi.com/2
+actions:
+- slug: account
+  name: Account info
+  description: Name, email and plan.
+  method: POST
+  url: https://api.dropboxapi.com/2/users/get_current_account
+- slug: list_folder
+  name: List folder
+  description: Entries in a folder.
+  method: POST
+  url: https://api.dropboxapi.com/2/files/list_folder
+  params:
+    path:
+      type: string
+      description: ''
+      default: ''
+      in: body
+    limit:
+      type: integer
+      description: ''
+      default: 50
+  response:
+    path: entries
+    max_items: 40

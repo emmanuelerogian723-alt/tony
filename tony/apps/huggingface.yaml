@@ -1,0 +1,62 @@
+slug: huggingface
+name: Hugging Face
+category: AI
+description: Models, datasets and spaces from the Hugging Face hub.
+docs: https://huggingface.co/docs/api-inference/
+logo: https://cdn.simpleicons.org/huggingface/FFD21E
+verified: true
+auth:
+  type: none
+base_url: https://huggingface.co/api
+actions:
+- slug: search_models
+  name: Search models
+  description: Most downloaded models for a query.
+  method: GET
+  url: https://huggingface.co/api/models
+  params:
+    search:
+      type: string
+      description: ''
+      required: true
+    limit:
+      type: integer
+      description: ''
+      default: 10
+    sort:
+      type: string
+      description: ''
+      default: downloads
+  required:
+  - search
+  response:
+    max_items: 15
+- slug: model_info
+  name: Model info
+  description: Metadata, tags and downloads for a model.
+  method: GET
+  url: https://huggingface.co/api/models/{model_id}
+  params:
+    model_id:
+      type: string
+      description: e.g. meta-llama/Llama-3.1-8B
+      required: true
+      in: path
+  required:
+  - model_id
+- slug: trending
+  name: Trending models
+  description: Trending models right now.
+  method: GET
+  url: https://huggingface.co/api/models
+  params:
+    sort:
+      type: string
+      description: ''
+      default: trendingScore
+    limit:
+      type: integer
+      description: ''
+      default: 10
+  response:
+    max_items: 15

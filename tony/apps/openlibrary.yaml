@@ -1,0 +1,43 @@
+slug: openlibrary
+name: Open Library
+category: Data
+description: Book search and edition data — no key needed.
+docs: https://openlibrary.org/developers/api
+logo: https://cdn.simpleicons.org/openlibrary/E5A16E
+verified: true
+auth:
+  type: none
+base_url: https://openlibrary.org
+actions:
+- slug: search
+  name: Search books
+  description: Search by title, author or ISBN.
+  method: GET
+  url: https://openlibrary.org/search.json
+  params:
+    q:
+      type: string
+      description: ''
+      required: true
+    limit:
+      type: integer
+      description: ''
+      default: 10
+  required:
+  - q
+  response:
+    path: docs
+    max_items: 15
+- slug: book
+  name: Book detail
+  description: Work detail for an Open Library id.
+  method: GET
+  url: https://openlibrary.org/works/{work_id}.json
+  params:
+    work_id:
+      type: string
+      description: e.g. OL45883W
+      required: true
+      in: path
+  required:
+  - work_id

@@ -1,0 +1,58 @@
+slug: outlook
+name: Outlook
+category: Communication
+description: Mail and calendar through Microsoft Graph.
+docs: https://learn.microsoft.com/graph/api/overview
+logo: https://cdn.simpleicons.org/microsoftoutlook/0078D4
+verified: false
+auth:
+  type: oauth2
+  authorize_url: https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+  token_url: https://login.microsoftonline.com/common/oauth2/v2.0/token
+  scopes:
+  - offline_access
+  - Mail.Read
+  - Calendars.Read
+  - User.Read
+  client_id_env: MICROSOFT_CLIENT_ID
+  client_secret_env: MICROSOFT_CLIENT_SECRET
+base_url: https://graph.microsoft.com/v1.0
+actions:
+- slug: me
+  name: Current user
+  description: Profile of the signed-in account.
+  method: GET
+  url: https://graph.microsoft.com/v1.0/me
+- slug: list_messages
+  name: List messages
+  description: Latest messages in the mailbox.
+  method: GET
+  url: https://graph.microsoft.com/v1.0/me/messages
+  params:
+    top:
+      type: integer
+      description: ''
+      default: 15
+    filter:
+      type: string
+      description: OData filter
+    select:
+      type: string
+      description: ''
+      default: subject,from,receivedDateTime,isRead
+  response:
+    path: value
+    max_items: 20
+- slug: list_events
+  name: List events
+  description: Upcoming calendar events.
+  method: GET
+  url: https://graph.microsoft.com/v1.0/me/events
+  params:
+    top:
+      type: integer
+      description: ''
+      default: 15
+  response:
+    path: value
+    max_items: 20

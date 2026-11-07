@@ -1,0 +1,80 @@
+slug: youtube
+name: YouTube
+category: Social
+description: Channel stats, videos and search through the YouTube Data API.
+docs: https://developers.google.com/youtube/v3/docs
+logo: https://cdn.simpleicons.org/youtube/FF0000
+verified: false
+auth:
+  type: oauth2
+  authorize_url: https://accounts.google.com/o/oauth2/v2/auth
+  token_url: https://oauth2.googleapis.com/token
+  scopes:
+  - https://www.googleapis.com/auth/youtube.readonly
+  client_id_env: GOOGLE_CLIENT_ID
+  client_secret_env: GOOGLE_CLIENT_SECRET
+  authorize_params:
+    access_type: offline
+    prompt: consent
+base_url: https://www.googleapis.com/youtube/v3
+actions:
+- slug: my_channel
+  name: My channel
+  description: Channel stats for the signed-in account.
+  method: GET
+  url: https://www.googleapis.com/youtube/v3/channels
+  params:
+    part:
+      type: string
+      description: ''
+      default: snippet,statistics
+    mine:
+      type: boolean
+      description: ''
+      default: true
+  response:
+    path: items
+    max_items: 5
+- slug: search
+  name: Search videos
+  description: Search YouTube videos.
+  method: GET
+  url: https://www.googleapis.com/youtube/v3/search
+  params:
+    part:
+      type: string
+      description: ''
+      default: snippet
+    q:
+      type: string
+      description: ''
+      required: true
+    maxResults:
+      type: integer
+      description: ''
+      default: 10
+      maximum: 25
+  required:
+  - q
+  response:
+    path: items
+    max_items: 15
+- slug: video_stats
+  name: Video stats
+  description: Views, likes and comments for video ids.
+  method: GET
+  url: https://www.googleapis.com/youtube/v3/videos
+  params:
+    part:
+      type: string
+      description: ''
+      default: snippet,statistics
+    id:
+      type: string
+      description: Comma separated ids
+      required: true
+  required:
+  - id
+  response:
+    path: items
+    max_items: 10

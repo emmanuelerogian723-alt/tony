@@ -1,0 +1,74 @@
+slug: slack
+name: Slack
+category: Communication
+verified: false
+description: Send messages, read channels and search conversations in a Slack workspace.
+docs: https://api.slack.com/methods
+logo: https://cdn.simpleicons.org/slack/4A154B
+base_url: https://slack.com/api
+auth:
+  type: oauth2
+  authorize_url: https://slack.com/oauth/v2/authorize
+  token_url: https://slack.com/api/oauth.v2.access
+  scopes: [channels:read, chat:write, users:read, search:read, files:read]
+  client_id_env: SLACK_CLIENT_ID
+  client_secret_env: SLACK_CLIENT_SECRET
+actions:
+  - slug: list_channels
+    name: List channels
+    description: Public channels in the workspace with ids and topics.
+    method: GET
+    url: https://slack.com/api/conversations.list
+    params:
+      limit: {type: integer, default: 50, maximum: 200}
+      exclude_archived: {type: boolean, default: true}
+      types: {type: string, default: "public_channel"}
+    response:
+      path: channels
+      max_items: 40
+  - slug: post_message
+    name: Post a message
+    description: Send a message to a channel as the connected user.
+    method: POST
+    url: https://slack.com/api/chat.postMessage
+    tier: write
+    params:
+      channel: {type: string, description: "Channel id (C…) or #name", required: true}
+      text: {type: string, required: true}
+      thread_ts: {type: string, description: Reply inside a thread}
+    required: [channel, text]
+    danger_note: Posts visibly in the workspace.
+  - slug: list_users
+    name: List users
+    description: Workspace members with display names and ids.
+    method: GET
+    url: https://slack.com/api/users.list
+    params:
+      limit: {type: integer, default: 100, maximum: 200}
+    response:
+      path: members
+      max_items: 60
+  - slug: search_messages
+    name: Search messages
+    description: Full-text search across channels the user can see.
+    method: GET
+    url: https://slack.com/api/search.messages
+    params:
+      query: {type: string, required: true}
+      count: {type: integer, default: 20, maximum: 100}
+    required: [query]
+    response:
+      path: messages.matches
+      max_items: 20
+  - slug: channel_history
+    name: Channel history
+    description: Recent messages in a channel.
+    method: GET
+    url: https://slack.com/api/conversations.history
+    params:
+      channel: {type: string, required: true}
+      limit: {type: integer, default: 30, maximum: 200}
+    required: [channel]
+    response:
+      path: messages
+      max_items: 30

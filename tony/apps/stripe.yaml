@@ -1,0 +1,60 @@
+slug: stripe
+name: Stripe
+category: Commerce
+verified: false
+description: Payments, customers, invoices and balance for a Stripe account.
+docs: https://docs.stripe.com/api
+logo: https://cdn.simpleicons.org/stripe/635BFF
+base_url: https://api.stripe.com/v1
+auth:
+  type: bearer
+  static_env: STRIPE_SECRET_KEY
+actions:
+  - slug: balance
+    name: Balance
+    description: Available and pending balance by currency.
+    method: GET
+    url: https://api.stripe.com/v1/balance
+  - slug: list_customers
+    name: List customers
+    description: Most recent customers with email and metadata.
+    method: GET
+    url: https://api.stripe.com/v1/customers
+    params:
+      limit: {type: integer, default: 10, minimum: 1, maximum: 100}
+      email: {type: string}
+    response:
+      path: data
+      max_items: 20
+  - slug: list_payments
+    name: List payments
+    description: Recent PaymentIntents with amount, currency and status.
+    method: GET
+    url: https://api.stripe.com/v1/payment_intents
+    params:
+      limit: {type: integer, default: 10, minimum: 1, maximum: 100}
+    response:
+      path: data
+      max_items: 20
+  - slug: list_invoices
+    name: List invoices
+    description: Recent invoices with totals and status.
+    method: GET
+    url: https://api.stripe.com/v1/invoices
+    params:
+      limit: {type: integer, default: 10, minimum: 1, maximum: 100}
+      status: {type: string, enum: [draft, open, paid, uncollectible, void]}
+    response:
+      path: data
+      max_items: 20
+  - slug: create_customer
+    name: Create customer
+    description: Add a customer record.
+    method: POST
+    url: https://api.stripe.com/v1/customers
+    tier: write
+    params:
+      email: {type: string, required: true}
+      name: {type: string}
+      metadata: {type: object}
+    required: [email]

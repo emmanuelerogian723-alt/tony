@@ -1,0 +1,49 @@
+slug: resend
+name: Resend
+category: Communication
+description: Transactional email through Resend.
+docs: https://resend.com/docs/api-reference/introduction
+logo: https://cdn.simpleicons.org/resend/000000
+verified: false
+auth:
+  type: bearer
+  static_env: RESEND_API_KEY
+base_url: https://api.resend.com
+actions:
+- slug: list_domains
+  name: List domains
+  description: Verified sending domains.
+  method: GET
+  url: https://api.resend.com/domains
+  response:
+    path: data
+    max_items: 20
+- slug: send_email
+  name: Send email
+  description: Send an email from a verified domain.
+  method: POST
+  url: https://api.resend.com/emails
+  params:
+    from:
+      type: string
+      description: ''
+      required: true
+    to:
+      type: array
+      description: Recipients
+    subject:
+      type: string
+      description: ''
+      required: true
+    html:
+      type: string
+      description: ''
+    text:
+      type: string
+      description: ''
+  required:
+  - from
+  - to
+  - subject
+  tier: write
+  danger_note: Sends real email.

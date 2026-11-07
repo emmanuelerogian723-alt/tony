@@ -1,0 +1,54 @@
+slug: gnews
+name: GNews
+category: Data
+description: Global news headlines and search.
+docs: https://gnews.io/docs/v4
+logo: https://cdn.simpleicons.org/gnews/2E7D32
+verified: false
+auth:
+  type: api_key
+  query_name: apikey
+  header_name: ''
+  value_template: '{token}'
+base_url: https://gnews.io/api/v4
+actions:
+- slug: top_headlines
+  name: Top headlines
+  description: Headlines for a category or country.
+  method: GET
+  url: https://gnews.io/api/v4/top-headlines
+  params:
+    category:
+      type: string
+      description: ''
+      default: general
+    lang:
+      type: string
+      description: ''
+      default: en
+    max:
+      type: integer
+      description: ''
+      default: 15
+  response:
+    path: articles
+    max_items: 20
+- slug: search
+  name: Search news
+  description: Search articles by keyword.
+  method: GET
+  url: https://gnews.io/api/v4/search
+  params:
+    q:
+      type: string
+      description: ''
+      required: true
+    max:
+      type: integer
+      description: ''
+      default: 15
+  required:
+  - q
+  response:
+    path: articles
+    max_items: 20

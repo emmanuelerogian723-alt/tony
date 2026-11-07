@@ -1,0 +1,68 @@
+slug: reddit
+name: Reddit
+category: Social
+description: Subreddits and posts for a Reddit account.
+docs: https://www.reddit.com/dev/api/
+logo: https://cdn.simpleicons.org/reddit/FF4500
+verified: false
+auth:
+  type: oauth2
+  authorize_url: https://www.reddit.com/api/v1/authorize
+  token_url: https://www.reddit.com/api/v1/access_token
+  scopes:
+  - identity
+  - read
+  - submit
+  client_id_env: REDDIT_CLIENT_ID
+  client_secret_env: REDDIT_CLIENT_SECRET
+  pkce: false
+base_url: https://oauth.reddit.com
+actions:
+- slug: me
+  name: Current user
+  description: Profile of the signed-in account.
+  method: GET
+  url: https://oauth.reddit.com/api/v1/me
+- slug: hot
+  name: Hot posts
+  description: Hot posts in a subreddit.
+  method: GET
+  url: https://oauth.reddit.com/r/{subreddit}/hot
+  params:
+    subreddit:
+      type: string
+      description: ''
+      required: true
+      in: path
+    limit:
+      type: integer
+      description: ''
+      default: 20
+  required:
+  - subreddit
+  response:
+    path: data.children
+    max_items: 25
+- slug: search
+  name: Search posts
+  description: Search Reddit.
+  method: GET
+  url: https://oauth.reddit.com/search
+  params:
+    q:
+      type: string
+      description: ''
+      required: true
+    limit:
+      type: integer
+      description: ''
+      default: 20
+    sort:
+      type: string
+      description: ''
+      default: relevance
+  required:
+  - q
+  response:
+    path: data.children
+    max_items: 25

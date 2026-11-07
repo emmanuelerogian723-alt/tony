@@ -1,0 +1,43 @@
+slug: render
+name: Render
+category: Developer
+description: Services, deploys and status on Render.
+docs: https://api-docs.render.com/
+logo: https://cdn.simpleicons.org/render/46E3B7
+verified: false
+auth:
+  type: bearer
+  static_env: RENDER_API_KEY
+base_url: https://api.render.com/v1
+actions:
+- slug: list_services
+  name: List services
+  description: Web services, cron jobs and databases.
+  method: GET
+  url: https://api.render.com/v1/services
+  params:
+    limit:
+      type: integer
+      description: ''
+      default: 20
+  response:
+    max_items: 30
+- slug: list_deploys
+  name: List deploys
+  description: Recent deploys for a service.
+  method: GET
+  url: https://api.render.com/v1/services/{service_id}/deploys
+  params:
+    service_id:
+      type: string
+      description: ''
+      required: true
+      in: path
+    limit:
+      type: integer
+      description: ''
+      default: 10
+  required:
+  - service_id
+  response:
+    max_items: 20

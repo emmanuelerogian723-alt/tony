@@ -1,0 +1,125 @@
+slug: github
+name: GitHub
+category: Developer
+verified: true
+description: Repositories, issues, pull requests, releases and code search for the signed-in user.
+docs: https://docs.github.com/en/rest
+logo: https://cdn.simpleicons.org/github/181717
+base_url: https://api.github.com
+default_headers:
+  Accept: application/vnd.github+json
+  X-GitHub-Api-Version: "2022-11-28"
+auth:
+  type: oauth2
+  authorize_url: https://github.com/login/oauth/authorize
+  token_url: https://github.com/login/oauth/access_token
+  scopes: [read:user, repo, read:org]
+  client_id_env: GITHUB_CLIENT_ID
+  client_secret_env: GITHUB_CLIENT_SECRET
+  authorize_params: {allow_signup: "true"}
+actions:
+  - slug: me
+    name: Current user
+    description: Profile of the authenticated user.
+    method: GET
+    url: https://api.github.com/user
+  - slug: list_repos
+    name: List repositories
+    description: Repositories for the authenticated user, newest first.
+    method: GET
+    url: https://api.github.com/user/repos
+    params:
+      type: {type: string, enum: [all, owner, member], default: all}
+      sort: {type: string, enum: [updated, pushed, full_name, created], default: updated}
+      per_page: {type: integer, default: 20, minimum: 1, maximum: 100}
+      page: {type: integer, default: 1}
+    response:
+      max_items: 30
+  - slug: search_repos
+    name: Search repositories
+    description: Search public repositories by keyword, language or stars.
+    method: GET
+    url: https://api.github.com/search/repositories
+    params:
+      q: {type: string, description: "GitHub search syntax, e.g. language:python stars:>1000", required: true}
+      sort: {type: string, enum: [stars, forks, updated, best-match], default: stars}
+      order: {type: string, enum: [desc, asc], default: desc}
+      per_page: {type: integer, default: 10, minimum: 1, maximum: 50}
+    required: [q]
+    response:
+      path: items
+      max_items: 10
+  - slug: list_issues
+    name: List issues
+    description: Issues in a repository, filtered by state.
+    method: GET
+    url: https://api.github.com/repos/{owner}/{repo}/issues
+    params:
+      owner: {type: string, required: true, in: path}
+      repo: {type: string, required: true, in: path}
+      state: {type: string, enum: [open, closed, all], default: open}
+      per_page: {type: integer, default: 20, minimum: 1, maximum: 100}
+    required: [owner, repo]
+    response:
+      max_items: 25
+  - slug: create_issue
+    name: Create an issue
+    description: Open a new issue in a repository.
+    method: POST
+    url: https://api.github.com/repos/{owner}/{repo}/issues
+    tier: write
+    params:
+      owner: {type: string, required: true, in: path}
+      repo: {type: string, required: true, in: path}
+      title: {type: string, required: true}
+      body: {type: string}
+      labels: {type: array, in: body}
+    required: [owner, repo, title]
+    danger_note: Posts a public issue under the user's account.
+  - slug: list_pull_requests
+    name: List pull requests
+    description: Pull requests in a repository.
+    method: GET
+    url: https://api.github.com/repos/{owner}/{repo}/pulls
+    params:
+      owner: {type: string, required: true, in: path}
+      repo: {type: string, required: true, in: path}
+      state: {type: string, enum: [open, closed, all], default: open}
+      per_page: {type: integer, default: 20, minimum: 1, maximum: 100}
+    required: [owner, repo]
+    response:
+      max_items: 25
+  - slug: list_commits
+    name: List commits
+    description: Recent commits on a branch.
+    method: GET
+    url: https://api.github.com/repos/{owner}/{repo}/commits
+    params:
+      owner: {type: string, required: true, in: path}
+      repo: {type: string, required: true, in: path}
+      sha: {type: string, description: Branch or SHA, default: main}
+      per_page: {type: integer, default: 20, minimum: 1, maximum: 100}
+    required: [owner, repo]
+    response:
+      max_items: 20
+  - slug: repo_info
+    name: Repository info
+    description: Stars, forks, language and description for one repository.
+    method: GET
+    url: https://api.github.com/repos/{owner}/{repo}
+    params:
+      owner: {type: string, required: true, in: path}
+      repo: {type: string, required: true, in: path}
+    required: [owner, repo]
+  - slug: create_comment
+    name: Comment on an issue or PR
+    description: Post a comment on an issue or pull request.
+    method: POST
+    url: https://api.github.com/repos/{owner}/{repo}/issues/{number}/comments
+    tier: write
+    params:
+      owner: {type: string, required: true, in: path}
+      repo: {type: string, required: true, in: path}
+      number: {type: integer, required: true, in: path}
+      body: {type: string, required: true}
+    required: [owner, repo, number, body]

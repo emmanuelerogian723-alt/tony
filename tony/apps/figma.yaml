@@ -1,0 +1,35 @@
+slug: figma
+name: Figma
+category: Productivity
+description: Files and projects in Figma.
+docs: https://www.figma.com/developers/api
+logo: https://cdn.simpleicons.org/figma/F24E1E
+verified: false
+auth:
+  type: api_key
+  header_name: X-Figma-Token
+  value_template: '{token}'
+base_url: https://api.figma.com/v1
+actions:
+- slug: me
+  name: Current user
+  description: Profile of the token owner.
+  method: GET
+  url: https://api.figma.com/v1/me
+- slug: file_info
+  name: File info
+  description: Metadata for a Figma file.
+  method: GET
+  url: https://api.figma.com/v1/files/{file_key}
+  params:
+    file_key:
+      type: string
+      description: ''
+      required: true
+      in: path
+    depth:
+      type: integer
+      description: ''
+      default: 1
+  required:
+  - file_key

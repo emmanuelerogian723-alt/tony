@@ -1,0 +1,35 @@
+slug: worldbank
+name: World Bank Open Data
+category: Data
+verified: true
+description: Country statistics, indicators and time series from the World Bank. No key required.
+docs: https://datahelpdesk.worldbank.org/knowledgebase/topics/125589
+logo: https://cdn.simpleicons.org/worldbank/0071BC
+auth:
+  type: none
+actions:
+  - slug: countries
+    name: Countries
+    description: Countries with ISO codes and income level.
+    method: GET
+    url: https://api.worldbank.org/v2/country
+    params:
+      format: {type: string, default: json, in: query}
+      per_page: {type: integer, default: 60, in: query}
+    response:
+      path: "1"
+      max_items: 60
+  - slug: indicator
+    name: Indicator time series
+    description: Historical values for an indicator and country (e.g. SP.POP.TOTL = population).
+    method: GET
+    url: https://api.worldbank.org/v2/country/{country}/indicator/{indicator}
+    params:
+      country: {type: string, description: "ISO code, e.g. NGA", required: true, in: path}
+      indicator: {type: string, description: "e.g. SP.POP.TOTL", required: true, in: path}
+      format: {type: string, default: json, in: query}
+      per_page: {type: integer, default: 20, in: query}
+    required: [country, indicator]
+    response:
+      path: "1"
+      max_items: 20

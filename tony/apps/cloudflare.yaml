@@ -1,0 +1,46 @@
+slug: cloudflare
+name: Cloudflare
+category: Developer
+description: Zones, DNS records and account details.
+docs: https://developers.cloudflare.com/api/
+logo: https://cdn.simpleicons.org/cloudflare/F38020
+verified: false
+auth:
+  type: bearer
+  static_env: CLOUDFLARE_API_TOKEN
+base_url: https://api.cloudflare.com/client/v4
+actions:
+- slug: verify_token
+  name: Verify token
+  description: Check that the API token is active.
+  method: GET
+  url: https://api.cloudflare.com/client/v4/user/tokens/verify
+- slug: list_zones
+  name: List zones
+  description: Domains on the account.
+  method: GET
+  url: https://api.cloudflare.com/client/v4/zones
+  params:
+    per_page:
+      type: integer
+      description: ''
+      default: 20
+  response:
+    path: result
+    max_items: 30
+- slug: list_dns
+  name: List DNS records
+  description: DNS records for a zone.
+  method: GET
+  url: https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records
+  params:
+    zone_id:
+      type: string
+      description: ''
+      required: true
+      in: path
+  required:
+  - zone_id
+  response:
+    path: result
+    max_items: 40

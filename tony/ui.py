@@ -183,6 +183,7 @@ pre.out{margin:0;background:#0a0a0a;color:#e8e8ea;border-radius:12px;padding:15p
   <aside class="side">
     <div class="logo"><img class="logo-mark" src="/static/brand/tony-mark.svg" alt="" width="26" height="26"><span>Tony</span></div>
     <div class="nav-item active" data-page="apps"><span class="i">▦</span><span>Apps</span></div>
+    <div class="nav-item" data-page="agent"><span class="i">✳</span><span>Agent</span></div>
     <div class="nav-item" data-page="connections"><span class="i">🔗</span><span>Connections</span></div>
     <div class="nav-item" data-page="runs"><span class="i">⟳</span><span>Runs</span></div>
     <div class="nav-item" data-page="triggers"><span class="i">⚡</span><span>Triggers</span></div>
@@ -216,6 +217,29 @@ pre.out{margin:0;background:#0a0a0a;color:#e8e8ea;border-radius:12px;padding:15p
         <div class="tiny muted" style="text-align:center;margin:10px 0 30px">Icons come from each app's own brand data; everything else gets a generated monogram.</div>
       </section>
       <!-- CONNECTIONS -->
+      <section class="page" id="page-agent">
+        <div class="head"><div><h2>Agent</h2><p>Give it an outcome. It plans across apps, runs the calls, and shows the receipts.</p></div></div>
+        <div class="grid2" style="grid-template-columns:1.15fr .85fr">
+          <div class="panel"><div class="panel-h"><b>Goal</b><span class="tiny muted">writes need approval</span></div>
+            <div class="panel-b">
+              <textarea id="ag-goal" class="input" rows="4" style="width:100%;resize:vertical;font-family:var(--mono);font-size:12.5px"
+                placeholder="e.g. check the top hacker news stories and summarise the best three"></textarea>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+                <button class="btn" id="ag-run">Run agent</button>
+                <button class="btn ghost" id="ag-write">Allow writes</button>
+                <button class="btn ghost" id="ag-clear">Clear</button>
+              </div>
+              <div class="tiny muted" style="margin-top:10px">Try: <span id="ag-eg"></span></div>
+            </div>
+          </div>
+          <div class="panel"><div class="panel-h"><b>Answer</b><span class="tiny muted" id="ag-engine"></span></div>
+            <div class="panel-b"><div id="ag-answer" style="font-size:13px;line-height:1.6">No run yet.</div></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:14px"><div class="panel-h"><b>Steps</b><span class="tiny muted">app.action, status, latency</span></div>
+          <div class="panel-b" id="ag-steps"><p class="tiny muted">Nothing has run.</p></div>
+        </div>
+      </section>
       <section class="page" id="page-connections">
         <div class="head"><div><h2>Connections</h2><p>Accounts your users have signed into.</p></div></div>
         <div class="panel"><div id="conns"><div class="empty">Loading…</div></div></div>
@@ -384,6 +408,7 @@ document.querySelectorAll('.nav-item').forEach(el=>el.onclick=()=>{
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.getElementById('page-'+el.dataset.page).classList.add('on');
   if(el.dataset.page==='runs')loadRuns();
+  if(el.dataset.page==='agent')mountAgent();
   if(el.dataset.page==='connections')loadConns();
   if(el.dataset.page==='triggers')loadTriggers();
   if(el.dataset.page==='billing')loadBilling();
@@ -391,6 +416,66 @@ document.querySelectorAll('.nav-item').forEach(el=>el.onclick=()=>{
 });
 
 const PAGE = 60;
+
+let AG_WRITES = false, AG_ON = false;
+const AG_EXAMPLES = [
+  'summarise the top hacker news stories right now',
+  'find the latest space news and explain it in three lines',
+  'what are the top stories on the front page today',
+  'look up a random wikipedia article and summarise it'
+];
+function mountAgent(){
+  if(AG_ON) return; AG_ON = true;
+  const eg = document.getElementById('ag-eg');
+  eg.innerHTML = AG_EXAMPLES.map(x=>'<span class="chip" style="cursor:pointer;margin-right:6px">'+esc(x.split(' ').slice(0,3).join(' '))+'</span>').join('');
+  eg.querySelectorAll('.chip').forEach((c,i)=>c.onclick=()=>{document.getElementById('ag-goal').value=AG_EXAMPLES[i]});
+  document.getElementById('ag-write').onclick=()=>{
+    AG_WRITES=!AG_WRITES;
+    document.getElementById('ag-write').textContent = AG_WRITES?'Writes allowed':'Allow writes';
+    document.getElementById('ag-write').style.borderColor = AG_WRITES?'var(--ink)':'';
+  };
+  document.getElementById('ag-clear').onclick=()=>{
+    document.getElementById('ag-goal').value='';
+    document.getElementById('ag-answer').textContent='No run yet.';
+    document.getElementById('ag-engine').textContent='';
+    document.getElementById('ag-steps').innerHTML='<p class="tiny muted">Nothing has run.</p>';
+  };
+  document.getElementById('ag-run').onclick=runAgent;
+  document.getElementById('ag-goal').addEventListener('keydown',e=>{
+    if((e.metaKey||e.ctrlKey)&&e.key==='Enter') runAgent();
+  });
+}
+async function runAgent(){
+  const goal = (document.getElementById('ag-goal').value||'').trim();
+  if(!goal){ toast('Describe the outcome first'); return; }
+  const btn = document.getElementById('ag-run');
+  btn.disabled = true; btn.textContent = 'Thinking…';
+  const ans = document.getElementById('ag-answer');
+  const steps = document.getElementById('ag-steps');
+  ans.innerHTML = '<span class="muted">Planning across the catalogue…</span>';
+  steps.innerHTML = '<p class="tiny muted">Running…</p>';
+  try{
+    const r = await fetch('/v1/agent', {method:'POST', headers:headers(),
+      body: JSON.stringify({goal, max_steps: 4, approve_writes: AG_WRITES})});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail||('HTTP '+r.status));
+    document.getElementById('ag-engine').textContent = (d.engine||'') + ' · ' + (d.elapsed_ms||0) + ' ms';
+    ans.textContent = d.answer || 'No answer returned.';
+    const rows = (d.steps||[]).map(s=>{
+      const ok = s.ok;
+      return '<div class="row" style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line)">'+
+        '<span style="color:'+(ok?'#137a45':'#a33')+';font-size:12px">'+(ok?'OK':'FAIL')+'</span>'+
+        '<div style="flex:1;min-width:0"><div class="mono tiny">'+esc(s.app||'-')+'.'+esc(s.action||'-')+'</div>'+
+        '<div class="tiny muted" style="margin-top:2px">'+esc((s.error||'').slice(0,180) || ((s.latency_ms||0)+' ms'))+'</div></div></div>';
+    }).join('');
+    steps.innerHTML = rows || '<p class="tiny muted">The model answered without calling a tool.</p>';
+  }catch(e){
+    ans.textContent = 'That run failed: ' + e.message;
+    steps.innerHTML = '<p class="tiny muted">No calls were recorded.</p>';
+  }finally{
+    btn.disabled = false; btn.textContent = 'Run agent';
+  }
+}
 let APPS = [], CATS = [], CUR = null, CURACT = null, CONNS = [], TOTAL = 0, OFFSET = 0, Q = '', CAT = '', TIER = '';
 
 function initials(name){

@@ -4,8 +4,11 @@ from __future__ import annotations
 import asyncio
 
 import json
+import os
+import re
 import secrets
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -16,7 +19,7 @@ from .auth import workspace_from_request
 from .catalog import catalog
 from .config import settings
 from .db import session
-from .executor import ExecutionError, execute
+from .executor import ExecutionError, execute, needs_base_url
 from .models import ActionRun, ConnectedAccount, Entity, Trigger, WebhookDelivery
 from .oauth import (
     OAuthError,
@@ -82,6 +85,8 @@ def get_app(slug: str) -> dict[str, Any]:
         "static_env": spec.auth.static_env,
         "user_supplied": spec.auth.type in {"api_key", "bearer", "basic", "custom"},
     }
+    data["needs_base_url"] = needs_base_url(spec)
+    data["needs_token"] = spec.auth.type != "none"
     return data
 
 
@@ -184,6 +189,38 @@ def connect_start(app_slug: str, request: Request, entity_id: str = "default",
     return {"mode": "oauth", "auth_session_id": session_id, "authorization_url": url}
 
 
+PRIVATE_HOST_RE = re.compile(
+    r"^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|169\.254\.|::1|\[::1\]|"
+    r"172\.(1[6-9]|2\d|3[01])\.|.*\.(internal|local|localhost)$)", re.IGNORECASE)
+
+
+def normalise_base_url(raw: str) -> str:
+    """Validate and tidy the API root a user pastes for a directory app.
+
+    Rejects anything that is not http(s), and blocks link-local / private
+    addresses so a connected app cannot be pointed at the host's own network.
+    Self-hosters who really do call an internal API can set
+    TONY_ALLOW_PRIVATE_BASE_URLS=1.
+    """
+    value = (raw or "").strip()
+    if not value:
+        raise HTTPException(400, detail="Base URL is required for this app")
+    if "://" not in value:
+        value = "https://" + value
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"http", "https"}:
+        raise HTTPException(400, detail="Base URL must start with http:// or https://")
+    host = (parsed.hostname or "").strip().lower()
+    if not host or "." not in host.replace("[", "").replace("]", "") and host != "localhost":
+        raise HTTPException(400, detail="That does not look like a host, e.g. https://api.example.com")
+    allow_private = os.getenv("TONY_ALLOW_PRIVATE_BASE_URLS", "").strip() in {"1", "true", "yes"}
+    if not allow_private and PRIVATE_HOST_RE.match(host):
+        raise HTTPException(400, detail="Private and loopback hosts are blocked. Set TONY_ALLOW_PRIVATE_BASE_URLS=1 to allow them.")
+    path = parsed.path.rstrip("/")
+    query = f"?{parsed.query}" if parsed.query else ""
+    return f"{parsed.scheme}://{parsed.netloc}{path}{query}"
+
+
 class KeyIn(BaseModel):
     entity_id: str = "default"
     values: dict[str, str] = Field(default_factory=dict)
@@ -196,10 +233,15 @@ def connect_key(app_slug: str, body: KeyIn, request: Request) -> dict[str, Any]:
     spec = catalog.get(app_slug)
     if not spec:
         raise HTTPException(404, detail="Unknown app")
-    if not body.values:
+    values = dict(body.values)
+    if needs_base_url(spec) or "base_url" in values:
+        values["base_url"] = normalise_base_url(values.get("base_url", ""))
+    elif not values:
         raise HTTPException(400, detail="Provide the credential values for this app")
+    if not values or (spec.auth.type != "none" and not any(v for k, v in values.items() if k != "base_url")):
+        raise HTTPException(400, detail=f"{spec.name} needs a token as well as a base URL")
     _entity(ws, body.entity_id)
-    acct = store_api_key(ws, body.entity_id, spec, body.values, body.label)
+    acct = store_api_key(ws, body.entity_id, spec, values, body.label)
     return {"mode": "key", "connection": public_redact(acct)}
 
 

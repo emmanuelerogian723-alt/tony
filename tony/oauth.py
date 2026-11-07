@@ -250,4 +250,17 @@ def public_redact(account: ConnectedAccount) -> dict[str, Any]:
         "scopes": account.scopes.split() if account.scopes else [],
         "created_at": account.created_at.isoformat() if account.created_at else None,
         "expires_at": account.expires_at.isoformat() if account.expires_at else None,
+        "base_url": _safe_base_url(account),
     }
+
+
+def _safe_base_url(account: ConnectedAccount) -> str:
+    """Expose the user-supplied API host, never the secret material."""
+    if not account.credentials_enc:
+        return ""
+    try:
+        creds = decrypt_json(account.credentials_enc)
+    except Exception:
+        return ""
+    value = creds.get("base_url") if isinstance(creds, dict) else None
+    return str(value)[:300] if value else ""

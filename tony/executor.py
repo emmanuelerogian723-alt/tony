@@ -237,6 +237,14 @@ def rss_items(raw: str, limit: int = 20) -> list:
 
 
 # ── request building ──────────────────────────────────────────────────────
+def needs_base_url(spec: AppSpec) -> bool:
+    """True when an app's URL template still expects the user to supply a host."""
+    for act in spec.actions:
+        if "{base_url}" in (act.url or ""):
+            return True
+    return False
+
+
 def apply_auth(
     spec: AppSpec,
     headers: dict[str, str],
@@ -348,6 +356,10 @@ def build_request(
                 url = url.replace(token, _raw)
             else:
                 url = url.replace(token, quote(_raw, safe="/" if keep_slash else ""))
+    if "{base_url}" in url:
+        raise ExecutionError(
+            f"{spec.name} has no API host yet. Open the console, pick {spec.name} → Connect, "
+            f"and paste its API base URL (docs: {spec.docs or 'see the vendor docs'}).")
     if "{" in url and "}" in url:
         raise ExecutionError(f"Unresolved path parameter in URL: {url}")
 

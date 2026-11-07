@@ -487,16 +487,14 @@ async function runAction(){
 
 function renderConnectTab(d, conn){
   const box = document.getElementById('connect-body');
-  if(d.auth.type==='none'){
-    box.innerHTML = '<div class="panel" style="border-radius:12px"><div class="panel-b">'+
-      '<p style="margin:0 0 6px"><b>Public app</b></p>'+
-      '<p class="muted" style="margin:0;font-size:13px">No credentials needed. Run any action right away.</p></div></div>';
-    return;
-  }
+  const base = (conn && conn.base_url) || '';
   if(conn){
     box.innerHTML = '<div class="panel" style="border-radius:12px"><div class="panel-b">'+
       '<p style="margin:0 0 4px"><b>Connected</b></p>'+
-      '<p class="muted tiny" style="margin:0">Scopes: '+esc((conn.scopes||[]).join(' ')||'—')+'</p></div></div>';
+      (base?'<p class="mono-sm" style="margin:0 0 6px;word-break:break-all">'+esc(base)+'</p>':'')+
+      '<p class="muted tiny" style="margin:0">Scopes: '+esc((conn.scopes||[]).join(' ')||'—')+'</p>'+
+      '<button class="btn small ghost" style="margin-top:12px" onclick="disconnect()">Disconnect</button>'+
+      '</div></div>';
     return;
   }
   if(d.auth.type==='oauth2'){
@@ -511,11 +509,27 @@ function renderConnectTab(d, conn){
       '</div></div>';
     return;
   }
+
+  const needsBase = !!d.needs_base_url, needsToken = d.auth.type !== 'none';
+  let rows = '';
+  if(needsBase){
+    rows += '<div class="field"><label>API base URL *<span class="hint">https</span></label>'+
+      '<input class="input" id="k-base" placeholder="https://api.'+esc(d.slug.replace(/-/g,''))+'.com" autocomplete="off"></div>';
+  }
+  if(needsToken){
+    rows += '<div class="field"><label>'+(needsBase?'Token / API key *':'API key / token *')+'</label>'+
+      '<input class="input" id="k-val" type="password" placeholder="paste the key" autocomplete="off"></div>';
+  }
+  const explain = needsBase
+    ? 'This app ships with its documented paths but no fixed host, so Tony needs you to tell it where the API lives. Paths get appended to the base URL you paste here.'
+    : 'Stored encrypted with Fernet on this server. Never shown again.';
   box.innerHTML = '<div class="panel" style="border-radius:12px"><div class="panel-b">'+
-    '<p style="margin:0 0 10px"><b>Add your '+esc(d.name)+' key</b></p>'+
-    '<div class="field"><label>API key / token</label><input class="input" id="k-val" placeholder="paste the key"></div>'+
-    '<button class="btn small" onclick="saveKey()">Save key</button>'+
-    '<p class="muted tiny" style="margin:10px 0 0">Stored encrypted with Fernet. Never shown again.</p></div></div>';
+    '<p style="margin:0 0 6px"><b>'+(needsBase?'Point Tony at ':'Add your ')+esc(d.name)+'</b></p>'+
+    '<p class="muted tiny" style="margin:0 0 14px">'+esc(explain)+'</p>'+ rows +
+    '<button class="btn small" onclick="saveKey()">Save connection</button>'+
+    (d.docs?'<p class="muted tiny" style="margin:10px 0 0">Base URL is in the vendor docs: '+
+      '<a href="'+esc(d.docs)+'" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">'+esc(d.docs)+'</a></p>':'')+
+    '</div></div>';
 }
 
 async function startConnect(){
@@ -525,13 +539,31 @@ async function startConnect(){
   else { toast(d.detail||'Could not start'); }
 }
 async function saveKey(){
-  const val = document.getElementById('k-val').value.trim();
-  if(!val){ toast('Paste a key first'); return }
+  const values = {};
+  const baseEl = document.getElementById('k-base');
+  const keyEl = document.getElementById('k-val');
+  if(baseEl){
+    const b = baseEl.value.trim();
+    if(!b){ toast('Paste the API base URL'); return }
+    values.base_url = b;
+  }
+  if(keyEl){
+    const v = keyEl.value.trim();
+    if(!v && CUR.auth.type!=='none'){ toast('Paste a key first'); return }
+    if(v){ values.api_key = v; values.token = v; values.access_token = v; }
+  }
+  const btn = event && event.target; if(btn) btn.disabled = true;
   const r = await fetch(BASE+'/v1/connections/'+CUR.slug+'/key',{method:'POST',headers:headers(),
-    body:JSON.stringify({entity_id:'default', values:{api_key:val, access_token:val, token:val}, label:'api key'})});
-  const d = await r.json();
-  if(d.connection){ toast('Connected'); closeDrawer(); loadConns(); }
+    body:JSON.stringify({entity_id:'default', values, label:'console'})});
+  const d = await r.json().catch(()=>({}));
+  if(btn) btn.disabled = false;
+  if(d.connection){ toast('Connected'); closeDrawer(); loadConns(); openApp(CUR.slug); }
   else toast(d.detail||'Failed');
+}
+
+async function disconnect(){
+  await fetch(BASE+'/v1/connections/'+CUR.slug+'?entity_id=default',{method:'DELETE',headers:headers()});
+  toast('Disconnected'); loadConns(); closeDrawer();
 }
 function closeDrawer(){document.getElementById('drawer').classList.remove('on')}
 

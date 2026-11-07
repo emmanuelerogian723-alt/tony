@@ -17,3 +17,6 @@ build/
 *.egg-info/
 coverage.xml
 htmlcov/
+
+# CI workflow is shipped as docs/ci-github-actions.yml (push needs `workflow` scope)
+.github/workflows/

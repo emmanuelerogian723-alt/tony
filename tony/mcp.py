@@ -41,6 +41,39 @@ META_TOOLS: list[dict[str, Any]] = [
         "annotations": {"readOnlyHint": True, "openWorldHint": True},
     },
     {
+        "name": "tony_agent",
+        "description": ("Give Tony a goal in plain language and it plans across the whole catalogue, runs the "
+                        "calls and answers with evidence. Use this for multi-step work ('summarise today's "
+                        "Hacker News and draft a post about it') instead of picking tools yourself."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "goal": {"type": "string", "description": "The outcome you want, in plain words"},
+                "apps": {"type": "array", "items": {"type": "string"},
+                         "description": "Optional app slugs to restrict the plan to"},
+                "max_steps": {"type": "integer", "default": 4, "minimum": 1, "maximum": 6},
+                "approve_writes": {"type": "boolean", "default": False,
+                                   "description": "Only true when the operator approved write actions"},
+            },
+            "required": ["goal"],
+        },
+        "annotations": {"readOnlyHint": False, "openWorldHint": True},
+    },
+    {
+        "name": "tony_apps",
+        "description": ("List or search apps in the catalogue (slug, name, action count, auth type). "
+                        "Use it before tony_search_tools when you only know the product name."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Name fragment, e.g. 'notion'"},
+                "limit": {"type": "integer", "default": 10, "minimum": 1, "maximum": 40},
+            },
+            "required": [],
+        },
+        "annotations": {"readOnlyHint": True, "openWorldHint": False},
+    },
+    {
         "name": "tony_execute",
         "description": ("Run any action by its dotted name (app.action). Same behaviour as calling "
                         "the tool directly; handy when the name came from tony_search_tools."),
@@ -229,6 +262,38 @@ async def _handle(msg: dict[str, Any], request: Request) -> dict[str, Any]:
 
         if name == "tony_search_tools":
             return ok(_search_tools(args))
+        if name == "tony_apps":
+            q = str(args.get("query") or "").strip().lower()
+            limit = max(1, min(int(args.get("limit") or 10), 40))
+            rows = []
+            for spec in catalog.apps.values():
+                hay = f"{spec.slug} {spec.name} {spec.category}".lower()
+                if q and q not in hay:
+                    continue
+                rows.append({"app": spec.slug, "name": spec.name, "actions": len(spec.actions),
+                             "auth": spec.auth.type, "category": spec.category,
+                             "connected_by": "sign in on the provider page" if spec.auth.type != "none" else "not required"})
+            rows.sort(key=lambda r: (r["app"] != q, -r["actions"]))
+            return ok({"content": [{"type": "text", "text": json.dumps(
+                {"ok": True, "count": len(rows), "apps": rows[:limit],
+                 "total_apps": len(catalog.apps)}, indent=2)}], "isError": False})
+        if name == "tony_agent":
+            from .power import AgentIn, agent as run_agent
+            goal = str(args.get("goal") or "").strip()
+            if not goal:
+                return err(-32602, "goal is required")
+            body = AgentIn(goal=goal, apps=[str(a) for a in (args.get("apps") or [])][:6],
+                           max_steps=int(args.get("max_steps") or 4),
+                           approve_writes=bool(args.get("approve_writes")))
+            try:
+                out = await run_agent(body, request)
+            except Exception as exc:  # noqa: BLE001
+                return ok({"content": [{"type": "text", "text": json.dumps(
+                    {"ok": False, "error": f"{type(exc).__name__}: {exc}"})}], "isError": True})
+            return ok({"content": [{"type": "text", "text": json.dumps(out, indent=2, default=str)}],
+                       "isError": False,
+                       "_meta": {"engine": out.get("engine"), "steps": len(out.get("steps") or []),
+                                 "elapsed_ms": out.get("elapsed_ms")}})
         if name == "tony_execute":
             name = str(args.get("action") or "")
 
@@ -298,6 +363,7 @@ def mcp_info() -> dict[str, Any]:
     return {
         "name": "tony",
         "transport": "http",
+        "stdio_bridge": "python mcp_bridge/tony_mcp.py  (TONY_URL + TONY_API_KEY)",
         "endpoint": f"{base}/mcp",
         "protocolVersion": PROTOCOL_VERSION,
         "auth": "Authorization: Bearer tk_live_...",

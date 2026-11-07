@@ -628,11 +628,13 @@ async function loadKeys(){
   }catch(e){ el('key-list').innerHTML='<div class="empty">'+esc(e.message)+'</div>' }
 }
 async function newKey(){
-  const name = prompt('Name this key', 'server'); if(name===null) return;
+  const field = el('key-name');
+  const name = (field.value || 'server').trim() || 'server';
   try{
     const d = await api('/v1/account/keys', {method:'POST', body:{name}});
     el('new-key-box').style.display='block';
     el('new-key-val').textContent = d.key;
+    if(field) field.value = '';
     toast('Copy the key now'); loadKeys();
   }catch(e){ toast(e.message) }
 }
@@ -823,8 +825,14 @@ def console_html(user: Any = None) -> str:
 
       <!-- keys -->
       <section class="pg" id="p-keys">
-        <div class="hd"><div><h1>API keys</h1><p>Use these from your own backend, MCP client or SDK.</p></div>
-          <button class="btn acc" onclick="newKey()">Create key</button></div>
+        <div class="hd"><div><h1>API keys</h1><p>Use these from your own backend, MCP client or SDK.</p></div></div>
+        <div class="card pad" style="margin-bottom:12px">
+          <div class="row wrap" style="gap:8px;align-items:flex-end">
+            <div class="field" style="flex:1;min-width:180px;margin:0"><label>Key name</label>
+              <input class="inp" id="key-name" placeholder="production" autocomplete="off"></div>
+            <button class="btn acc" onclick="newKey()">Create key</button>
+          </div>
+        </div>
         <div class="card pad">
           <div id="new-key-box" style="display:none;margin-bottom:14px">
             <p class="tiny muted" style="margin:0 0 6px">Copy this now. It is not shown again.</p>

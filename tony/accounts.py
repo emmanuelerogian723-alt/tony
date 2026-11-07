@@ -288,6 +288,7 @@ def list_keys(request: Request) -> dict[str, Any]:
         rows = s.scalars(select(ApiKey).where(ApiKey.workspace_id == u.workspace_id,
                                               ApiKey.revoked.is_(False))).all()
         return {"keys": [{"id": k.id, "name": k.name, "prefix": k.prefix,
+                          "owner": u.email, "owner_id": k.user_id or u.id,
                           "created_at": k.created_at.isoformat() if k.created_at else None,
                           "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None}
                          for k in rows]}
@@ -307,10 +308,11 @@ def create_key(body: KeyNameIn, request: Request) -> dict[str, Any]:
         if count >= 20:
             raise HTTPException(400, detail="You have 20 active keys. Revoke one first.")
         k = ApiKey(workspace_id=u.workspace_id, name=(body.name or "key")[:120],
-                   prefix=prefix, key_hash=hashed)
+                   prefix=prefix, key_hash=hashed, user_id=u.id)
         s.add(k)
         s.flush()
         return {"key": plain, "id": k.id, "name": k.name, "prefix": prefix,
+                "owner": u.email, "workspace_id": u.workspace_id,
                 "note": "Copy it now. It is shown once."}
 
 
@@ -322,4 +324,54 @@ def revoke_key(key_id: str, request: Request) -> dict[str, Any]:
         if k is None or k.workspace_id != u.workspace_id:
             raise HTTPException(404, detail="Key not found")
         k.revoked = True
+    return {"ok": True}
+
+
+class ProviderIn(BaseModel):
+    client_id: str
+    client_secret: str = ""
+
+
+@router.get("/providers")
+def list_providers(request: Request) -> dict[str, Any]:
+    """Which OAuth apps are ready, so users can just click Connect."""
+    require_user(request)
+    from .catalog import catalog
+    from .oauth import provider_ready
+
+    rows = []
+    for spec in catalog.apps.values():
+        if spec.auth.type != "oauth2":
+            continue
+        rows.append({"slug": spec.slug, "name": spec.name, "category": spec.category,
+                     "ready": provider_ready(spec.slug),
+                     "scopes": spec.auth.scopes,
+                     "callback": f"/oauth/callback"})
+    rows.sort(key=lambda r: (not r["ready"], r["name"].lower()))
+    return {"providers": rows, "ready": sum(1 for r in rows if r["ready"]), "total": len(rows)}
+
+
+@router.post("/providers/{app_slug}")
+def set_provider(app_slug: str, body: ProviderIn, request: Request) -> dict[str, Any]:
+    u = require_user(request)
+    from .catalog import catalog
+    from .oauth import save_provider
+
+    spec = catalog.get(app_slug)
+    if spec is None:
+        raise HTTPException(404, detail="Unknown app")
+    if spec.auth.type != "oauth2":
+        raise HTTPException(400, detail="This app does not use OAuth sign-in")
+    if not body.client_id.strip():
+        raise HTTPException(400, detail="Client id is required")
+    save_provider(app_slug, body.client_id, body.client_secret, u.id)
+    return {"ok": True, "slug": app_slug, "ready": True}
+
+
+@router.delete("/providers/{app_slug}")
+def remove_provider(app_slug: str, request: Request) -> dict[str, Any]:
+    require_user(request)
+    from .oauth import drop_provider
+
+    drop_provider(app_slug)
     return {"ok": True}

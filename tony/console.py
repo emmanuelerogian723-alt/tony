@@ -591,9 +591,16 @@ function connectHTML(){
   if(d.auth.type==='oauth2'){
     const ready = d.configured;
     return '<div class="card pad"><b>Sign in with '+esc(d.name)+'</b>'+
-      '<p class="tiny muted" style="margin:6px 0 14px">Tony sends you to '+esc(d.name)+' and stores the tokens encrypted here.</p>'+
-      (ready?'<button class="btn sm" id="btn-oauth">Connect '+esc(d.name)+'</button>'
-        :'<pre class="out">Set '+esc(d.auth.client_id_env||'CLIENT_ID')+' and '+esc(d.auth.client_secret_env||'CLIENT_SECRET')+' in the environment, then restart Tony.</pre>')+
+      '<p class="tiny muted" style="margin:6px 0 14px">You never paste an API key. Tony opens '+esc(d.name)+
+      '\u2019s own sign-in page, you log in, and the account comes back connected. Tokens stay encrypted on this server.</p>'+
+      '<button class="btn sm" id="btn-oauth">Connect '+esc(d.name)+'</button>'+
+      (ready?'<p class="tiny" style="margin:12px 0 0;color:var(--ok)">OAuth app ready \u00b7 users just sign in</p>'
+        :'<details style="margin-top:14px"><summary class="tiny" style="cursor:pointer">One-time setup: register the OAuth app</summary>'+
+         '<p class="tiny muted" style="margin:10px 0">Do this once for this provider. After that, every user clicks Connect and signs in \u2014 no keys handed around. Callback URL: <span class="mono">'+
+         esc(CFG.public_url)+'/oauth/callback</span></p>'+
+         '<div class="field"><label>Client id</label><input class="inp" id="prov-id" autocomplete="off" placeholder="from the provider\u2019s developer console"></div>'+
+         '<div class="field"><label>Client secret</label><input class="inp" id="prov-secret" type="password" autocomplete="off" placeholder="stored encrypted"></div>'+
+         '<button class="btn ghost sm" id="btn-prov">Save OAuth app</button></details>')+
       '</div>';
   }
   const base = !!d.needs_base_url, token = d.auth.type!=='none';
@@ -615,9 +622,20 @@ function wireConnect(){
     toast('Disconnected'); loadConns(); openApp(d.slug);
   };
   if(oauth) oauth.onclick = async()=>{
+    oauth.disabled = true; oauth.textContent = 'Opening sign-in\u2026';
     try{
       const r = await api('/v1/connections/'+encodeURIComponent(d.slug)+'/start?entity_id=default', {method:'POST'});
-      if(r.authorization_url) location.href = r.authorization_url; else toast('Could not start');
+      if(r.authorization_url) location.href = r.authorization_url;
+      else { toast('Could not start'); oauth.disabled=false; oauth.textContent='Connect '+d.name }
+    }catch(e){ toast(e.message); oauth.disabled=false; oauth.textContent='Connect '+d.name }
+  };
+  const prov = el('btn-prov');
+  if(prov) prov.onclick = async()=>{
+    const cid = (el('prov-id')||{}).value||'', sec = (el('prov-secret')||{}).value||'';
+    if(!cid.trim()) return toast('Client id required');
+    try{
+      await api('/v1/account/providers/'+encodeURIComponent(d.slug), {method:'POST', body:JSON.stringify({client_id:cid.trim(), client_secret:sec.trim()})});
+      toast('OAuth app saved \u2014 users can sign in now'); openApp(d.slug);
     }catch(e){ toast(e.message) }
   };
   if(save) save.onclick = async()=>{
@@ -675,7 +693,7 @@ async function loadKeys(){
     const d = await api('/v1/account/keys');
     S.keys = d.keys||[];
     el('key-list').innerHTML = S.keys.length ? S.keys.map(k=>
-      '<div class="pk"><code>'+esc(k.prefix)+'…</code><span class="tiny muted">'+esc(k.name)+'</span><span class="sp"></span>'+
+      '<div class="pk"><code>'+esc(k.prefix)+'…</code><span class="tiny muted">'+esc(k.name)+(k.owner?' · '+esc(k.owner):'')+'</span><span class="sp"></span>'+
       '<button class="btn ghost sm" data-r="'+esc(k.id)+'">Revoke</button></div>').join('')
       : '<div class="empty">No keys yet. Create one to call Tony from your own code.</div>';
     el('key-list').querySelectorAll('[data-r]').forEach(b=>b.onclick=async()=>{

@@ -133,17 +133,85 @@ async def _handle(msg: dict[str, Any], request: Request) -> dict[str, Any]:
     if method == "initialize":
         return ok({
             "protocolVersion": PROTOCOL_VERSION,
-            "capabilities": {"tools": {"listChanged": False}},
+            "capabilities": {"tools": {"listChanged": False},
+                             "prompts": {"listChanged": False},
+                             "resources": {"subscribe": False, "listChanged": False}},
             "serverInfo": {"name": "tony", "version": __version__},
             "instructions": (
-                "Tony is an integration gateway. Tools are named app__action "
-                "(e.g. github__list_repos). Read-only tools run immediately; write "
-                "or destructive tools return a pending_approval record that the "
-                "operator must approve before the action executes."
-            ),
+                "Tony is an integration gateway with {apps} apps and {actions} actions. "
+                "Start with tony_search_tools to find the right action, then call "
+                "app__action tools (e.g. github__list_repos). Read-only tools run "
+                "immediately. Write and destructive tools return a pending_approval "
+                "record; the operator approves it once in the console and the exact "
+                "request executes. Accounts are connected by signing in on the "
+                "provider's own page, so you never handle the user's credentials."
+            ).format(apps=len(catalog.apps),
+                     actions=sum(len(a.actions) for a in catalog.apps.values())),
         })
     if method == "ping":
         return ok({})
+    if method == "prompts/list":
+        return ok({"prompts": [
+            {"name": "connect_app", "description": "Guide the user through connecting an app by signing in",
+             "arguments": [{"name": "app", "description": "App slug, e.g. gmail", "required": True}]},
+            {"name": "safe_write", "description": "Run a write action with the approval gate",
+             "arguments": [{"name": "action", "description": "app.action, e.g. github.create_issue", "required": True}]},
+            {"name": "weekly_digest", "description": "Summarise activity across connected apps",
+             "arguments": []},
+        ]})
+    if method == "prompts/get":
+        name = str(params.get("name") or "")
+        a = params.get("arguments") or {}
+        if name == "connect_app":
+            text = (f"Connect {a.get('app', 'the app')} to Tony by signing in. Call the MCP tool for that app; "
+                    f"if it is not connected, tell the user to open the Tony console, pick the app, press Connect "
+                    f"and sign in on the provider's page. Never ask for an API key.")
+        elif name == "safe_write":
+            text = (f"Call {a.get('action', 'the write action')} with approved=false first, show the user the exact "
+                    f"request Tony would send, and only re-send with approved=true after they approve.")
+        elif name == "weekly_digest":
+            text = ("Summarise this week's activity: what ran, what failed, what is waiting for approval, "
+                    "and which connected accounts need re-authentication.")
+        else:
+            return err(-32602, "Unknown prompt")
+        return ok({"description": name, "messages": [{"role": "user", "content": {"type": "text", "text": text}}]})
+    if method == "resources/list":
+        return ok({"resources": [
+            {"uri": "tony://meta", "name": "Catalogue and policy", "mimeType": "application/json"},
+            {"uri": "tony://connections", "name": "Connected accounts", "mimeType": "application/json"},
+            {"uri": "tony://approvals", "name": "Runs waiting for approval", "mimeType": "application/json"},
+        ]})
+    if method == "resources/read":
+        uri = str(params.get("uri") or "")
+        ws, _ = workspace_from_request(request)
+        payload: Any = {}
+        if uri == "tony://meta":
+            payload = {"apps": len(catalog.apps),
+                       "actions": sum(len(a.actions) for a in catalog.apps.values()),
+                       "requires_approval": settings.require_approval,
+                       "gateway": settings.base_url}
+        elif uri in {"tony://connections", "tony://approvals"}:
+            from sqlalchemy import select
+
+            from .db import session
+            from .models import ActionRun, ConnectedAccount
+
+            with session() as sess:
+                if uri == "tony://connections":
+                    rows = sess.scalars(select(ConnectedAccount).where(
+                        ConnectedAccount.workspace_id == ws)).all()
+                    payload = [{"app": r.app_slug, "entity": r.entity_id, "status": r.status,
+                                "label": r.label} for r in rows]
+                else:
+                    rows = sess.scalars(select(ActionRun).where(
+                        ActionRun.workspace_id == ws,
+                        ActionRun.status == "pending_approval")).all()
+                    payload = [{"run_id": r.id, "action": f"{r.app_slug}.{r.action_slug}",
+                                "created_at": r.created_at.isoformat() if r.created_at else None} for r in rows]
+        else:
+            return err(-32602, "Unknown resource")
+        return ok({"contents": [{"uri": uri, "mimeType": "application/json",
+                                 "text": json.dumps(payload, indent=2)}]})
     if method == "tools/list":
         cursor = params.get("cursor")
         offset = int(cursor) if cursor else 0
@@ -211,11 +279,26 @@ async def _handle(msg: dict[str, Any], request: Request) -> dict[str, Any]:
             "isError": not result.ok,
             "_meta": {"app": spec.slug, "action": action.slug, "latency_ms": result.latency_ms},
         })
-    if method == "resources/list":
-        return ok({"resources": [
-            {"uri": "tony://catalog", "name": "App catalogue", "mimeType": "application/json"},
-            {"uri": "tony://runs", "name": "Recent runs", "mimeType": "application/json"},
-        ]})
-    if method == "prompts/list":
-        return ok({"prompts": []})
     return err(-32601, f"Method not found: {method}")
+
+
+@router.get("/mcp")
+def mcp_info() -> dict[str, Any]:
+    """Discovery for humans and agents: how to attach Tony as an MCP server."""
+    base = (settings.base_url or "").rstrip("/")
+    return {
+        "name": "tony",
+        "transport": "http",
+        "endpoint": f"{base}/mcp",
+        "protocolVersion": PROTOCOL_VERSION,
+        "auth": "Authorization: Bearer tk_live_...",
+        "apps": len(catalog.apps),
+        "actions": sum(len(a.actions) for a in catalog.apps.values()),
+        "clients": {
+            "claude_desktop": {"mcpServers": {"tony": {"url": f"{base}/mcp",
+                                                       "headers": {"Authorization": "Bearer tk_live_YOUR_KEY"}}}},
+            "cursor": {"url": f"{base}/mcp", "headers": {"Authorization": "Bearer tk_live_YOUR_KEY"}},
+            "cli_bridge": "python mcp_bridge/tony_mcp.py --url " + f"{base}/mcp" + " --key tk_live_YOUR_KEY",
+        },
+        "approval_policy": "write and destructive actions pause for one human approval",
+    }

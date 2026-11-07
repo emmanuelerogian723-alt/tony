@@ -1,6 +1,8 @@
 """OAuth session lifecycle with a mocked token endpoint."""
 from urllib.parse import parse_qs, urlparse
 
+import asyncio
+
 import httpx
 import pytest
 
@@ -30,14 +32,14 @@ def test_start_oauth_requires_client_id(monkeypatch):
     monkeypatch.delenv("GITHUB_CLIENT_ID", raising=False)
     monkeypatch.delenv("GITHUB_CLIENT_SECRET", raising=False)
     with pytest.raises(OAuthError):
-        start_oauth("ws", "ent", catalog.get("github"))
+        asyncio.run(start_oauth("ws", "ent", catalog.get("github")))
 
 
 def test_start_oauth_builds_authorize_url(monkeypatch):
     from tony.oauth import start_oauth
     monkeypatch.setenv("GITHUB_CLIENT_ID", "cid")
     monkeypatch.setenv("GITHUB_CLIENT_SECRET", "cs")
-    session_id, url = start_oauth("ws1", "entity1", catalog.get("github"), "/app")
+    session_id, url = asyncio.run(start_oauth("ws1", "entity1", catalog.get("github"), "/app"))
     parsed = urlparse(url)
     q = parse_qs(parsed.query)
     assert parsed.netloc == "github.com"
@@ -56,11 +58,10 @@ def test_complete_oauth_stores_encrypted_credentials(monkeypatch):
     monkeypatch.setenv("GITHUB_CLIENT_SECRET", "cs")
     monkeypatch.setattr("tony.oauth.httpx.AsyncClient", FakeClient)
 
-    session_id, url = start_oauth("ws2", "entity2", catalog.get("github"), "/app")
+    session_id, url = asyncio.run(start_oauth("ws2", "entity2", catalog.get("github"), "/app"))
     state = parse_qs(urlparse(url).query)["state"][0]
 
-    import asyncio
-    account = asyncio.get_event_loop().run_until_complete(complete_oauth(state, "the-code"))
+    account = asyncio.run(complete_oauth(state, "the-code"))
     assert account.status == "active"
     assert account.app_slug == "github"
     assert "at-123" not in account.credentials_enc
@@ -70,4 +71,4 @@ def test_complete_oauth_stores_encrypted_credentials(monkeypatch):
 
     from tony.oauth import OAuthError
     with _pytest.raises(OAuthError):
-        asyncio.get_event_loop().run_until_complete(complete_oauth(state, "again"))
+        asyncio.run(complete_oauth(state, "again"))

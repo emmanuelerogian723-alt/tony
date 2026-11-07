@@ -67,7 +67,27 @@ def init_db() -> None:
             Base.metadata.create_all(engine)
             return
         raise
+    _migrate(backend)
     DB_STATUS.update(backend=backend, error="")
+
+
+def _migrate(backend: str) -> None:
+    """Additive, idempotent schema upgrades for existing deployments."""
+    stmts = [
+        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS user_id VARCHAR(32)",
+    ]
+    if backend != "postgres":
+        stmts = ["ALTER TABLE api_keys ADD COLUMN user_id VARCHAR(32)"]
+    import logging
+
+    from sqlalchemy import text
+
+    for stmt in stmts:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception as exc:  # column already there, or db too old to care
+            logging.getLogger("tony").debug("migrate skipped (%s): %s", stmt.split()[2], exc)
 
 
 @contextmanager

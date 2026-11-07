@@ -53,6 +53,41 @@ def stats() -> dict[str, Any]:
     return {**base, "runs": runs, "connections": conns, "version": __version__}
 
 
+@router.get("/whoami")
+def whoami(request: Request) -> dict[str, Any]:
+    """Which workspace, user and key is behind this call.
+
+    Every key carries its owner, so an agent can prove whose data it touches.
+    """
+    from .models import User
+
+    ws, demo = workspace_from_request(request)
+    with session() as s:
+        user = s.scalar(select(User).where(User.workspace_id == ws))
+        conns = s.scalars(select(ConnectedAccount).where(ConnectedAccount.workspace_id == ws,
+                                                        ConnectedAccount.status == "active")).all()
+        keys = s.scalars(select(ApiKey).where(ApiKey.workspace_id == ws, ApiKey.revoked.is_(False))).all()
+        key = s.scalar(select(ApiKey).where(ApiKey.workspace_id == ws,
+                                            ApiKey.prefix == (_key_prefix(request) or ""))) if _key_prefix(request) else None
+        return {
+            "workspace_id": ws,
+            "demo_session": demo,
+            "owner": {"id": user.id, "email": user.email, "name": user.name} if user else None,
+            "key": {"id": key.id, "name": key.name, "prefix": key.prefix,
+                    "owner": (user.email if user else None)} if key else None,
+            "connections": [{"app": c.app_slug, "entity_id": c.entity_id, "status": c.status} for c in conns],
+            "keys": len(keys),
+        }
+
+
+def _key_prefix(request: Request) -> str:
+    raw = request.headers.get("authorization") or request.headers.get("x-api-key") or ""
+    if raw.lower().startswith("bearer "):
+        raw = raw.split(" ", 1)[1]
+    raw = raw.strip()
+    return raw[:16] if raw.startswith("tk_") else ""
+
+
 @router.get("/meta")
 def meta() -> dict[str, Any]:
     """Agent-facing manifest: what Tony is, what it can do, how to call it."""
@@ -197,8 +232,8 @@ def list_connections(request: Request, entity_id: str = "") -> dict[str, Any]:
 
 
 @router.post("/connections/{app_slug}/start")
-def connect_start(app_slug: str, request: Request, entity_id: str = "default",
-                  redirect_after: str = "/app") -> dict[str, Any]:
+async def connect_start(app_slug: str, request: Request, entity_id: str = "default",
+                        redirect_after: str = "/app") -> dict[str, Any]:
     ws, _ = workspace_from_request(request)
     spec = catalog.get(app_slug)
     if not spec:
@@ -218,7 +253,7 @@ def connect_start(app_slug: str, request: Request, entity_id: str = "default",
         raise HTTPException(400, detail="This app uses a key, not OAuth. POST /v1/connections/{app}/key with your credentials.")
     _entity(ws, entity_id)
     try:
-        session_id, url = start_oauth(ws, entity_id, spec, redirect_after)
+        session_id, url = await start_oauth(ws, entity_id, spec, redirect_after)
     except OAuthError as exc:
         raise HTTPException(400, detail=str(exc)) from exc
     return {"mode": "oauth", "auth_session_id": session_id, "authorization_url": url}

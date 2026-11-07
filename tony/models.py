@@ -46,6 +46,7 @@ class ApiKey(Base):
     name: Mapped[str] = mapped_column(String(120), default="default")
     prefix: Mapped[str] = mapped_column(String(24), index=True)
     key_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    user_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -165,3 +166,19 @@ class UserSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     user_agent: Mapped[str] = mapped_column(String(200), default="")
+
+
+class OAuthProvider(Base):
+    """OAuth client registered once by the owner so users just sign in.
+
+    Users never paste client ids or secrets: they click Connect, land on the
+    provider's own login page, and come back connected.
+    """
+
+    __tablename__ = "oauth_providers"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    app_slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    client_id: Mapped[str] = mapped_column(String(400), default="")
+    secret_enc: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(32), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)

@@ -27,9 +27,117 @@ def _b64url(data: bytes) -> str:
 
 
 def _client_creds(spec: AppSpec) -> tuple[str, str]:
+    """Provider credentials: environment first, then the owner-registered store.
+
+    The store is what makes one-click sign-in possible for users: the owner
+    registers an OAuth app once and everyone else just clicks Connect.
+    """
     cid = os.getenv(spec.auth.client_id_env or f"{spec.slug.upper()}_CLIENT_ID", "").strip()
     secret = os.getenv(spec.auth.client_secret_env or f"{spec.slug.upper()}_CLIENT_SECRET", "").strip()
+    if cid and secret:
+        return cid, secret
+    stored = stored_provider(spec.slug)
+    if stored:
+        return stored.get("client_id", "") or cid, stored.get("client_secret", "") or secret
     return cid, secret
+
+
+def stored_provider(app_slug: str) -> dict[str, str]:
+    from .models import OAuthProvider
+
+    with session() as s:
+        row = s.scalar(select(OAuthProvider).where(OAuthProvider.app_slug == app_slug))
+        if row is None:
+            return {}
+        secret = ""
+        if row.secret_enc:
+            try:
+                secret = decrypt_json({"v": row.secret_enc}).get("v", "")
+            except Exception:
+                secret = ""
+        return {"client_id": row.client_id or "", "client_secret": secret}
+
+
+def save_provider(app_slug: str, client_id: str, client_secret: str, user_id: str = "") -> None:
+    """Register (or rotate) the OAuth app used for one-click sign-in."""
+    from .models import OAuthProvider
+
+    with session() as s:
+        row = s.scalar(select(OAuthProvider).where(OAuthProvider.app_slug == app_slug))
+        if row is None:
+            row = OAuthProvider(app_slug=app_slug)
+            s.add(row)
+        row.client_id = (client_id or "").strip()[:400]
+        row.secret_enc = encrypt_json({"v": (client_secret or "").strip()[:1200]}) if client_secret else ""
+        row.created_by = user_id
+        s.flush()
+
+
+def drop_provider(app_slug: str) -> None:
+    from .models import OAuthProvider
+
+    with session() as s:
+        row = s.scalar(select(OAuthProvider).where(OAuthProvider.app_slug == app_slug))
+        if row is not None:
+            s.delete(row)
+
+
+def provider_ready(slug: str) -> bool:
+    from .catalog import catalog
+
+    spec = catalog.get(slug)
+    if spec is None:
+        return False
+    cid, secret = _client_creds(spec)
+    return bool(cid and secret)
+
+
+def _well_known(authorize_url: str) -> str:
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(authorize_url)
+    return f"{parts.scheme}://{parts.netloc}/.well-known/oauth-authorization-server"
+
+
+async def dynamic_client(spec: AppSpec) -> tuple[str, str]:
+    """Register a client automatically with providers that support DCR (RFC 7591).
+
+    This is the keyless path: no client id, no secret, no trip to a dashboard.
+    Many MCP servers and modern OAuth providers advertise it.
+    """
+    url = _well_known(spec.auth.authorize_url or "")
+    try:
+        meta_resp = await _fetch_meta(url)
+    except Exception as exc:
+        raise OAuthError(
+            f"{spec.name} needs a one-time OAuth app registration. "
+            f"Add its client id and secret once in Tony, then users just sign in."
+        ) from exc
+    if True:  # keep the flow linear after the fetch
+        if meta_resp.status_code >= 400:
+            raise OAuthError(
+                f"{spec.name} needs a one-time OAuth app registration. "
+                f"Add its client id and secret in Tony, then users just sign in."
+            )
+        meta = meta_resp.json()
+        reg_endpoint = meta.get("registration_endpoint")
+        if not reg_endpoint:
+            raise OAuthError(f"{spec.name} does not support automatic client registration.")
+        reg = await _post_registration(reg_endpoint, {
+            "client_name": "Tony",
+            "redirect_uris": [redirect_uri(spec)],
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+            "token_endpoint_auth_method": "client_secret_post",
+        })
+        if reg.status_code >= 400:
+            raise OAuthError(f"Automatic client registration failed ({reg.status_code}).")
+        data = reg.json()
+        cid = data.get("client_id", "")
+        secret = data.get("client_secret", "")
+        if cid:
+            save_provider(spec.slug, cid, secret)
+        return cid, secret
 
 
 def is_configured(spec: AppSpec) -> bool:
@@ -48,14 +156,13 @@ def redirect_uri(spec: AppSpec) -> str:
     return f"{settings.base_url}/oauth/callback"
 
 
-def start_oauth(workspace_id: str, entity_id: str, spec: AppSpec, redirect_after: str = "/app") -> tuple[str, str]:
+async def start_oauth(workspace_id: str, entity_id: str, spec: AppSpec, redirect_after: str = "/app") -> tuple[str, str]:
     """Create an auth session and return (session_id, authorization_url)."""
     cid, _secret = _client_creds(spec)
     if not cid:
-        raise OAuthError(
-            f"{spec.name} has no OAuth client configured. Set {spec.auth.client_id_env or spec.slug.upper() + '_CLIENT_ID'} "
-            f"and {spec.auth.client_secret_env or spec.slug.upper() + '_CLIENT_SECRET'}."
-        )
+        cid, _secret = await dynamic_client(spec)
+    if not cid:
+        raise OAuthError(f"{spec.name} is not ready for one-click sign-in yet.")
     state = secrets.token_urlsafe(24)
     verifier = secrets.token_urlsafe(48) if spec.auth.pkce else ""
     with session() as s:
@@ -264,3 +371,13 @@ def _safe_base_url(account: ConnectedAccount) -> str:
         return ""
     value = creds.get("base_url") if isinstance(creds, dict) else None
     return str(value)[:300] if value else ""
+
+
+async def _fetch_meta(url: str) -> httpx.Response:
+    async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
+        return await client.get(url)
+
+
+async def _post_registration(url: str, payload: dict[str, Any]) -> httpx.Response:
+    async with httpx.AsyncClient(timeout=15) as client:
+        return await client.post(url, json=payload)

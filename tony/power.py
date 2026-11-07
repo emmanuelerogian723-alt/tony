@@ -153,15 +153,19 @@ DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 DEFAULT_OPENROUTER_MODEL = "openai/gpt-4o-mini"
 
 
-def _llm_targets() -> list[tuple[str, str, dict[str, str]]]:
+def _llm_targets(fast: bool = False) -> list[tuple[str, str, dict[str, str]]]:
     """Every usable model endpoint, strongest first. Providers retire models, so the
     chain is a list and a 404 on one model falls through to the next instead of
     silently dropping to the deterministic path."""
     out: list[tuple[str, str, dict[str, str]]] = []
     groq = os.getenv("GROQ_API_KEY", "").strip()
+    fast_model = os.getenv("TONY_FAST_MODEL", "llama-3.1-8b-instant")
     if groq:
         models = [m.strip() for m in (os.getenv("TONY_GROQ_MODELS") or "").split(",") if m.strip()]
-        for model in models or [os.getenv("TONY_AGENT_MODEL", DEFAULT_GROQ_MODEL), DEFAULT_GROQ_MODEL]:
+        if fast:
+            models = [fast_model] + models
+        models = models or [os.getenv("TONY_AGENT_MODEL", DEFAULT_GROQ_MODEL), DEFAULT_GROQ_MODEL]
+        for model in models:
             out.append(("https://api.groq.com/openai/v1/chat/completions", model,
                         {"Authorization": f"Bearer {groq}"}))
     if os.getenv("OPENAI_API_KEY"):
@@ -189,14 +193,15 @@ def _llm_target() -> tuple[str, str, dict[str, str]] | None:
 
 
 async def _chat(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None,
-                temperature: float = 0.2) -> dict[str, Any] | None:
+                temperature: float = 0.2, fast: bool = False) -> dict[str, Any] | None:
     """Ask the model with the whole configured chain. A retired model, a rate limit
     or a bad key walks to the next provider; the caller only sees None when all fail."""
-    chain = _llm_targets()
+    chain = _llm_targets(fast=fast)
     if not chain:
         return None
     for url, model, hdr in chain:
-        payload: dict[str, Any] = {"model": model, "messages": messages, "temperature": temperature}
+        payload: dict[str, Any] = {"model": model, "messages": messages, "temperature": temperature,
+                                   "max_tokens": 700 if not tools else 900}
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
@@ -494,7 +499,7 @@ async def agent(body: AgentIn, request: Request) -> dict[str, Any]:
                         "under 120 words. Lead with the answer, then the specific evidence (titles, numbers, "
                         "ids) that supports it. If something failed, say which part and what it means."),
         }]
-        final = await _chat(synthesis, None, temperature=0.3)
+        final = await _chat(synthesis, None, temperature=0.3, fast=True)
         if final and (final.get("content") or "").strip():
             answer = final["content"].strip()
 

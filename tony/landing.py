@@ -204,7 +204,7 @@ h2 em{font-style:italic;color:var(--signal)}
   color:rgba(243,240,233,.55);padding:12px 18px 13px;border-bottom:2px solid transparent;margin-bottom:-1px}
 .tabs button[aria-selected="true"]{color:var(--paper);border-bottom-color:var(--signal)}
 .code{position:relative;background:#111110;border:1px solid rgba(243,240,233,.14);border-top:0}
-.code pre{margin:0;padding:22px 20px;overflow:auto;font-family:var(--mono);font-size:12.5px;line-height:1.75;
+.code pre{margin:0;padding:22px 20px;overflow:auto;max-width:100%;font-family:var(--mono);font-size:12.5px;line-height:1.75;
   color:#D6D2C7;max-height:340px}
 .code .k{color:#F0835C}
 .code .s{color:#9BD1A8}
@@ -247,10 +247,10 @@ h2 em{font-style:italic;color:var(--signal)}
 
 /* install */
 .install{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line-2)}
-.install > div{padding:clamp(22px,3vw,34px)}
+.install > div{padding:clamp(22px,3vw,34px);min-width:0}
 .install > div:first-child{border-right:1px solid var(--line-2);background:var(--paper-2)}
 .cmd{display:flex;align-items:center;gap:12px;background:var(--ink);color:#EDE9E0;padding:13px 15px;
-  font-family:var(--mono);font-size:12.5px;margin-bottom:10px;overflow:auto;white-space:nowrap}
+  font-family:var(--mono);font-size:12.5px;margin-bottom:10px;overflow:auto;white-space:nowrap;max-width:100%}
 .cmd i{color:#F0835C;font-style:normal}
 .cmd b{color:#8C887C;font-weight:400}
 

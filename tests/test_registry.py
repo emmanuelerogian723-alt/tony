@@ -42,3 +42,13 @@ def test_pagination_is_stable():
     page2 = catalog.search("", limit=10, offset=10)
     assert len(page1) == 10 and len(page2) == 10
     assert {a.slug for a in page1}.isdisjoint({a.slug for a in page2})
+
+
+def test_public_actions_run_without_a_connection():
+    """Mixed-auth apps: public reads must not demand OAuth."""
+    from tony.catalog import catalog as cat
+    tiktok = cat.get("tiktok")
+    assert tiktok is not None
+    public = [a.slug for a in tiktok.actions if a.public]
+    assert "video_info" in public and "trending" in public
+    assert all(not a.public for a in tiktok.actions if a.slug in {"profile", "list_videos"})

@@ -185,7 +185,7 @@ async def _handle(msg: dict[str, Any], request: Request) -> dict[str, Any]:
                 "isError": False,
             })
         creds = credentials_for(ws, entity, spec)
-        if spec.auth.type != "none" and creds is None:
+        if spec.auth.type != "none" and creds is None and not action.public:
             return ok({
                 "content": [{"type": "text", "text": json.dumps({
                     "ok": False, "error": f"No connected {spec.name} account for entity '{entity}'"} , indent=2)}],

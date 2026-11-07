@@ -272,7 +272,7 @@ async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
 
     acct = None
     creds = credentials_for(ws, entity, spec)
-    if spec.auth.type != "none" and creds is None:
+    if spec.auth.type != "none" and creds is None and not action.public:
         raise HTTPException(
             400,
             detail=f"No {spec.name} account connected for entity '{entity}'. "

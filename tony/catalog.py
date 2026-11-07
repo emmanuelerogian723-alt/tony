@@ -61,6 +61,7 @@ class ActionSpec:
     pagination: dict[str, Any] | None = None
     response: dict[str, Any] = field(default_factory=dict)
     danger_note: str = ""
+    public: bool = False
 
     @property
     def full_slug(self) -> str:
@@ -124,6 +125,7 @@ def _action_to_public(self: ActionSpec) -> dict[str, Any]:
         "required": self.required,
         "pagination": bool(self.pagination),
         "danger_note": self.danger_note,
+        "public": self.public,
     }
 
 
@@ -189,6 +191,7 @@ def parse_manifest(path: Path) -> AppSpec:
                 pagination=a.get("pagination"),
                 response=a.get("response") or {},
                 danger_note=str(a.get("danger_note") or ""),
+                public=bool(a.get("public") or False),
             )
         )
 
@@ -231,6 +234,12 @@ def parse_registry_line(line: str, where: str) -> AppSpec:
             params=a.get("params") or {},
             required=[str(r) for r in (a.get("required") or [])],
             tier=str(a.get("tier", "read")).lower() if str(a.get("tier", "read")).lower() in _TIERS else "read",
+            headers={str(k): str(v) for k, v in (a.get("headers") or {}).items()},
+            body_template=a.get("body_template"),
+            pagination=a.get("pagination"),
+            response=a.get("response") or {},
+            danger_note=str(a.get("danger_note") or ""),
+            public=bool(a.get("public") or False),
         ))
     return AppSpec(
         slug=slug,

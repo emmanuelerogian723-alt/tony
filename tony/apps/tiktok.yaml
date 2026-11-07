@@ -35,6 +35,7 @@ actions:
       path: data.videos
       max_items: 20
   - slug: video_info
+    public: true
     name: Video info (no login)
     description: Real metadata for any TikTok video URL — title, author, thumbnail and embed. Uses TikTok oEmbed, so no developer account is needed.
     method: GET
@@ -46,6 +47,7 @@ actions:
       max_chars: 6000
     notes: Public oEmbed endpoint; no key required.
   - slug: trending
+    public: true
     name: Trending on TikTok now
     description: What people are currently posting about on TikTok — pulled live from trending hashtags, sounds and videos in the news and creator ecosystem. Returns titles, links and snippets.
     method: GET

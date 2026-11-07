@@ -32,7 +32,6 @@ _poller_task: asyncio.Task | None = None
 demo_key: str = ""
 
 
-@asynccontextmanager
 async def self_ping(base: str, every: int) -> None:
     """Keep a free Render instance from idling out (public URL, every N seconds)."""
     import httpx
@@ -48,6 +47,7 @@ async def self_ping(base: str, every: int) -> None:
             await asyncio.sleep(max(60, every))
 
 
+@asynccontextmanager
 async def lifespan(app: FastAPI):
     global _poller_task, demo_key
     init_db()

@@ -529,7 +529,9 @@ async function runAction(){
     meta.textContent = (d.status==='pending_approval' ? 'needs approval' : (d.status||'')) + ' · ' +
       Math.round(performance.now()-t0) + 'ms';
     out.textContent = JSON.stringify(d, null, 2);
-    if(d.status === 'pending_approval') showApproval(d, args);
+    if(d.status === 'pending_approval'){ showApproval(d, args);
+      el('approve-box').scrollIntoView({behavior:'smooth', block:'center'}) }
+    else if(el('p-out')) el('p-out').scrollIntoView({behavior:'smooth', block:'nearest'});
   }catch(e){ out.textContent = 'Error: ' + e.message; meta.textContent = '' }
   btn.disabled = false;
 }
@@ -944,7 +946,7 @@ def console_html(user: Any = None) -> str:
     <button data-t="connect" onclick="sheetTab('connect')">Connect</button>
     <button data-t="code" onclick="sheetTab('code')">Code</button>
   </div>
-  <div class="sheet-bd" id="sheet-bd"></div>
+  <div class="sheet-bd" id="sheet-bd" tabindex="0"></div>
 </div></div>
 
 <div id="toast"></div>

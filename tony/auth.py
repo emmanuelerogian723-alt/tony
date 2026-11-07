@@ -56,6 +56,15 @@ def workspace_from_request(request: Request) -> tuple[str, bool]:
         if ws:
             return ws, False
         raise HTTPException(401, detail="Invalid API key")
+    # a signed-in console user acts as their own workspace
+    try:
+        from .accounts import current_user  # local import: accounts imports this module
+
+        cookie_user = current_user(request)
+        if cookie_user is not None and cookie_user.workspace_id:
+            return cookie_user.workspace_id, False
+    except Exception:  # pragma: no cover - never block the demo path on a session bug
+        pass
     if settings.demo_open:
         with session() as s:
             ws = s.scalar(select(Workspace).where(Workspace.is_demo.is_(True)))

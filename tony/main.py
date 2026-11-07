@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from .accounts import router as account_router
 from .api import router as api_router
 from .mcp import router as mcp_router
 
@@ -32,6 +33,21 @@ demo_key: str = ""
 
 
 @asynccontextmanager
+async def self_ping(base: str, every: int) -> None:
+    """Keep a free Render instance from idling out (public URL, every N seconds)."""
+    import httpx
+
+    await asyncio.sleep(20)
+    async with httpx.AsyncClient(timeout=20) as client:
+        while True:
+            try:
+                r = await client.get(f"{base}/health")
+                log.info("self-ping %s %s", r.status_code, base)
+            except Exception as exc:  # network hiccup is not fatal
+                log.warning("self-ping failed: %s", exc)
+            await asyncio.sleep(max(60, every))
+
+
 async def lifespan(app: FastAPI):
     global _poller_task, demo_key
     init_db()
@@ -42,6 +58,10 @@ async def lifespan(app: FastAPI):
         for err in catalog.errors:
             log.warning("manifest: %s", err)
     _poller_task = asyncio.create_task(poller())
+    if settings.self_url and settings.ping_seconds > 0:
+        _tasks = getattr(app.state, "tasks", [])
+        _tasks.append(asyncio.create_task(self_ping(settings.self_url, settings.ping_seconds)))
+        app.state.tasks = _tasks
     try:
         yield
     finally:
@@ -69,6 +89,7 @@ app.add_middleware(
 )
 
 
+app.include_router(account_router)
 app.include_router(api_router)
 app.include_router(mcp_router)
 
@@ -135,13 +156,26 @@ async def oauth_callback(code: str = "", state: str = "", error: str = "", error
     return RedirectResponse(f"/app?connection=ok&{urlencode({'app': account.app_slug})}")
 
 
+@app.get("/account", response_class=HTMLResponse, include_in_schema=False)
+def account_page(request: Request):
+    from .accounts import current_user
+    from .console import console_html
+
+    user = current_user(request)
+    return HTMLResponse(console_html(user=user))
+
+
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 def landing(request: Request):
     return HTMLResponse(landing_html())
 
 
-@app.get("/app", response_class=HTMLResponse, include_in_schema=False)
-def dashboard(request: Request):
+@app.get("/app", include_in_schema=False)
+def dashboard_redirect():
+    return RedirectResponse("/account", status_code=307)
+
+
+def _old_dashboard(request: Request):
     from .auth import workspace_from_request
     key = ""
     ws_id = ""

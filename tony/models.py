@@ -140,3 +140,28 @@ class WebhookDelivery(Base):
     ok: Mapped[bool] = mapped_column(Boolean, default=False)
     error: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class User(Base):
+    """A human who signs in to the console (Google or email+password)."""
+    __tablename__ = "users"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(160), default="")
+    picture: Mapped[str] = mapped_column(String(500), default="")
+    password_hash: Mapped[str] = mapped_column(String(200), default="")
+    google_sub: Mapped[str] = mapped_column(String(64), default="", index=True)
+    workspace_id: Mapped[str] = mapped_column(String(32), index=True, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class UserSession(Base):
+    """Opaque server-side session: the cookie holds a random token, we store its hash."""
+    __tablename__ = "user_sessions"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(String(32), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    user_agent: Mapped[str] = mapped_column(String(200), default="")

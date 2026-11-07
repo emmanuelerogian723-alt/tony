@@ -31,6 +31,11 @@ class Settings:
     http_retries: int = field(default_factory=lambda: int(os.getenv("TONY_HTTP_RETRIES", "2")))
     allow_private_networks: bool = field(default_factory=lambda: _bool("TONY_ALLOW_PRIVATE", False))
     poll_interval: int = field(default_factory=lambda: int(os.getenv("TONY_POLL_INTERVAL", "30")))
+    google_client_id: str = field(default_factory=lambda: os.getenv("GOOGLE_CLIENT_ID", "").strip())
+    google_allowed_origins: str = field(default_factory=lambda: os.getenv("TONY_GOOGLE_ORIGINS", "").strip())
+    session_days: int = field(default_factory=lambda: int(os.getenv("TONY_SESSION_DAYS", "30")))
+    self_url: str = field(default_factory=lambda: (os.getenv("RENDER_EXTERNAL_URL") or os.getenv("TONY_BASE_URL", "")).rstrip("/"))
+    ping_seconds: int = field(default_factory=lambda: int(os.getenv("TONY_PING_SECONDS", "240")))
     log_level: str = field(default_factory=lambda: os.getenv("TONY_LOG_LEVEL", "INFO"))
 
     @property

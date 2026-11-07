@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 from contextlib import asynccontextmanager
 from urllib.parse import urlencode
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from .api import router as api_router
 from .mcp import router as mcp_router
@@ -19,7 +21,8 @@ from .config import settings
 from .db import ensure_demo_workspace, init_db
 from .oauth import OAuthError, complete_oauth
 from .triggers import poller
-from .ui import dashboard_html, landing_html
+from .ui import dashboard_html
+from .landing import landing_html
 
 logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("tony")
@@ -70,6 +73,38 @@ app.include_router(api_router)
 app.include_router(mcp_router)
 
 
+_STATIC = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=_STATIC), name="static")
+
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse(_STATIC / "brand" / "favicon.ico", media_type="image/x-icon")
+
+
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+def touch_icon():
+    return FileResponse(_STATIC / "brand" / "tony-180.png", media_type="image/png")
+
+
+@app.get("/site.webmanifest", include_in_schema=False)
+def manifest():
+    return JSONResponse({
+        "name": "Tony — every app, one port",
+        "short_name": "Tony",
+        "description": "Open-source integration gateway. 7,854 apps, 20,084 actions.",
+        "start_url": "/app",
+        "display": "standalone",
+        "background_color": "#F3F0E9",
+        "theme_color": "#0E0E0C",
+        "icons": [
+            {"src": "/static/brand/tony-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/static/brand/tony-512.png", "sizes": "512x512", "type": "image/png"},
+        ],
+    })
+
+
 @app.get("/health")
 def health() -> dict:
     return {
@@ -102,7 +137,7 @@ async def oauth_callback(code: str = "", state: str = "", error: str = "", error
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 def landing(request: Request):
-    return HTMLResponse(landing_html(demo_open=settings.demo_open))
+    return HTMLResponse(landing_html())
 
 
 @app.get("/app", response_class=HTMLResponse, include_in_schema=False)

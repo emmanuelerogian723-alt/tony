@@ -51,12 +51,12 @@ actions:
     name: Trending on TikTok now
     description: What people are currently posting about on TikTok — pulled live from trending hashtags, sounds and videos in the news and creator ecosystem. Returns titles, links and snippets.
     method: GET
-    url: https://html.duckduckgo.com/html/
+    url: https://news.google.com/rss/search
     params:
       q: {type: string, default: "tiktok trending hashtags today", description: "Search query"}
     required: [q]
     response:
-      transform: ddg
+      transform: search
       max_items: 12
       max_chars: 8000
     headers:

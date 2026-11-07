@@ -1,6 +1,8 @@
 """Public REST API (v1) and the dashboard's JSON surface."""
 from __future__ import annotations
 
+import asyncio
+
 import json
 import secrets
 from typing import Any
@@ -290,7 +292,18 @@ async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
                 creds = credentials_for(ws, entity, spec)
 
     try:
-        result = await execute(spec, action, body.args, creds, dry_run=body.dry_run)
+        try:
+            result = await asyncio.wait_for(
+                execute(spec, action, body.args, creds, dry_run=body.dry_run),
+                timeout=settings.execution_deadline,
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(
+                504,
+                detail=f"{action.full_name if hasattr(action, 'full_name') else action.slug} exceeded "
+                       f"{settings.execution_deadline:g}s. The provider hung; Tony cut it off so your "
+                       f"agent stays responsive.",
+            )
     except ExecutionError as exc:
         run_id = _log_run(ws, entity, spec, action, "error", None,
                           {"args": body.args, "action": body.action}, error=str(exc))

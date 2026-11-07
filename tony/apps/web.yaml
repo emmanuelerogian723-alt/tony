@@ -35,12 +35,13 @@ actions:
     name: Web search
     description: Search the web through a keyless engine and get titles, URLs and snippets.
     method: GET
-    url: https://html.duckduckgo.com/html/
+    url: https://news.google.com/rss/search
     params:
       q: {type: string, description: Search query, required: true}
     required: [q]
     response:
       max_chars: 9000
-      transform: ddg
+      transform: search
+      max_items: 12
     headers:
       Accept: text/html

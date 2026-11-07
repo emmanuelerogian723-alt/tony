@@ -570,6 +570,15 @@ async def execute(
 ) -> ExecResult:
     started = time.perf_counter()
     cleaned = validate_args(action, args)
+
+    # Fan-out search: three keyless sources, merged, no single point of failure.
+    if str((action.response or {}).get("transform") or "") == "search":
+        from .search import multi_search
+        query = str(cleaned.get("q") or cleaned.get("query") or "")
+        limit = int((action.response or {}).get("max_items", 12) or 12)
+        found = await asyncio.wait_for(multi_search(query, limit), timeout=settings.execution_deadline)
+        return ExecResult(True, 200, int((time.perf_counter() - started) * 1000), found,
+                          {"transform": "search", "sources": found.get("sources", {})})
     pages: list[Any] = []
     last_raw: Any = None
     meta: dict[str, Any] = {}

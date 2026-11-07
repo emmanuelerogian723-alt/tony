@@ -27,6 +27,7 @@ class Settings:
     require_approval: bool = field(default_factory=lambda: _bool("TONY_REQUIRE_APPROVAL", True))
     max_response_chars: int = field(default_factory=lambda: int(os.getenv("TONY_MAX_RESPONSE_CHARS", "12000")))
     http_timeout: float = field(default_factory=lambda: float(os.getenv("TONY_HTTP_TIMEOUT", "25")))
+    execution_deadline: float = field(default_factory=lambda: float(os.getenv("TONY_EXECUTION_DEADLINE", "30")))
     http_retries: int = field(default_factory=lambda: int(os.getenv("TONY_HTTP_RETRIES", "2")))
     allow_private_networks: bool = field(default_factory=lambda: _bool("TONY_ALLOW_PRIVATE", False))
     poll_interval: int = field(default_factory=lambda: int(os.getenv("TONY_POLL_INTERVAL", "30")))

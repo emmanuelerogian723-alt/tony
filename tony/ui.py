@@ -45,189 +45,6 @@ h2{font-size:clamp(26px,3vw,40px)}
 h3{font-size:17px;letter-spacing:-.02em}
 """
 
-LANDING = """<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tony — connect any app, let any agent act</title>
-<meta name="description" content="Open-source integration gateway. One API, one MCP endpoint, every app.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230a0a0a'/%3E%3Ctext x='32' y='44' font-size='34' font-family='-apple-system,sans-serif' font-weight='700' fill='white' text-anchor='middle'%3ET%3C/text%3E%3C/svg%3E">
-<style>__CSS__
-.nav{position:sticky;top:0;z-index:40;backdrop-filter:saturate(180%) blur(20px);background:rgba(255,255,255,.82);
-  border-bottom:1px solid var(--line)}
-.nav-in{max-width:1120px;margin:0 auto;padding:0 24px;height:62px;display:flex;align-items:center;gap:14px}
-.logo{display:flex;align-items:center;gap:9px;font-weight:680;letter-spacing:-.02em;font-size:16px}
-.logo-mark{width:28px;height:28px;border-radius:9px;background:var(--ink);color:#fff;display:grid;place-items:center;
-  font-size:14px;font-weight:700;letter-spacing:-.02em}
-.nav-links{display:flex;gap:22px;margin-left:26px;font-size:13.5px;color:var(--muted)}
-.nav-links a{transition:color .18s var(--ease)}.nav-links a:hover{color:var(--ink)}
-.nav-cta{margin-left:auto;display:flex;gap:10px;align-items:center}
-.hero{max-width:1120px;margin:0 auto;padding:92px 24px 30px;text-align:center}
-.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);
-  background:var(--soft-2);font-size:12.5px;color:var(--ink-2);font-weight:560;letter-spacing:-.01em}
-.hero h1{margin:22px auto 0;max-width:900px}
-.hero .sub{max-width:640px;margin:20px auto 0;font-size:18px;color:var(--muted);letter-spacing:-.01em}
-.hero-cta{margin-top:32px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.stats{display:flex;gap:40px;justify-content:center;margin:52px 0 0;flex-wrap:wrap}
-.stat b{display:block;font-size:30px;letter-spacing:-.03em;font-weight:700;font-variant-numeric:tabular-nums}
-.stat span{font-size:12.5px;color:var(--muted);letter-spacing:.01em;text-transform:none}
-.section{max-width:1120px;margin:0 auto;padding:80px 24px}
-.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
-.card{border:1px solid var(--line);border-radius:var(--r-lg);padding:24px;background:#fff;
-  transition:transform .22s var(--ease),box-shadow .22s var(--ease),border-color .22s var(--ease)}
-.card:hover{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--line-2)}
-.card h3{margin-bottom:8px}
-.card p{margin:0;color:var(--muted);font-size:14px}
-.ico{width:38px;height:38px;border-radius:11px;background:var(--soft);display:grid;place-items:center;margin-bottom:16px;
-  font-size:17px}
-.code-wrap{background:#0a0a0a;border-radius:var(--r-xl);padding:26px 26px 22px;color:#e8e8ea;overflow:hidden;
-  box-shadow:var(--shadow-lg);position:relative}
-.code-wrap .bar{display:flex;gap:6px;margin-bottom:16px}
-.code-wrap .bar i{width:10px;height:10px;border-radius:50%;background:#2a2a2e;display:block}
-.code-wrap pre{margin:0;font-size:13.5px;line-height:1.75;white-space:pre-wrap;word-break:break-word}
-.k{color:#7dd3a0}.s{color:#a5b4fc}.c{color:#6b7280}.n{color:#fbbf24}
-.split{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
-.checklist{display:grid;gap:14px;margin-top:26px}
-.check{display:flex;gap:11px;align-items:flex-start;font-size:14.5px;color:var(--ink-2)}
-.check b{font-weight:600}
-.check .tick{width:20px;height:20px;border-radius:50%;background:var(--green-soft);color:var(--green);
-  display:grid;place-items:center;font-size:11px;flex:none;margin-top:2px}
-.table{width:100%;border-collapse:collapse;font-size:14px}
-.table th{text-align:left;font-weight:590;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em;
-  padding:0 12px 12px;border-bottom:1px solid var(--line)}
-.table td{padding:14px 12px;border-bottom:1px solid var(--line)}
-.table tr:last-child td{border-bottom:none}
-.cta{text-align:center;padding:90px 24px 100px}
-.cta h2{max-width:640px;margin:0 auto}
-.cta p{color:var(--muted);max-width:520px;margin:16px auto 0}
-.footer{border-top:1px solid var(--line);padding:30px 24px;display:flex;gap:16px;justify-content:space-between;
-  align-items:center;flex-wrap:wrap;max-width:1120px;margin:0 auto;font-size:13px;color:var(--muted)}
-@media(max-width:820px){.split{grid-template-columns:1fr;gap:34px}.nav-links{display:none}.hero{padding-top:64px}}
-</style></head>
-<body>
-<nav class="nav"><div class="nav-in">
-  <a class="logo" href="/"><span class="logo-mark">T</span>Tony</a>
-  <div class="nav-links">
-    <a href="#how">How it works</a><a href="#compare">Why Tony</a><a href="#apps">Catalogue</a>
-    <a href="https://github.com/emmanuelerogian723-alt/tony" target="_blank" rel="noopener">GitHub</a>
-  </div>
-  <div class="nav-cta">
-    <a class="btn ghost small" href="/docs" target="_blank" rel="noopener">API</a>
-    <a class="btn small" href="/app">Open dashboard</a>
-  </div>
-</div></nav>
-
-<header class="hero">
-  <span class="eyebrow fade"><span class="dot"></span> Open source · self-hosted · no per-action pricing</span>
-  <h1 class="fade">Connect any app.<br>Let any agent act on it.</h1>
-  <p class="sub fade">Tony is the integration layer your product was missing — one API, one MCP endpoint,
-  and real, live data from every app your users sign into.</p>
-  <div class="hero-cta fade">
-    <a class="btn" href="/app">Try it live →</a>
-    <a class="btn ghost" href="https://github.com/emmanuelerogian723-alt/tony" target="_blank" rel="noopener">Star on GitHub</a>
-  </div>
-  <div class="stats fade" id="stats">
-    <div class="stat"><b id="s-apps">—</b><span>apps connected</span></div>
-    <div class="stat"><b id="s-actions">—</b><span>actions</span></div>
-    <div class="stat"><b id="s-runs">—</b><span>live runs</span></div>
-    <div class="stat"><b id="s-lat">—</b><span>avg latency</span></div>
-  </div>
-</header>
-
-<section class="section" id="how">
-  <div class="split">
-    <div>
-      <h2>Your users sign in.<br>You get a clean API.</h2>
-      <p class="muted" style="margin-top:16px;font-size:16px">Tony runs the whole OAuth dance, refreshes tokens
-      before they expire, and encrypts every credential at rest. Your code never touches a provider secret.</p>
-      <div class="checklist">
-        <div class="check"><span class="tick">✓</span><div><b>Bring your own OAuth app</b><br><span class="muted tiny">Each provider uses your client ID. No shared rate limits, no vendor lock.</span></div></div>
-        <div class="check"><span class="tick">✓</span><div><b>Tokens refresh themselves</b><br><span class="muted tiny">Expiring credentials are renewed in the background before a call fails.</span></div></div>
-        <div class="check"><span class="tick">✓</span><div><b>Row-level safety</b><br><span class="muted tiny">Write and destructive actions wait for an explicit approval, and every call is logged.</span></div></div>
-      </div>
-    </div>
-    <div class="code-wrap fade">
-      <div class="bar"><i></i><i></i><i></i></div>
-<pre><span class="c"># 1 — connect a user's app (one link)</span>
-<span class="k">POST</span> /v1/connections/github/start
-   { <span class="s">"entity_id"</span>: <span class="s">"user_42"</span> }
-<span class="c">→ { authorization_url: "https://github.com/login/oauth/..." }</span>
-
-<span class="c"># 2 — let any model use it</span>
-<span class="k">POST</span> /v1/execute
-   { <span class="s">"action"</span>: <span class="s">"github.list_repos"</span>,
-     <span class="s">"entity_id"</span>: <span class="s">"user_42"</span>,
-     <span class="s">"args"</span>: { <span class="s">"per_page"</span>: <span class="n">10</span> } }
-<span class="c">→ real repositories, 180ms, tokens never leave Tony</span>
-
-<span class="c"># 3 — or point Claude / Cursor at it</span>
-<span class="k">POST</span> /mcp   <span class="c"># MCP JSON-RPC, 200+ tools</span></pre>
-    </div>
-  </div>
-</section>
-
-<section class="section" id="apps">
-  <h2>Built for real data</h2>
-  <p class="muted" style="margin-top:14px;font-size:16px;max-width:620px">Every action is a declarative manifest — add a new
-  app with twenty lines of YAML, no core changes, no SDK release.</p>
-  <div class="grid-3" style="margin-top:34px">
-    <div class="card"><div class="ico">🔌</div><h3>Universal REST connector</h3>
-      <p>Any API with a key or a bearer token works on day one. Paste the key, call the action.</p></div>
-    <div class="card"><div class="ico">🌐</div><h3>No-API fallback</h3>
-      <p>For sites that never shipped an API, Tony fetches the page, extracts the text, or searches the web.</p></div>
-    <div class="card"><div class="ico">⚡</div><h3>Triggers</h3>
-      <p>Poll an action on a schedule and webhook your server the moment the result actually changes.</p></div>
-    <div class="card"><div class="ico">🧠</div><h3>LLM-ready responses</h3>
-      <p>Path extraction, item caps and response budgets keep every payload small enough for a context window.</p></div>
-    <div class="card"><div class="ico">🔒</div><h3>Encrypted at rest</h3>
-      <p>Fernet-encrypted credentials, hashed API keys, SSRF guard on every outbound call.</p></div>
-    <div class="card"><div class="ico">📊</div><h3>Run log</h3>
-      <p>Every call is timestamped with latency, status and byte count — replay any of them.</p></div>
-  </div>
-</section>
-
-<section class="section" id="compare">
-  <h2>How Tony compares</h2>
-  <div style="margin-top:28px;border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden">
-  <table class="table">
-    <tr><th>Capability</th><th>Hosted aggregator</th><th>Tony</th></tr>
-    <tr><td>Pricing model</td><td class="muted">Per connected user, per month</td><td><b>Free, self-hosted</b></td></tr>
-    <tr><td>OAuth client</td><td class="muted">Shared, rate-limited</td><td><b>Yours</b></td></tr>
-    <tr><td>Add a new app</td><td class="muted">Wait for a vendor release</td><td><b>One YAML file</b></td></tr>
-    <tr><td>Agent protocol</td><td class="muted">Proprietary SDK</td><td><b>MCP + OpenAPI</b></td></tr>
-    <tr><td>Data residency</td><td class="muted">Their cloud</td><td><b>Your server</b></td></tr>
-    <tr><td>Destructive calls</td><td class="muted">Trust the caller</td><td><b>Approval + audit log</b></td></tr>
-  </table>
-  </div>
-</section>
-
-<section class="cta">
-  <h2>Ship integrations<br>this afternoon.</h2>
-  <p>Clone the repo, set one secret, run one command. Your agents get every app in the catalogue.</p>
-  <div style="margin-top:28px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-    <a class="btn" href="/app">Open the live dashboard</a>
-    <a class="btn ghost" href="https://github.com/emmanuelerogian723-alt/tony" target="_blank" rel="noopener">Read the source</a>
-  </div>
-</section>
-
-<footer class="footer">
-  <div class="logo" style="font-size:14px"><span class="logo-mark" style="width:24px;height:24px;border-radius:8px;font-size:12px">T</span>Tony</div>
-  <div>Apache-2.0 · built to be the open layer under every agent</div>
-</footer>
-<script>
-(async function(){
-  try{
-    const r = await fetch('/v1/stats'); const d = await r.json();
-    document.getElementById('s-apps').textContent = d.apps;
-    document.getElementById('s-actions').textContent = d.actions;
-    document.getElementById('s-runs').textContent = d.runs;
-  }catch(e){}
-  try{
-    const r = await fetch('/v1/runs',{headers:{}});
-  }catch(e){}
-})();
-</script>
-</body></html>"""
-
 DASH = """<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -238,6 +55,7 @@ body{background:var(--soft-2);height:100vh;overflow:hidden}
 .shell{display:grid;grid-template-columns:232px 1fr;height:100vh}
 .side{background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 14px}
 .side .logo{padding:4px 8px 18px}
+.logo-mark{width:26px;height:26px;border-radius:8px;display:block}
 .nav-item{display:flex;align-items:center;gap:10px;height:38px;padding:0 10px;border-radius:9px;color:var(--ink-2);
   font-size:13.5px;font-weight:520;letter-spacing:-.01em;transition:background .16s var(--ease);cursor:pointer}
 .nav-item:hover{background:var(--soft)}
@@ -340,7 +158,7 @@ pre.out{margin:0;background:#0a0a0a;color:#e8e8ea;border-radius:12px;padding:15p
 <body>
 <div class="shell">
   <aside class="side">
-    <div class="logo"><span class="logo-mark">T</span><span>Tony</span></div>
+    <div class="logo"><img class="logo-mark" src="/static/brand/tony-mark.svg" alt="" width="26" height="26"><span>Tony</span></div>
     <div class="nav-item active" data-page="apps"><span class="i">▦</span><span>Apps</span></div>
     <div class="nav-item" data-page="connections"><span class="i">🔗</span><span>Connections</span></div>
     <div class="nav-item" data-page="runs"><span class="i">⟳</span><span>Runs</span></div>
@@ -765,8 +583,6 @@ loadApps(true);
 </body></html>"""
 
 
-def landing_html(demo_open: bool = True) -> str:
-    return LANDING.replace("__CSS__", BASE_CSS)
 
 
 def dashboard_html(key: str = "", workspace_id: str = "", demo_open: bool = True) -> str:

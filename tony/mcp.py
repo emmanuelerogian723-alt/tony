@@ -5,6 +5,8 @@ Any MCP-capable agent (Claude Desktop, Cursor, your own runtime) can point at
 """
 from __future__ import annotations
 
+import asyncio
+
 import json
 from typing import Any
 
@@ -13,6 +15,7 @@ from fastapi.responses import JSONResponse
 
 from . import __version__
 from .auth import workspace_from_request
+from .config import settings
 from .catalog import catalog
 from .executor import ExecutionError, execute
 from .oauth import credentials_for
@@ -192,7 +195,11 @@ async def _handle(msg: dict[str, Any], request: Request) -> dict[str, Any]:
                 "isError": True,
             })
         try:
-            result = await execute(spec, action, args, creds)
+            try:
+                result = await asyncio.wait_for(
+                    execute(spec, action, args, creds), timeout=settings.execution_deadline)
+            except asyncio.TimeoutError:
+                raise ExecError(f"{spec.slug}.{action.slug} exceeded {settings.execution_deadline:g}s")
         except ExecutionError as exc:
             return ok({
                 "content": [{"type": "text", "text": json.dumps(

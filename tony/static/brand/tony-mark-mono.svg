@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Tony">
+  <path d="M11.5 32h6.5" stroke="currentColor" stroke-width="5.4" stroke-linecap="round"/>
+  <circle cx="32" cy="32" r="13" fill="none" stroke="currentColor" stroke-width="5.4"
+          stroke-dasharray="62 19.7" stroke-linecap="round" transform="rotate(45 32 32)"/>
+  <circle cx="33.5" cy="30.5" r="4.6" fill="currentColor"/>
+</svg>

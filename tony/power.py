@@ -401,6 +401,35 @@ async def llm_health() -> dict[str, Any]:
     return {"targets": rows}
 
 
+GREETING = re.compile(
+    r"^(hi|hey|hello|yo|sup|hiya|good (morning|afternoon|evening)|thanks|thank you|ok|okay|nice|cool)"
+    r"[\s!.,?]*$", re.I)
+
+
+async def _direct_answer(goal: str, history: list[dict[str, str]] | None = None) -> str:
+    """Answer without touching an app. Tony is a general assistant first: conversation,
+    explanations, drafts and small talk all belong here, not in a tool loop."""
+    system = ("You are Tony, a friendly, capable assistant. Answer the person directly and usefully. "
+              "For small talk, be warm and brief (one or two sentences) and offer a concrete thing you can do next. "
+              "For explanations, code, drafts or planning, just do the work well. Never say you cannot help with "
+              "something unless it truly needs a connected app; in that case name the app (for example gmail or "
+              "github) and say what pressing Connect unlocks. No markdown headings.")
+    msgs: list[dict[str, Any]] = [{"role": "system", "content": system}]
+    for turn in (history or [])[-6:]:
+        if turn.get("role") in {"user", "assistant"} and turn.get("content"):
+            msgs.append({"role": turn["role"], "content": str(turn["content"])[:1500]})
+    msgs.append({"role": "user", "content": goal})
+    reply = await _chat(msgs, None, temperature=0.5, fast=True)
+    if reply is None:
+        return ("I'm here. Tell me what you want done - today's news, a draft, a repo lookup, "
+                "or anything about connecting an app - and I'll take it from there.")
+    content = (reply.get("content") or "").strip()
+    if content:
+        return content
+    return ("I'm here and ready. Give me a goal like 'summarise Hacker News' or ask me anything about "
+            "APIs, keys or OAuth.")
+
+
 @router.post("/agent")
 async def agent(body: AgentIn, request: Request) -> dict[str, Any]:
     """Give Tony a goal. It plans, calls real apps, and answers with receipts."""
@@ -414,6 +443,12 @@ async def agent(body: AgentIn, request: Request) -> dict[str, Any]:
     steps: list[dict[str, Any]] = []
     started = time.perf_counter()
 
+    # 0. conversation, questions and writing need no app at all
+    if not body.apps and (GREETING.match(goal) or len(goal.split()) <= 3 and goal.endswith("?")):
+        text = await _direct_answer(goal, body.history)
+        return {"answer": text, "steps": [], "engine": "chat",
+                "elapsed_ms": int((time.perf_counter() - started) * 1000)}
+
     # 1. choose candidate apps
     if body.apps:
         specs = _pick_apps(body.apps)
@@ -422,13 +457,13 @@ async def agent(body: AgentIn, request: Request) -> dict[str, Any]:
                         key=lambda s: (_score_app(goal, s), -len(s.slug)), reverse=True)
         specs = [s for s in ranked[:3] if _score_app(goal, s) >= 6]
         if not specs:
-            return {"answer": ("I could not match that goal to an app. Name the app you want "
-                               "(for example 'hackernews' or 'github') or use GET /v1/apps?q= to search the catalogue."),
-                    "steps": [], "elapsed_ms": int((time.perf_counter() - started) * 1000),
-                    "engine": "no-match"}
+            text = await _direct_answer(goal, body.history)
+            return {"answer": text, "steps": [],
+                    "elapsed_ms": int((time.perf_counter() - started) * 1000), "engine": "chat"}
     if not specs:
-        return {"answer": "No app in the catalogue matches that. Search with GET /v1/apps?q=.",
-                "steps": [], "elapsed_ms": 0, "engine": "none"}
+        text = await _direct_answer(goal, body.history)
+        return {"answer": text, "steps": [],
+                "elapsed_ms": int((time.perf_counter() - started) * 1000), "engine": "chat"}
 
     # 2. build the tool belt
     belt: list[dict[str, Any]] = []

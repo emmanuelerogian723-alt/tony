@@ -182,3 +182,87 @@ class OAuthProvider(Base):
     secret_enc: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[str] = mapped_column(String(32), default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class Subscription(Base):
+    """One row per console user: which plan they are on and until when."""
+    __tablename__ = "subscriptions"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    workspace_id: Mapped[str] = mapped_column(String(32), index=True, default="")
+    plan: Mapped[str] = mapped_column(String(24), default="free")  # free|pro|business
+    status: Mapped[str] = mapped_column(String(24), default="active")  # active|trialing|past_due|cancelled
+    provider: Mapped[str] = mapped_column(String(24), default="none")  # none|paystack|passcode|admin
+    external_ref: Mapped[str] = mapped_column(String(120), default="")
+    current_period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class PaymentEvent(Base):
+    """Every checkout we started or payment we received, for audit and replay safety."""
+    __tablename__ = "payment_events"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(String(32), index=True, default="")
+    workspace_id: Mapped[str] = mapped_column(String(32), index=True, default="")
+    provider: Mapped[str] = mapped_column(String(24), default="paystack")
+    reference: Mapped[str] = mapped_column(String(120), index=True, default="")
+    plan: Mapped[str] = mapped_column(String(24), default="pro")
+    months: Mapped[int] = mapped_column(Integer, default=1)
+    amount: Mapped[int] = mapped_column(Integer, default=0)  # minor units (kobo/cents)
+    currency: Mapped[str] = mapped_column(String(8), default="NGN")
+    status: Mapped[str] = mapped_column(String(24), default="pending")  # pending|paid|failed|abandoned
+    raw_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AgentSession(Base):
+    """A scoped runtime session for one end-user of a workspace.
+
+    This is the Composio-style primitive: your agent gets a session bound to a
+    person, a subset of apps and a run budget, so a support bot or a per-customer
+    automation cannot act outside its lane.
+    """
+    __tablename__ = "agent_sessions"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    workspace_id: Mapped[str] = mapped_column(String(32), index=True)
+    owner_user_id: Mapped[str] = mapped_column(String(32), index=True, default="")
+    entity_id: Mapped[str] = mapped_column(String(160), default="default")
+    label: Mapped[str] = mapped_column(String(160), default="")
+    allowed_apps: Mapped[str] = mapped_column(Text, default="")  # csv; empty means every app the plan allows
+    allowed_tiers: Mapped[str] = mapped_column(String(40), default="read")  # read|read,write|read,write,destructive
+    run_limit: Mapped[int] = mapped_column(Integer, default=0)  # 0 = use the plan's monthly limit
+    runs_used: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class CustomTool(Base):
+    """A user-defined HTTP tool: bring an internal API or a service we do not list.
+
+    It behaves exactly like a catalog action: same quota, same approval gate on
+    writes, same run log. Only the request shape is yours.
+    """
+    __tablename__ = "custom_tools"
+    __table_args__ = (UniqueConstraint("workspace_id", "slug", name="uq_custom_tool"),)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    workspace_id: Mapped[str] = mapped_column(String(32), index=True)
+    slug: Mapped[str] = mapped_column(String(60), index=True)
+    name: Mapped[str] = mapped_column(String(120), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    method: Mapped[str] = mapped_column(String(8), default="GET")
+    url: Mapped[str] = mapped_column(String(600), default="")
+    headers_json: Mapped[str] = mapped_column(Text, default="{}")
+    body_template: Mapped[str] = mapped_column(Text, default="")
+    secret_enc: Mapped[str] = mapped_column(Text, default="")
+    auth_style: Mapped[str] = mapped_column(String(24), default="bearer")  # bearer|header|query|none
+    auth_name: Mapped[str] = mapped_column(String(80), default="Authorization")
+    tier: Mapped[str] = mapped_column(String(16), default="read")
+    params_json: Mapped[str] = mapped_column(Text, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

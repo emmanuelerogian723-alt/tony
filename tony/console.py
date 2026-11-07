@@ -229,6 +229,37 @@ pre.out{margin:0;padding:13px;border-radius:10px;background:#151412;color:#EDE8D
 .pk{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);
   border-radius:9px;background:var(--card);margin-bottom:8px}
 .pk code{font-family:var(--mono);font-size:12px}
+
+/* ── billing + sessions ─────────────────────────────────── */
+.hero{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:18px 20px;border-radius:var(--r-lg);
+  background:linear-gradient(135deg,#12110F,#2C2A25);color:var(--paper);box-shadow:var(--shadow-lift);margin-bottom:14px}
+.hero .amt{font-family:var(--serif);font-size:32px;line-height:1;letter-spacing:-.03em}
+.hero .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;opacity:.62}
+.hero .badge{background:rgba(244,239,231,.14);border-color:rgba(244,239,231,.26);color:var(--paper)}
+.hero .note{font-size:12.5px;opacity:.72;max-width:44ch}
+.meters{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:16px}
+.mtr{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 13px;box-shadow:var(--shadow)}
+.mtr .k{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);font-weight:600}
+.mtr .v{font-family:var(--serif);font-size:19px;letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.mtr .v small{font-family:var(--sans);font-size:11px;color:var(--mut);letter-spacing:0}
+.bar{height:5px;border-radius:999px;background:rgba(18,17,15,.08);margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ink);border-radius:999px}
+.bar.w i{background:var(--warn)}
+.bar.b i{background:var(--bad)}
+.plans{display:grid;gap:12px;grid-template-columns:1fr;margin-bottom:16px}
+@media(min-width:760px){.plans{grid-template-columns:repeat(3,1fr)}}
+.plan{display:flex;flex-direction:column;gap:9px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow);position:relative}
+.plan.mid{border-color:var(--ink);box-shadow:var(--shadow-lift)}
+.plan h3{font-size:16px}
+.plan .price{font-family:var(--serif);font-size:24px;letter-spacing:-.03em;line-height:1.1}
+.plan .price small{font-family:var(--sans);font-size:11px;color:var(--mut);letter-spacing:0;font-weight:500}
+.plan ul{margin:0;padding:0;list-style:none;display:grid;gap:6px}
+.plan li{font-size:12.3px;color:var(--ink-2);padding-left:16px;position:relative}
+.plan li:before{content:"✓";position:absolute;left:0;color:var(--ok);font-weight:700}
+.plan .cur{position:absolute;right:12px;top:12px}
+.ses{display:flex;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ses:last-child{border-bottom:none}
 """
 
 CONSOLE_JS = r"""
@@ -322,15 +353,17 @@ const NAV = [['overview','Overview','M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5'],
              ['connections','Connections','M9 15l6-6M7.5 4.5 6 6a4 4 0 105.7 5.7M16.5 19.5 18 18a4 4 0 10-5.7-5.7'],
              ['runs','Activity','M3 12h4l2.5-7 4 14L16 12h5'],
              ['keys','API keys','M14 7a4 4 0 10-3.5 4L4 17.5V21h3.5l6.5-6.5A4 4 0 0014 7z'],
+             ['sessions','Sessions','M12 3a9 9 0 100 18 9 9 0 000-18zm0 4v5l3.5 2'],
+             ['billing','Billing','M3 7h18M3 7l0 11a1 1 0 001 1h16a1 1 0 001-1V7M7 13h4'],
              ['profile','Profile','M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0']];
-const MOBILE = ['apps','connections','runs','keys','profile'];
+const MOBILE = ['apps','runs','sessions','billing','profile'];
 
 function iconNav(d){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="'+d+'"/></svg>'}
 function buildNav(){
   el('rail-nav').innerHTML = NAV.map(([id,label,d])=>
     '<button class="nav" data-p="'+id+'">'+iconNav(d)+'<span>'+label+'</span></button>').join('');
   el('rail-nav').querySelectorAll('.nav').forEach(b=>b.onclick=()=>go(b.dataset.p));
-  const labels = {apps:'Apps', connections:'Links', runs:'Activity', keys:'Keys', profile:'You'};
+  const labels = {apps:'Apps', connections:'Links', runs:'Activity', keys:'Keys', sessions:'Sessions', billing:'Billing', profile:'You'};
   const icons = Object.fromEntries(NAV.map(([id,l,d])=>[id,d]));
   el('tabbar').innerHTML = MOBILE.map(id=>
     '<button class="tab" data-p="'+id+'">'+iconNav(icons[id])+'<span>'+labels[id]+'</span></button>').join('');
@@ -347,13 +380,15 @@ function go(page){
   if(page==='keys'){ loadKeys() }
   if(page==='profile'){ renderProfile() }
   if(page==='overview'){ loadOverview() }
+  if(page==='billing'){ loadBilling() }
+  if(page==='sessions'){ loadSessions() }
 }
 
 /* ── boot ───────────────────────────────────────────────── */
 async function boot(){
-  renderWho(); buildNav();
+  renderWho(); buildNav(); checkBillingReturn();
   const h = (location.hash||'#overview').slice(1);
-  go(['overview','apps','connections','runs','keys','profile'].includes(h) ? h : 'overview');
+  go(['overview','apps','connections','runs','keys','sessions','billing','profile'].includes(h) ? h : 'overview');
 }
 function renderWho(){
   const u = S.user || {};
@@ -713,6 +748,145 @@ async function newKey(){
   }catch(e){ toast(e.message) }
 }
 
+
+/* ── billing ─────────────────────────────────────────────── */
+const LIMIT_LABEL = {runs:'runs', connected_accounts:'accounts', entities:'identities',
+                     keys:'keys', triggers:'triggers', sessions:'sessions', custom_tools:'custom tools'};
+async function loadBilling(){
+  try{
+    const [d, plans] = await Promise.all([api('/v1/billing/me'), api('/v1/billing/plans')]);
+    S.billing = d; S.plans = plans;
+    const p = d.plan, u = d.usage, lim = d.limits;
+    const price = p.price_ngn ? '₦'+n(p.price_ngn) : 'Free';
+    const sub = d.trial ? 'Pro trial · ' + (d.days_left||0) + ' days left'
+      : (p.price_ngn ? 'Renews in ' + (d.days_left||0) + ' days' : 'No card needed, ever');
+    el('bl-hero').innerHTML =
+      '<div class="hero"><div><div class="lbl">Current plan</div><div class="amt">'+esc(p.name)+'</div>'+
+      '<div class="note">'+esc(price)+(p.price_ngn?' / month':'')+' · '+esc(sub)+'</div></div>'+
+      '<span class="sp"></span>'+
+      '<div style="text-align:right"><span class="badge">'+esc(d.status)+'</span>'+
+      (d.cancel_at_period_end?'<div class="note" style="margin-top:6px">Cancels at period end</div>':'')+'</div></div>';
+    el('bl-meters').innerHTML = Object.keys(LIMIT_LABEL).map(k=>{
+      const used = u[k]||0, cap = lim[k]||0;
+      if(!cap) return '';
+      const pct = Math.min(100, Math.round(used/cap*100));
+      const cls = pct>=90?'b':(pct>=70?'w':'');
+      return '<div class="mtr"><div class="k">'+LIMIT_LABEL[k]+'</div>'+
+        '<div class="v">'+n(used)+' <small>/ '+n(cap)+'</small></div>'+
+        '<div class="bar '+cls+'"><i style="width:'+pct+'%"></i></div></div>';
+    }).join('') +
+      '<div class="mtr"><div class="k">requests / min</div><div class="v">'+n(lim.rate_per_min)+'</div>'+
+      '<div class="bar"><i style="width:100%"></i></div></div>'+
+      '<div class="mtr"><div class="k">history</div><div class="v">'+n(lim.retention_days)+' <small>days</small></div>'+
+      '<div class="bar"><i style="width:100%"></i></div></div>';
+    el('bl-plans').innerHTML = (plans.plans||[]).map(p=>{
+      const cur = p.id===d.plan_id;
+      const mid = p.id==='pro' ? ' mid':'';
+      const price = p.price_ngn ? '₦'+n(p.price_ngn)+' <small>/month</small>' : 'Free <small>forever</small>';
+      const cta = cur ? '<button class="btn ghost sm" disabled>Current plan</button>'
+        : (p.id==='free' ? '<button class="btn ghost sm" onclick="toast(\'Paid time simply stops renewing; your data stays.\')">Included</button>'
+        : '<button class="btn '+(p.id==='pro'?'acc':'ghost')+' sm" onclick="upgrade(\''+p.id+'\')">Choose '+esc(p.name)+'</button>');
+      return '<div class="plan'+mid+'">'+(cur?'<span class="badge acc cur">now</span>':'')+
+        '<h3>'+esc(p.name)+'</h3><p class="tiny muted" style="margin:0">'+esc(p.tagline)+'</p>'+
+        '<div class="price">'+price+'</div><ul>'+(p.highlights||[]).map(h=>'<li>'+esc(h)+'</li>').join('')+'</ul>'+
+        '<span class="sp"></span>'+cta+'</div>';
+    }).join('');
+    const ready = plans.payments_ready;
+    el('pay-note').textContent = ready
+      ? 'Card payments run through Paystack. Annual billing gives you two months free.'
+      : 'No payment key on this server yet, so checkout is off. Everything else works, and a pass code unlocks a tier instantly. Owner: add PAYSTACK_SECRET_KEY in Render → Environment.';
+    el('pay-actions').innerHTML = (d.plan_id!=='free' && !d.cancel_at_period_end)
+      ? '<button class="btn ghost sm" onclick="cancelPlan()">Cancel at period end</button>'
+      : (d.cancel_at_period_end ? '<button class="btn ghost sm" onclick="resumePlan()">Resume plan</button>' : '');
+  }catch(e){ el('bl-hero').innerHTML='<div class="empty">'+esc(e.message)+'</div>' }
+}
+async function upgrade(plan, months){
+  months = months || 1;
+  try{
+    const d = await api('/v1/billing/checkout', {method:'POST', body:{plan, months}});
+    if(d.authorization_url){ location.href = d.authorization_url; return }
+    toast('Checkout opened');
+  }catch(e){
+    if(e.status===503){
+      let msg = e.message;
+      try{ const d = JSON.parse(e.message); msg = d.error || msg }catch(_){}
+      toast(msg);
+    } else toast(e.message);
+  }
+}
+async function redeemPasscode(){
+  const code = (el('pc-code').value||'').trim();
+  if(!code){ toast('Enter a pass code'); return }
+  try{
+    const d = await api('/v1/billing/passcode', {method:'POST', body:{code}});
+    toast('Unlocked '+d.plan+' for '+d.days+' days'); el('pc-code').value=''; loadBilling();
+  }catch(e){ toast(e.message) }
+}
+async function cancelPlan(){
+  try{ await api('/v1/billing/cancel', {method:'POST'}); toast('Cancels at period end'); loadBilling() }
+  catch(e){ toast(e.message) }
+}
+async function resumePlan(){
+  try{ await api('/v1/billing/resume', {method:'POST'}); toast('Plan resumed'); loadBilling() }
+  catch(e){ toast(e.message) }
+}
+async function checkBillingReturn(){
+  const q = new URLSearchParams(location.search);
+  if(q.get('billing')!=='verify') return;
+  const ref = q.get('reference');
+  if(!ref) return;
+  try{
+    const d = await api('/v1/billing/verify?reference='+encodeURIComponent(ref));
+    toast(d.ok ? ('Payment confirmed. You are on '+d.plan+'.') : 'Payment not confirmed yet');
+    if(d.ok) loadBilling();
+  }catch(e){ toast(e.message) }
+  history.replaceState({}, '', location.pathname + location.hash);
+}
+
+/* ── sessions ────────────────────────────────────────────── */
+async function loadSessions(){
+  try{
+    const d = await api('/v1/sessions');
+    const rows = d.sessions||[];
+    el('se-count').textContent = rows.length ? rows.length + ' total' : '';
+    el('se-list').innerHTML = rows.length ? rows.map(x=>{
+      const dead = x.revoked || x.expired;
+      const apps = (x.apps||[]).join(', ');
+      const budget = x.run_limit ? (x.runs_used+'/'+x.run_limit) : 'plan';
+      return '<div class="ses"><div style="min-width:0;flex:1">'+
+        '<div class="row" style="gap:6px"><code class="mono tiny">'+esc(x.id)+'</code>'+
+        '<span class="badge '+(dead?'bad':'ok')+'">'+(x.revoked?'revoked':(x.expired?'expired':'live'))+'</span></div>'+
+        '<div class="tiny muted" style="margin-top:3px">'+esc(x.entity_id)+(x.label?' · '+esc(x.label):'')+
+        ' · apps: '+esc(apps||'all')+' · tiers: '+esc((x.tiers||[]).join(', '))+' · runs: '+esc(budget)+'</div></div>'+
+        '<button class="btn ghost sm" data-c="'+esc(x.id)+'">Copy id</button>'+
+        (dead?'':'<button class="btn ghost sm" data-x="'+esc(x.id)+'">Revoke</button>')+'</div>';
+    }).join('') : '<div class="empty">No sessions yet. Create one to scope an agent to a single end-user.</div>';
+    el('se-list').querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{
+      navigator.clipboard.writeText(b.dataset.c).then(()=>{ b.textContent='Copied'; setTimeout(()=>b.textContent='Copy id',1400) });
+    });
+    el('se-list').querySelectorAll('[data-x]').forEach(b=>b.onclick=async()=>{
+      await api('/v1/sessions/'+b.dataset.x, {method:'DELETE'}); toast('Session revoked'); loadSessions();
+    });
+  }catch(e){ el('se-list').innerHTML='<div class="empty">'+esc(e.message)+'</div>' }
+}
+async function createSession(){
+  const tiers = [];
+  if(el('se-t-read').checked) tiers.push('read');
+  if(el('se-t-write').checked) tiers.push('write');
+  if(el('se-t-dest').checked) tiers.push('destructive');
+  if(!tiers.length){ toast('Pick at least one tier'); return }
+  const body = {entity_id:(el('se-entity').value||'default').trim(), label:el('se-label').value.trim(),
+                apps:(el('se-apps').value||'').split(',').map(s=>s.trim()).filter(Boolean),
+                tiers, ttl_hours:parseInt(el('se-ttl').value||'24',10),
+                run_limit:parseInt(el('se-limit').value||'0',10)};
+  try{
+    const d = await api('/v1/sessions', {method:'POST', body});
+    toast('Session ready'); el('se-entity').value=''; el('se-label').value=''; el('se-apps').value='';
+    loadSessions();
+    if(d.how_to_use) setTimeout(()=>toast('Attach X-Tony-Session: '+d.id), 1200);
+  }catch(e){ toast(e.message) }
+}
+
 /* ── profile ────────────────────────────────────────────── */
 function renderProfile(){
   const u = S.user||{};
@@ -922,6 +1096,59 @@ def console_html(user: Any = None) -> str:
           <div id="key-list"></div>
           <div class="divider"></div>
           <p class="tiny muted" style="margin:0">Example<br><code class="mono">curl -H "Authorization: Bearer tony_sk_…" https://tony-7su0.onrender.com/v1/apps?limit=3</code></p>
+        </div>
+      </section>
+
+      <!-- sessions -->
+      <section class="pg" id="p-sessions">
+        <div class="hd"><div><h1>Sessions</h1><p>One per end-user: pinned identity, app allowlist, tier limit, own run budget.</p></div></div>
+        <div class="grid" style="grid-template-columns:1fr;gap:12px">
+          <div class="card pad">
+            <div class="row wrap" style="gap:8px;align-items:flex-end">
+              <div class="field" style="flex:1;min-width:150px;margin:0"><label>End-user identity</label>
+                <input class="inp" id="se-entity" placeholder="user_42" autocomplete="off"></div>
+              <div class="field" style="flex:1;min-width:150px;margin:0"><label>Label</label>
+                <input class="inp" id="se-label" placeholder="Support bot for Ada" autocomplete="off"></div>
+            </div>
+            <div class="field" style="margin-top:11px"><label>Allowed apps<span class="hint">comma separated, empty = every app</span></label>
+              <input class="inp" id="se-apps" placeholder="gmail, slack" autocomplete="off"></div>
+            <div class="row wrap" style="gap:14px;margin:2px 0 12px">
+              <label class="tiny row" style="gap:6px"><input type="checkbox" id="se-t-read" checked> read</label>
+              <label class="tiny row" style="gap:6px"><input type="checkbox" id="se-t-write" checked> write</label>
+              <label class="tiny row" style="gap:6px"><input type="checkbox" id="se-t-dest"> destructive</label>
+              <span class="sp"></span>
+              <label class="tiny row" style="gap:6px">TTL <input class="inp" id="se-ttl" value="24" style="width:64px;height:32px"> h</label>
+              <label class="tiny row" style="gap:6px">budget <input class="inp" id="se-limit" value="0" style="width:88px;height:32px"></label>
+            </div>
+            <button class="btn acc" onclick="createSession()">Create session</button>
+            <p class="tiny muted" style="margin:10px 0 0">Send <code class="mono">X-Tony-Session: &lt;id&gt;</code> on any call. Your workspace key stays on your server.</p>
+          </div>
+          <div class="card pad"><div class="row" style="margin-bottom:8px"><b style="font-size:14px">Active</b>
+            <span class="sp"></span><span class="tiny muted" id="se-count"></span></div>
+            <div id="se-list"><div class="empty">Loading…</div></div></div>
+        </div>
+      </section>
+
+      <!-- billing -->
+      <section class="pg" id="p-billing">
+        <div class="hd"><div><h1>Billing</h1><p>Free covers a real product. Upgrade only when volume says so.</p></div></div>
+        <div id="bl-hero"></div>
+        <div class="meters" id="bl-meters"></div>
+        <div class="plans" id="bl-plans"></div>
+        <div class="grid" style="grid-template-columns:1fr;gap:12px">
+          <div class="card pad">
+            <b style="font-size:14px">Pass code</b>
+            <p class="tiny muted" style="margin:6px 0 10px">Owner-issued codes unlock a tier with no card.</p>
+            <div class="row wrap" style="gap:8px">
+              <input class="inp" id="pc-code" placeholder="TONY-…" style="flex:1;min-width:150px" autocomplete="off">
+              <button class="btn sm" onclick="redeemPasscode()">Apply</button>
+            </div>
+          </div>
+          <div class="card pad">
+            <b style="font-size:14px">Payments</b>
+            <p class="tiny muted" id="pay-note" style="margin:6px 0 10px">Checking…</p>
+            <div class="row wrap" style="gap:8px" id="pay-actions"></div>
+          </div>
         </div>
       </section>
 

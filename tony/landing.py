@@ -11,10 +11,10 @@ LANDING_CSS = r"""
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 :root{
-  --paper:#F3F0E9; --paper-2:#EAE6DB; --paper-3:#E2DDD0;
-  --ink:#0E0E0C; --ink-2:#1B1B16; --muted:#6E6B61; --muted-2:#8C887C;
-  --line:rgba(14,14,12,.13); --line-2:rgba(14,14,12,.26); --line-3:rgba(14,14,12,.5);
-  --signal:#D9502A; --signal-ink:#B23F1F; --signal-soft:#F6DCD1;
+  --paper:#FFFFFF; --paper-2:#FBFBFC; --paper-3:#F4F4F5;
+  --ink:#09090B; --ink-2:#18181B; --muted:#71717A; --muted-2:#A1A1AA;
+  --line:rgba(9,9,11,.08); --line-2:rgba(9,9,11,.14); --line-3:rgba(9,9,11,.4);
+  --signal:#E2542B; --signal-ink:#C1441F; --signal-soft:#FFF0EA;
   --max:1180px; --gut:clamp(18px,4vw,44px);
   --serif:'Fraunces',Georgia,'Times New Roman',serif;
   --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -30,7 +30,7 @@ body{
 }
 /* paper grain: a real texture, not a gradient */
 body::before{
-  content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:.42;
+  content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:.09;
   mix-blend-mode:multiply;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.14'/%3E%3C/svg%3E");
 }
@@ -329,6 +329,50 @@ h2 em{font-style:italic;color:var(--signal)}
   .foot-links{flex-wrap:wrap;gap:10px 16px}
   .cmd{font-size:11.5px}
 }
+/* ── diamond white: crisp, quiet, developer-grade ─────── */
+.nav{background:rgba(255,255,255,.82)!important;border-bottom:1px solid var(--line);
+  backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px)}
+.btn{box-shadow:none!important;border-radius:8px}
+.btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(9,9,11,.12)!important}
+.btn:active{transform:translateY(0)}
+.btn.signal{box-shadow:0 1px 2px rgba(226,84,43,.28)!important}
+.btn.signal:hover{box-shadow:0 8px 22px rgba(226,84,43,.26)!important}
+.plate,.search-shell,.install,.tier,.callout{box-shadow:0 1px 2px rgba(9,9,11,.04),0 12px 32px -12px rgba(9,9,11,.10)!important;
+  background:#fff!important;border-color:var(--line)!important;border-radius:14px!important}
+.plate:hover{box-shadow:0 2px 4px rgba(9,9,11,.05),0 18px 44px -16px rgba(9,9,11,.16)!important}
+.search-shell{border:1px solid var(--line-2)!important}
+.hero{background:
+  radial-gradient(1100px 520px at 12% -8%, rgba(226,84,43,.07), transparent 62%),
+  radial-gradient(900px 480px at 92% 0%, rgba(9,9,11,.045), transparent 60%),
+  #fff}
+.hero-grid h1 em{color:var(--signal-ink)}
+.counters div{border-left:1px solid var(--line)}
+.kicker .bar{background:var(--line-3)}
+hr,.rule{background:var(--line)}
+/* pricing */
+.pricing{display:grid;gap:16px;grid-template-columns:1fr;margin-top:26px}
+@media (min-width:820px){.pricing{grid-template-columns:repeat(3,1fr)}}
+.tier{position:relative;display:flex;flex-direction:column;gap:14px;padding:26px 24px 24px;
+  border:1px solid var(--line);border-radius:16px;background:#fff}
+.tier.hot{border-color:var(--ink)!important;box-shadow:0 2px 4px rgba(9,9,11,.05),0 26px 60px -22px rgba(9,9,11,.28)!important}
+.tier .tname{font-family:var(--serif);font-size:21px;letter-spacing:-.02em}
+.tier .tag{font-size:13px;color:var(--muted);min-height:38px;line-height:1.45}
+.tier .amt{display:flex;align-items:baseline;gap:6px}
+.tier .amt b{font-family:var(--serif);font-size:38px;letter-spacing:-.035em;line-height:1}
+.tier .amt span{font-size:12px;color:var(--muted)}
+.tier ul{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+.tier li{display:flex;gap:9px;font-size:13.2px;color:var(--ink-2);line-height:1.45}
+.tier li svg{flex:none;margin-top:2px;color:var(--signal)}
+.tier .foot{margin-top:auto;padding-top:6px}
+.tier .foot .btn{width:100%}
+.badge-hot{position:absolute;top:-11px;right:20px;background:var(--ink);color:#fff;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;padding:4px 9px;border-radius:999px}
+.pay-note{margin-top:16px;font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.strip{display:grid;gap:12px;grid-template-columns:1fr;margin-top:22px}
+@media (min-width:760px){.strip{grid-template-columns:repeat(4,1fr)}}
+.strip div{border:1px solid var(--line);border-radius:12px;padding:15px 16px;background:var(--paper-2)}
+.strip b{display:block;font-size:13.5px;margin-bottom:4px}
+.strip p{margin:0;font-size:12.4px;color:var(--muted);line-height:1.5}
 @media (max-width:430px){
   .wrap{padding:0 16px}
   h1{font-size:clamp(31px,10.4vw,44px)}
@@ -439,6 +483,7 @@ BODY = """
     <a href="#layers">Layers</a>
     <a href="#protocol">Protocol</a>
     <a href="#compare">Compare</a>
+    <a href="#pricing">Pricing</a>
     <a href="/docs">Docs</a>
   </nav>
   <div class="nav-cta">
@@ -460,7 +505,7 @@ BODY = """
           <a class="btn" href="/app">Open the console
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 10 10 2M4 2h6v6"/></svg>
           </a>
-          <a class="btn ghost" href="#protocol">Read the protocol</a>
+          <a class="btn ghost" href="#pricing">See pricing</a>
           <span class="cta-note">no card · no vendor cloud</span>
         </div>
         <div class="counters">
@@ -679,6 +724,27 @@ Authorization: Bearer tony_sk_...
   </div>
 </section>
 
+<section class="sec" id="pricing" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head rise">
+      <div class="sec-num">07 / pricing</div>
+      <div>
+        <h2>Generous by default. <em>Paid for volume.</em></h2>
+        <p>Free is a real tier, not a trial: every app, every action, writes included, 5,000 runs a
+          month. You pay when your volume grows, never to unlock a feature or a "pro" app.</p>
+      </div>
+    </div>
+    <div class="pricing">__PRICING__</div>
+    <div class="pay-note">__PAYNOTE__</div>
+    <div class="strip">
+      <div><b>Per-user sessions</b><p>Pin an agent to one end-user, one app allowlist and its own run budget. The workspace key never leaves your server.</p></div>
+      <div><b>Custom tools</b><p>Your own internal API becomes a first-class action: same quota, same approval gate, same tool schema export.</p></div>
+      <div><b>Batch execution</b><p>Up to twenty actions in one request, sequential, each result reported on its own.</p></div>
+      <div><b>Approval gate</b><p>Anything that writes stops and asks. Approve once, replay the call, keep the audit trail.</p></div>
+    </div>
+  </div>
+</section>
+
 <footer class="foot">
   <div class="wrap">
     <div class="foot-top">
@@ -851,6 +917,32 @@ def _counts(apps) -> tuple[dict, dict]:
     return by_source, by_tier
 
 
+
+def _pricing_html() -> str:
+    """Plan cards straight from the billing module, so the page can never lie."""
+    from .billing import PLANS
+
+    tick = ('<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+            'stroke-width="2.4" stroke-linecap="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>')
+    out = []
+    for pid in ("free", "pro", "business"):
+        p = PLANS[pid]
+        hot = pid == "pro"
+        price = (f'<b>₦{p["price_ngn"]:,}</b><span>/month</span>' if p["price_ngn"]
+                 else '<b>₦0</b><span>forever</span>')
+        cta = ('<a class="btn" href="/app">Start free</a>' if not p["price_ngn"]
+               else f'<a class="btn {"signal" if hot else "ghost"}" href="/app#billing">Choose {p["name"]}</a>')
+        items = "".join(f'<li>{tick}<span>{h}</span></li>' for h in p["highlights"])
+        out.append(f"""<div class="tier{' hot' if hot else ''}">
+      {'<span class="badge-hot">most chosen</span>' if hot else ''}
+      <div class="tname">{p['name']}</div>
+      <div class="tag">{p['tagline']}</div>
+      <div class="amt">{price}</div>
+      <ul>{items}</ul>
+      <div class="foot">{cta}</div>
+    </div>""")
+    return "".join(out)
+
 def landing_html(demo_open: bool = True) -> str:
     """Render the marketing page with numbers taken from the live registry."""
     from .catalog import catalog
@@ -876,6 +968,9 @@ def landing_html(demo_open: bool = True) -> str:
         "__G_GATE__": GLYPHS["gate"], "__G_LAYERS__": GLYPHS["layers"],
         "__G_CLOCK__": GLYPHS["clock"], "__G_LEDGER__": GLYPHS["ledger"],
         "__G_WEB__": GLYPHS["web"], "__G_SHIELD__": GLYPHS["shield"],
+        "__PRICING__": _pricing_html(),
+        "__PAYNOTE__": ("Every new account starts on a 14-day Pro trial. Pay by card through Paystack, "
+                        "or redeem an owner pass code. Annual billing gives you two months free."),
     }
 
     def render(chunk: str) -> str:
@@ -892,7 +987,7 @@ def landing_html(demo_open: bool = True) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tony — every app, one port</title>
 <meta name="description" content="Open-source integration gateway. __APPS__ apps, __ACTIONS__ typed actions, MCP + REST, OAuth handled, credentials sealed, approval gates on anything that writes.">
-<meta name="theme-color" content="#F3F0E9">
+<meta name="theme-color" content="#FFFFFF">
 <link rel="icon" href="/static/brand/favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="/static/brand/tony-mark.svg">
 <link rel="apple-touch-icon" href="/static/brand/tony-180.png">

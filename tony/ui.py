@@ -154,6 +154,29 @@ pre.out{margin:0;background:#0a0a0a;color:#e8e8ea;border-radius:12px;padding:15p
 .statcard span{font-size:12px;color:var(--muted)}
 @media(max-width:860px){.shell{grid-template-columns:68px 1fr}.side .logo span,.nav-item span,.side-foot{display:none}
   .nav-item{justify-content:center}.search{min-width:0;flex:1}}
+/* billing + sessions */
+.planhero{display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:22px 24px;border-radius:var(--r-lg);
+  background:linear-gradient(140deg,#0a0a0a,#232326);color:#fff;margin-bottom:16px}
+.planhero .amt{font-size:34px;font-weight:720;letter-spacing:-.04em;line-height:1}
+.planhero .sub{font-size:12.5px;opacity:.72}
+.planhero .pill{background:rgba(255,255,255,.14);color:#fff}
+.meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px}
+.meter{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+.meter .k{font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.meter .v{font-size:19px;font-weight:680;letter-spacing:-.03em;margin-top:4px;font-variant-numeric:tabular-nums}
+.bar{height:6px;border-radius:999px;background:var(--soft);margin-top:9px;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--ink);border-radius:999px;transition:width .5s var(--ease)}
+.bar.warn span{background:#b45309}
+.plangrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.plan{border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;background:#fff;display:flex;flex-direction:column;gap:10px}
+.plan.mid{border-color:var(--ink);box-shadow:var(--shadow)}
+.plan h3{font-size:16px}
+.plan .p{font-size:26px;font-weight:720;letter-spacing:-.04em}
+.plan .p small{font-size:12px;font-weight:500;color:var(--muted);letter-spacing:0}
+.plan ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+.plan li{font-size:12.8px;color:var(--ink-2);padding-left:18px;position:relative}
+.plan li:before{content:"✓";position:absolute;left:0;color:var(--green);font-weight:700}
+@media(max-width:640px){.planhero .amt{font-size:28px}}
 </style></head>
 <body>
 <div class="shell">
@@ -163,7 +186,9 @@ pre.out{margin:0;background:#0a0a0a;color:#e8e8ea;border-radius:12px;padding:15p
     <div class="nav-item" data-page="connections"><span class="i">🔗</span><span>Connections</span></div>
     <div class="nav-item" data-page="runs"><span class="i">⟳</span><span>Runs</span></div>
     <div class="nav-item" data-page="triggers"><span class="i">⚡</span><span>Triggers</span></div>
+    <div class="nav-item" data-page="sessions"><span class="i">◎</span><span>Sessions</span></div>
     <div class="nav-item" data-page="developers"><span class="i">{ }</span><span>Developers</span></div>
+    <div class="nav-item" data-page="billing"><span class="i">₦</span><span>Billing</span></div>
     <div class="side-foot">
       <div id="wsline">workspace · demo</div>
       <div style="display:flex;align-items:center;gap:6px"><span class="dot"></span> live</div>
@@ -214,6 +239,51 @@ pre.out{margin:0;background:#0a0a0a;color:#e8e8ea;border-radius:12px;padding:15p
             <button class="btn small" onclick="createTrigger()">Create trigger</button>
           </div></div>
           <div class="panel"><div class="panel-h"><b>Active</b></div><div id="triggers"><div class="empty">None yet</div></div></div>
+        </div>
+      </section>
+      <!-- SESSIONS -->
+      <section class="page" id="page-sessions">
+        <div class="head"><div><h2>Sessions</h2><p>One session per end-user: pinned identity, app allowlist, tier limit and a run budget.</p></div>
+          <button class="btn ghost small" onclick="loadSessions()">Refresh</button></div>
+        <div class="grid2">
+          <div class="panel"><div class="panel-h"><b>New session</b></div><div class="panel-b">
+            <div class="field"><label>End-user identity</label><input class="input" id="se-entity" placeholder="user_42"></div>
+            <div class="field"><label>Label</label><input class="input" id="se-label" placeholder="Support bot for Ada"></div>
+            <div class="field"><label>Allowed apps (comma separated, empty = all)</label><input class="input" id="se-apps" placeholder="gmail, slack"></div>
+            <div class="field"><label>Allowed tiers</label>
+              <div style="display:flex;gap:14px;margin-top:6px" class="tiny">
+                <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="se-t-read" checked> read</label>
+                <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="se-t-write" checked> write</label>
+                <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="se-t-dest"> destructive</label>
+              </div></div>
+            <div class="field" style="display:flex;gap:10px">
+              <div style="flex:1"><label>TTL (hours)</label><input class="input" id="se-ttl" value="24"></div>
+              <div style="flex:1"><label>Run budget (0 = plan)</label><input class="input" id="se-limit" value="0"></div>
+            </div>
+            <button class="btn small" onclick="createSession()">Create session</button>
+            <p class="muted tiny" style="margin:10px 0 0">Send <code>X-Tony-Session: &lt;id&gt;</code> with any call. The workspace key stays on your server.</p>
+          </div></div>
+          <div class="panel"><div class="panel-h"><b>Active sessions</b><span class="tiny muted" id="se-count" style="margin-left:auto"></span></div>
+            <div id="sessions"><div class="empty">None yet</div></div></div>
+        </div>
+      </section>
+      <!-- BILLING -->
+      <section class="page" id="page-billing">
+        <div class="head"><div><h2>Billing</h2><p>Free covers a real product. Upgrade only when volume says so.</p></div>
+          <button class="btn ghost small" onclick="loadBilling()">Refresh</button></div>
+        <div id="billing-hero"></div>
+        <div class="meters" id="billing-meters"></div>
+        <div class="plangrid" id="billing-plans"></div>
+        <div class="grid2" style="margin-top:16px">
+          <div class="panel"><div class="panel-h"><b>Pass code</b></div><div class="panel-b">
+            <p class="muted tiny" style="margin:0 0 10px">Owner-issued codes unlock a tier with no card.</p>
+            <div style="display:flex;gap:8px"><input class="input" id="pc-code" placeholder="TONY-…" style="flex:1">
+              <button class="btn small" onclick="redeem()">Apply</button></div>
+          </div></div>
+          <div class="panel"><div class="panel-h"><b>Payments</b></div><div class="panel-b">
+            <p class="muted tiny" id="pay-note" style="margin:0">Checking…</p>
+            <div id="pay-actions" style="display:flex;gap:8px;margin-top:10px"></div>
+          </div></div>
         </div>
       </section>
       <!-- DEVELOPERS -->
@@ -316,6 +386,8 @@ document.querySelectorAll('.nav-item').forEach(el=>el.onclick=()=>{
   if(el.dataset.page==='runs')loadRuns();
   if(el.dataset.page==='connections')loadConns();
   if(el.dataset.page==='triggers')loadTriggers();
+  if(el.dataset.page==='billing')loadBilling();
+  if(el.dataset.page==='sessions')loadSessions();
 });
 
 const PAGE = 60;

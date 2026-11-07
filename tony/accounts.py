@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import secrets
 import time
@@ -15,6 +16,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
+from .billing import check_capacity, ensure_subscription, summary
 from .auth import rate_limit
 from .config import settings
 from .crypto import new_api_key
@@ -112,7 +114,7 @@ class LoginIn(BaseModel):
 
 @router.post("/signup")
 def signup(body: SignupIn, request: Request, response: Response) -> dict[str, Any]:
-    rate_limit(f"signup:{_client_ip(request)}", 8)
+    rate_limit(f"signup:{_client_ip(request)}", int(os.getenv("TONY_SIGNUP_RATE", "12")))
     email = body.email.strip().lower()
     if not EMAIL_RE.match(email):
         raise HTTPException(400, detail="Enter a valid email address")
@@ -124,8 +126,9 @@ def signup(body: SignupIn, request: Request, response: Response) -> dict[str, An
         user = User(email=email, name=name, password_hash=hash_password(body.password), workspace_id=ws.id)
         s.add(user)
         s.flush()
+        ensure_subscription(s, user)
         _start_session(s, user, request, response)
-        return {"user": public_user(user)}
+        return {"user": public_user(user), "plan": "trial"}
 
 
 @router.post("/login")
@@ -201,6 +204,7 @@ def google_login(body: GoogleIn, request: Request, response: Response) -> dict[s
                         google_sub=claims["sub"], workspace_id=ws.id)
             s.add(user)
             s.flush()
+            ensure_subscription(s, user)
         else:
             user.google_sub = user.google_sub or claims["sub"]
             user.picture = claims.get("picture") or user.picture
@@ -220,7 +224,9 @@ def public_config() -> dict[str, Any]:
 @router.get("/me")
 def me(request: Request) -> dict[str, Any]:
     u = current_user(request)
-    return {"user": public_user(u) if u else None}
+    if u is None:
+        return {"user": None}
+    return {"user": public_user(u), "billing": summary(u.workspace_id)}
 
 
 @router.post("/logout")
@@ -302,11 +308,8 @@ class KeyNameIn(BaseModel):
 def create_key(body: KeyNameIn, request: Request) -> dict[str, Any]:
     u = require_user(request)
     plain, prefix, hashed = new_api_key()
+    check_capacity(u.workspace_id, "keys")
     with session() as s:
-        count = len(s.scalars(select(ApiKey).where(ApiKey.workspace_id == u.workspace_id,
-                                                   ApiKey.revoked.is_(False))).all())
-        if count >= 20:
-            raise HTTPException(400, detail="You have 20 active keys. Revoke one first.")
         k = ApiKey(workspace_id=u.workspace_id, name=(body.name or "key")[:120],
                    prefix=prefix, key_hash=hashed, user_id=u.id)
         s.add(k)

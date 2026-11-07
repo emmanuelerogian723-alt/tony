@@ -14,7 +14,10 @@ from fastapi.staticfiles import StaticFiles
 
 from .accounts import router as account_router
 from .api import router as api_router
+from .billing import router as billing_router
+from .customtools import router as customtools_router
 from .mcp import router as mcp_router
+from .sessions import router as sessions_router
 
 from . import __version__
 from .catalog import catalog
@@ -92,6 +95,9 @@ app.add_middleware(
 app.include_router(account_router)
 app.include_router(api_router)
 app.include_router(mcp_router)
+app.include_router(billing_router)
+app.include_router(sessions_router)
+app.include_router(customtools_router)
 
 
 _STATIC = Path(__file__).parent / "static"

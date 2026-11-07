@@ -14,7 +14,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from . import __version__
-from .auth import workspace_from_request
+from .auth import rate_limit, workspace_from_request
+from .billing import check_run, enforce_session, rate_for, resolve_session, touch_session
 from .config import settings
 from .catalog import catalog
 from .executor import ExecutionError, execute
@@ -241,6 +242,12 @@ async def _handle(msg: dict[str, Any], request: Request) -> dict[str, Any]:
             ws, _demo = workspace_from_request(request)
         except Exception:
             return err(-32001, "Missing or invalid API key")
+        sess = resolve_session(request, ws)
+        enforce_session(sess, spec.slug, action.tier)
+        rate_limit(f"ws:{ws}", rate_for(ws))
+        check_run(ws)
+        if sess:
+            entity = sess.entity_id
         if action.tier != "read" and not approved:
             return ok({
                 "content": [{
@@ -255,6 +262,7 @@ async def _handle(msg: dict[str, Any], request: Request) -> dict[str, Any]:
                 }],
                 "isError": False,
             })
+        touch_session(sess)
         creds = credentials_for(ws, entity, spec)
         if spec.auth.type != "none" and creds is None and not action.public:
             return ok({
@@ -274,6 +282,7 @@ async def _handle(msg: dict[str, Any], request: Request) -> dict[str, Any]:
                     {"ok": False, "error": str(exc), "detail": exc.detail}, indent=2, default=str)}],
                 "isError": True,
             })
+        touch_session(sess)
         return ok({
             "content": [{"type": "text", "text": json.dumps(result.as_dict(), indent=2, default=str)}],
             "isError": not result.ok,

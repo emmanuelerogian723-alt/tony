@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 
 import json
+import time
 import os
 import re
 import secrets
@@ -15,7 +16,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from . import __version__
-from .auth import workspace_from_request
+from .auth import rate_limit, workspace_from_request
+from .billing import check_capacity, check_run, enforce_session, rate_for, resolve_session, touch_session
 from .catalog import catalog
 from .config import settings
 from .db import session
@@ -37,8 +39,11 @@ mcp_tools_cache: list[dict[str, Any]] = []
 def _entity(ws: str, entity_id: str) -> str:
     entity_id = (entity_id or "default").strip()[:160] or "default"
     with session() as s:
-        row = s.scalar(select(Entity).where(Entity.workspace_id == ws, Entity.external_id == entity_id))
-        if row is None:
+        if s.scalar(select(Entity).where(Entity.workspace_id == ws, Entity.external_id == entity_id)):
+            return entity_id
+    check_capacity(ws, "entities")
+    with session() as s:
+        if not s.scalar(select(Entity).where(Entity.workspace_id == ws, Entity.external_id == entity_id)):
             s.add(Entity(workspace_id=ws, external_id=entity_id))
     return entity_id
 
@@ -182,8 +187,8 @@ def list_actions(search: str = "", app: str = "", tier: str = "", limit: int = 5
 
 
 @router.get("/tools")
-def tool_schemas(fmt: str = "openai", app: str = "") -> dict[str, Any]:
-    """Export the catalogue as LLM tool definitions."""
+def tool_schemas(request: Request, fmt: str = "openai", app: str = "") -> dict[str, Any]:
+    """Export the catalogue as LLM tool definitions, workspace custom tools included."""
     tools: list[dict[str, Any]] = []
     for spec in catalog.apps.values():
         if app and spec.slug != app:
@@ -216,6 +221,30 @@ def tool_schemas(fmt: str = "openai", app: str = "") -> dict[str, Any]:
                         },
                     },
                 })
+    try:
+        ws, _ = workspace_from_request(request)
+        from .customtools import public as _custom_public
+        from .db import session as _sess
+        from .models import CustomTool as _CT
+        from sqlalchemy import select as _select
+        with _sess() as s2:
+            for row in s2.scalars(_select(_CT).where(_CT.workspace_id == ws)).all():
+                params = {}
+                for pm in json.loads(row.params_json or "[]"):
+                    if isinstance(pm, dict) and pm.get("name"):
+                        params[pm["name"]] = {"type": pm.get("type", "string"),
+                                              "description": pm.get("description", "")}
+                name = f"custom__{row.slug}"
+                desc = f"{row.name}: {row.description}".strip()
+                if fmt == "anthropic":
+                    tools.append({"name": name, "description": desc,
+                                  "input_schema": {"type": "object", "properties": params}})
+                else:
+                    tools.append({"type": "function", "function": {
+                        "name": name, "description": desc,
+                        "parameters": {"type": "object", "properties": params}}})
+    except Exception:  # noqa: BLE001 - anonymous callers just get the catalogue
+        pass
     return {"tools": tools, "count": len(tools), "format": fmt}
 
 
@@ -238,6 +267,7 @@ async def connect_start(app_slug: str, request: Request, entity_id: str = "defau
     spec = catalog.get(app_slug)
     if not spec:
         raise HTTPException(404, detail="Unknown app")
+    check_capacity(ws, "connections")
     if spec.auth.type == "none":
         entities = _entity(ws, entity_id)
         with session() as s:
@@ -310,6 +340,7 @@ def connect_key(app_slug: str, body: KeyIn, request: Request) -> dict[str, Any]:
         raise HTTPException(400, detail="Provide the credential values for this app")
     if not values or (spec.auth.type != "none" and not any(v for k, v in values.items() if k != "base_url")):
         raise HTTPException(400, detail=f"{spec.name} needs a token as well as a base URL")
+    check_capacity(ws, "connections")
     _entity(ws, body.entity_id)
     acct = store_api_key(ws, body.entity_id, spec, values, body.label)
     return {"mode": "key", "connection": public_redact(acct)}
@@ -363,15 +394,22 @@ def _log_run(ws: str, entity: str, spec, action, status: str, result=None, reque
 @router.post("/execute")
 async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
     ws, _ = workspace_from_request(request)
+    if body.action.startswith("custom."):
+        return await _execute_custom(body, request, ws)
     resolved = catalog.find_action(body.action)
     if not resolved:
         raise HTTPException(404, detail=f"Unknown action '{body.action}'. Try app.action, e.g. github.list_repos")
     spec, action = resolved
-    entity = _entity(ws, body.entity_id)
+    sess = resolve_session(request, ws)
+    enforce_session(sess, spec.slug, action.tier)
+    rate_limit(f"ws:{ws}", rate_for(ws))
+    check_run(ws)
+    entity = _entity(ws, sess.entity_id if sess else body.entity_id)
 
     if action.tier != "read" and settings.require_approval and not body.approved and not body.dry_run:
         run_id = _log_run(ws, entity, spec, action, "pending_approval",
                           request_payload={"args": body.args, "action": body.action})
+        touch_session(sess)
         return {
             "ok": False,
             "status": "pending_approval",
@@ -424,11 +462,96 @@ async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
 
     run_id = _log_run(ws, entity, spec, action, "success", result,
                       {"args": body.args, "action": body.action})
+    touch_session(sess)
     payload = result.as_dict()
     payload["run_id"] = run_id
     payload["app"] = spec.slug
     payload["action"] = action.slug
     return payload
+
+
+async def _execute_custom(body: ExecuteIn, request: Request, ws: str) -> dict[str, Any]:
+    """Run one user-defined HTTP tool through the same gates as the catalog."""
+    from . import customtools
+
+    slug = body.action.split(".", 1)[1]
+    tool = customtools.find(ws, slug)
+    if tool is None:
+        raise HTTPException(404, detail=f"No custom tool '{slug}' in this workspace. Create one at POST /v1/custom-tools.")
+    sess = resolve_session(request, ws)
+    enforce_session(sess, "custom", tool.tier)
+    rate_limit(f"ws:{ws}", rate_for(ws))
+    check_run(ws)
+    entity = _entity(ws, sess.entity_id if sess else body.entity_id)
+
+    if tool.tier != "read" and settings.require_approval and not body.approved and not body.dry_run:
+        with session() as s:
+            run = ActionRun(workspace_id=ws, entity_id=entity, app_slug="custom",
+                            action_slug=tool.slug, tier=tool.tier, status="pending_approval",
+                            request_json=json.dumps({"args": body.args, "action": body.action}, default=str))
+            s.add(run)
+            s.flush()
+            run_id = run.id
+        touch_session(sess)
+        return {"ok": False, "status": "pending_approval", "run_id": run_id, "tier": tool.tier,
+                "message": f"'{tool.name}' is a {tool.tier} tool. Approve it, then call again with approved=true.",
+                "preview": {"app": "custom", "action": tool.slug, "method": tool.method,
+                            "args": body.args, "url": tool.url}}
+
+    try:
+        res = await asyncio.wait_for(customtools.run(tool, body.args), timeout=settings.execution_deadline)
+    except asyncio.TimeoutError:
+        raise HTTPException(504, detail=f"custom.{slug} exceeded {settings.execution_deadline:g}s and was cut off.")
+    except Exception as exc:  # noqa: BLE001
+        with session() as s:
+            run = ActionRun(workspace_id=ws, entity_id=entity, app_slug="custom", action_slug=tool.slug,
+                            tier=tool.tier, status="error", error=str(exc)[:2000],
+                            request_json=json.dumps({"args": body.args, "action": body.action}, default=str))
+            s.add(run)
+            s.flush()
+            run_id = run.id
+        return {"ok": False, "error": str(exc), "run_id": run_id, "app": "custom", "action": tool.slug}
+
+    with session() as s:
+        run = ActionRun(workspace_id=ws, entity_id=entity, app_slug="custom", action_slug=tool.slug,
+                        tier=tool.tier, status="success" if res["ok"] else "error",
+                        status_code=res["status"], latency_ms=res["latency_ms"],
+                        chars_out=len(json.dumps(res["data"], default=str)),
+                        request_json=json.dumps({"args": body.args, "action": body.action}, default=str),
+                        response_json=json.dumps(res, default=str)[:60000])
+        s.add(run)
+        s.flush()
+        run_id = run.id
+    touch_session(sess)
+    return {**res, "run_id": run_id, "app": "custom", "action": tool.slug}
+
+
+class BatchIn(BaseModel):
+    calls: list[ExecuteIn] = Field(default_factory=list)
+
+
+@router.post("/batch")
+async def batch(body: BatchIn, request: Request) -> dict[str, Any]:
+    """Run up to 20 actions in one request. Sequential, so quota and approvals stay honest."""
+    if not body.calls:
+        raise HTTPException(400, detail="Send at least one call")
+    if len(body.calls) > 20:
+        raise HTTPException(400, detail="Batch is capped at 20 calls. Split larger jobs.")
+    results: list[dict[str, Any]] = []
+    started = time.time()
+    for call in body.calls:
+        try:
+            out = await execute_action(call, request)
+            results.append({"action": call.action, "ok": bool(out.get("ok")),
+                            "status": out.get("status", "ok"), "result": out})
+        except HTTPException as exc:
+            results.append({"action": call.action, "ok": False, "status": "error",
+                            "status_code": exc.status_code, "error": exc.detail})
+        except Exception as exc:  # noqa: BLE001
+            results.append({"action": call.action, "ok": False, "status": "error", "error": str(exc)})
+    return {"results": results, "count": len(results),
+            "succeeded": sum(1 for r in results if r["ok"]),
+            "elapsed_ms": int((time.time() - started) * 1000)}
 
 
 @router.post("/runs/{run_id}/approve")
@@ -476,6 +599,7 @@ class TriggerIn(BaseModel):
 @router.post("/triggers")
 def create_trigger(body: TriggerIn, request: Request) -> dict[str, Any]:
     ws, _ = workspace_from_request(request)
+    check_capacity(ws, "triggers")
     resolved = catalog.find_action(body.action)
     if not resolved:
         raise HTTPException(404, detail="Unknown action")

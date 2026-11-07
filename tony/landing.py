@@ -677,17 +677,19 @@ fetch('/v1/stats').then(r => r.json()).then(s => {
 const results = $('#results'), q = $('#q'), qmeta = $('#qmeta');
 const initials = name => name.replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean)
   .map(w => w[0]).join('').slice(0, 2).toUpperCase();
-const tierLabel = t => ({actions: 'curated', proxy: 'proxy', directory: 'dir'}[t] || t);
+const label = a => ({curated: 'curated', openapi: 'openapi', 'public-apis': 'directory',
+  nango: 'directory', pipedream: 'directory', activepieces: 'directory', n8n: 'directory',
+  homeassistant: 'directory'}[a.source] || a.tier);
 
 function render(list, total, query) {
-  qmeta.textContent = total ? fmt(total) + ' matches' : 'no matches';
+  qmeta.textContent = total ? fmt(total) + (query ? ' matches' : ' apps') : 'no matches';
   if (!list.length) { results.innerHTML = '<div class="empty">Nothing under that name. Try "shopify", "mail" or "pdf".</div>'; return; }
   results.innerHTML = list.map(a => `
     <a class="row" href="/app?app=${encodeURIComponent(a.slug)}">
       <span class="ic">${initials(a.name)}</span>
       <span><span class="nm">${a.name}</span><span class="cat">${a.category}</span></span>
-      <span class="acts">${a.actions} act.</span>
-      <span class="tag ${a.tier === 'actions' ? 'act' : ''}">${tierLabel(a.tier)}</span>
+      <span class="acts">${a.actions_count} act.</span>
+      <span class="tag ${a.tier === 'actions' ? 'act' : ''}">${label(a)}</span>
     </a>`).join('');
 }
 

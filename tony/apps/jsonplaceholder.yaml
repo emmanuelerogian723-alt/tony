@@ -1,0 +1,89 @@
+slug: jsonplaceholder
+name: JSONPlaceholder
+category: Developer
+description: Free fake REST API for testing. No key needed - prove a write action end to end.
+docs: https://jsonplaceholder.typicode.com
+logo: https://cdn.simpleicons.org/json/000000
+verified: true
+auth:
+  type: none
+base_url: https://jsonplaceholder.typicode.com
+actions:
+- slug: list_posts
+  name: List posts
+  description: Read the first posts.
+  method: GET
+  url: https://jsonplaceholder.typicode.com/posts
+  params:
+    _limit:
+      type: integer
+      description: How many posts to return.
+      default: 5
+- slug: get_post
+  name: Get a post
+  description: Read one post by id.
+  method: GET
+  url: https://jsonplaceholder.typicode.com/posts/{id}
+  params:
+    id:
+      type: integer
+      description: Post id.
+      required: true
+  required:
+  - id
+- slug: create_post
+  name: Create post
+  description: Write test - creates a post and returns the created record.
+  method: POST
+  url: https://jsonplaceholder.typicode.com/posts
+  tier: write
+  params:
+    title:
+      type: string
+      description: Post title.
+      required: true
+    body:
+      type: string
+      description: Post body text.
+      required: true
+    userId:
+      type: integer
+      description: Author id.
+      default: 1
+  required:
+  - title
+  - body
+- slug: update_post
+  name: Update post
+  description: Write test - replaces a post.
+  method: PUT
+  url: https://jsonplaceholder.typicode.com/posts/{id}
+  tier: write
+  params:
+    id:
+      type: integer
+      description: Post id.
+      required: true
+    title:
+      type: string
+      description: New title.
+      required: true
+    body:
+      type: string
+      description: New body.
+  required:
+  - id
+  - title
+- slug: delete_post
+  name: Delete post
+  description: Destructive test - deletes a post.
+  method: DELETE
+  url: https://jsonplaceholder.typicode.com/posts/{id}
+  tier: destructive
+  params:
+    id:
+      type: integer
+      description: Post id.
+      required: true
+  required:
+  - id

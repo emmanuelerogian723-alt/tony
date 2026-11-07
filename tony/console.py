@@ -450,10 +450,8 @@ async function runAgent(){
   out.innerHTML = '<span class="muted">Choosing apps and planning…</span>';
   steps.innerHTML = '<div class="empty">Running…</div>';
   try{
-    const r = await fetch('/v1/agent', {method:'POST', headers:authHeaders(),
-      body: JSON.stringify({goal, max_steps: 4, approve_writes: AG.writes})});
-    const d = await r.json();
-    if(!r.ok) throw new Error(d.detail || ('HTTP '+r.status));
+    const d = await api('/v1/agent', {method:'POST',
+      body: {goal, max_steps: 4, approve_writes: AG.writes}});
     el('ag-meta').textContent = (d.engine||'') + ' · ' + (d.elapsed_ms||0) + ' ms';
     out.textContent = d.answer || 'No answer came back.';
     const rows = (d.steps||[]).map(st=>{

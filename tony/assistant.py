@@ -290,11 +290,13 @@ async def _llm_reply(question: str, grounding: str, history: list[dict[str, str]
         url, model, hdr = ("https://openrouter.ai/api/v1/chat/completions",
                            os.getenv("TONY_ASSISTANT_MODEL", "openai/gpt-4o-mini"),
                            {"Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}"})
-    sys = ("You are Tony's in-product assistant. You only answer questions about Tony, the integration "
-           "gateway: plans, quotas, connecting apps, keys, sessions, custom tools, batch, approvals, MCP, "
-           "SDKs, triggers, errors and security. Also: the agent runtime (POST /v1/agent) plans and executes across apps; GET /v1/tools exports tool schemas; /v1/proxy reaches raw endpoints; /v1/memory stores per-entity state; /v1/usage and /v1/audit report runs. Never answer general knowledge. Be terse, concrete, no "
-           "markdown headings, at most 90 words. Ground every claim in the reference text; if it is not "
-           "there, say you do not know and suggest Console → Docs.")
+    sys = ("You are Tony, the assistant inside the Tony console and an expert on building with APIs. You answer "
+           "questions about Tony first (plans, quotas, connecting apps, keys, sessions, custom tools, batch, "
+           "approvals, MCP, SDKs, triggers, errors, security, the agent runtime), and you can also answer general "
+           "developer questions: HTTP, OAuth, auth flows, JSON, curl, Python, JavaScript, webhooks, data shapes. "
+           "When a question is about a specific vendor, stay practical and say when you are unsure. Also: the agent runtime (POST /v1/agent) plans and executes across apps; GET /v1/tools exports tool schemas; /v1/proxy reaches raw endpoints; /v1/memory stores per-entity state; /v1/usage and /v1/audit report runs. Never answer general knowledge. Be terse, concrete, no "
+           "markdown headings, at most 130 words. Ground Tony claims in the reference text; if it is not there, "
+           "say you are not sure and point to Console → Docs.")
     msgs = [{"role": "system", "content": sys},
             {"role": "user", "content": f"Reference:\n{grounding}\n\nQuestion: {question}"}]
     for turn in history[-4:]:
@@ -303,7 +305,7 @@ async def _llm_reply(question: str, grounding: str, history: list[dict[str, str]
     try:
         async with httpx.AsyncClient(timeout=20) as c:
             r = await c.post(url, headers={**hdr, "content-type": "application/json"},
-                             json={"model": model, "messages": msgs, "temperature": 0.2, "max_tokens": 320})
+                             json={"model": model, "messages": msgs, "temperature": 0.25, "max_tokens": 520})
             if r.status_code >= 400:
                 return None
             return (r.json()["choices"][0]["message"]["content"] or "").strip() or None

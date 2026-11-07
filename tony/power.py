@@ -149,40 +149,66 @@ class AgentIn(BaseModel):
     history: list[dict[str, str]] = Field(default_factory=list)
 
 
-def _llm_target() -> tuple[str, str, dict[str, str]] | None:
-    if os.getenv("GROQ_API_KEY"):
-        return ("https://api.groq.com/openai/v1/chat/completions",
-                os.getenv("TONY_AGENT_MODEL", "llama-3.3-70b-versatile"),
-                {"Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}"})
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
+DEFAULT_OPENROUTER_MODEL = "openai/gpt-4o-mini"
+
+
+def _llm_targets() -> list[tuple[str, str, dict[str, str]]]:
+    """Every usable model endpoint, strongest first. Providers retire models, so the
+    chain is a list and a 404 on one model falls through to the next instead of
+    silently dropping to the deterministic path."""
+    out: list[tuple[str, str, dict[str, str]]] = []
+    groq = os.getenv("GROQ_API_KEY", "").strip()
+    if groq:
+        models = [m.strip() for m in (os.getenv("TONY_GROQ_MODELS") or "").split(",") if m.strip()]
+        for model in models or [os.getenv("TONY_AGENT_MODEL", DEFAULT_GROQ_MODEL), DEFAULT_GROQ_MODEL]:
+            out.append(("https://api.groq.com/openai/v1/chat/completions", model,
+                        {"Authorization": f"Bearer {groq}"}))
     if os.getenv("OPENAI_API_KEY"):
-        return ("https://api.openai.com/v1/chat/completions",
-                os.getenv("TONY_AGENT_MODEL", "gpt-4o-mini"),
-                {"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"})
-    if os.getenv("OPENROUTER_API_KEY"):
-        return ("https://openrouter.ai/api/v1/chat/completions",
-                os.getenv("TONY_AGENT_MODEL", "openai/gpt-4o-mini"),
-                {"Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}"})
-    return None
+        out.append(("https://api.openai.com/v1/chat/completions",
+                    os.getenv("TONY_AGENT_MODEL", "gpt-4o-mini"),
+                    {"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"}))
+    or_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if or_key:
+        out.append(("https://openrouter.ai/api/v1/chat/completions",
+                    os.getenv("TONY_AGENT_MODEL", DEFAULT_OPENROUTER_MODEL),
+                    {"Authorization": f"Bearer {or_key}", "HTTP-Referer": "https://tony-7su0.onrender.com",
+                     "X-Title": "Tony"}))
+    seen, uniq = set(), []
+    for target in out:
+        key = (target[0], target[1])
+        if key not in seen:
+            seen.add(key)
+            uniq.append(target)
+    return uniq
+
+
+def _llm_target() -> tuple[str, str, dict[str, str]] | None:
+    chain = _llm_targets()
+    return chain[0] if chain else None
 
 
 async def _chat(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None,
                 temperature: float = 0.2) -> dict[str, Any] | None:
-    target = _llm_target()
-    if not target:
+    """Ask the model with the whole configured chain. A retired model, a rate limit
+    or a bad key walks to the next provider; the caller only sees None when all fail."""
+    chain = _llm_targets()
+    if not chain:
         return None
-    url, model, hdr = target
-    payload: dict[str, Any] = {"model": model, "messages": messages, "temperature": temperature}
-    if tools:
-        payload["tools"] = tools
-        payload["tool_choice"] = "auto"
-    try:
-        async with httpx.AsyncClient(timeout=45) as c:
-            r = await c.post(url, json=payload, headers={**hdr, "Content-Type": "application/json"})
-            if r.status_code >= 400:
-                return None
-            return r.json()["choices"][0]["message"]
-    except Exception:
-        return None
+    for url, model, hdr in chain:
+        payload: dict[str, Any] = {"model": model, "messages": messages, "temperature": temperature}
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+        try:
+            async with httpx.AsyncClient(timeout=45) as c:
+                r = await c.post(url, json=payload, headers={**hdr, "Content-Type": "application/json"})
+                if r.status_code >= 400:
+                    continue
+                return r.json()["choices"][0]["message"]
+        except Exception:
+            continue
+    return None
 
 
 def _score_app(goal: str, spec: Any) -> int:
@@ -360,8 +386,10 @@ async def agent(body: AgentIn, request: Request) -> dict[str, Any]:
     messages: list[dict[str, Any]] = [{
         "role": "system",
         "content": ("You are Tony, an execution agent with real hands on real apps. You call tools and answer "
-                    "with what actually came back. Rules: never invent data; if a tool errors, say so and try a "
-                    "different tool once; keep the final answer under 110 words; no markdown headings."),
+                    "only from what came back. Rules: never invent data or ids; if a tool errors, read the error "
+                    "and try a different tool once; prefer the fewest calls that satisfy the goal; if the goal "
+                    "needs a write and writes are not approved, say exactly which action you would run and stop; "
+                    "lead with the result, then the supporting detail; under 140 words; no markdown headings."),
     }, {"role": "user", "content": goal}]
     for turn in (body.history or [])[-4:]:
         messages.insert(-1, {"role": turn.get("role", "user"), "content": turn.get("content", "")})
@@ -419,14 +447,14 @@ async def agent(body: AgentIn, request: Request) -> dict[str, Any]:
             value = items[0].get(id_key) if id_key else None
         elif raw and isinstance(raw[0], (int, str, float)):
             value = raw[0]
-            if value not in (None, ""):
-                follow = next((a for a in spec.actions
-                               if a.tier == "read" and a.slug != first["action"]
-                               and len(a.required or []) == 1
-                               and "random" not in (a.url or "")), None)
-                if follow is not None:
-                    steps.append(await _run_one(ws, entity, spec.slug, follow.slug,
-                                                {follow.required[0]: value}, body.dry_run))
+        if value not in (None, ""):
+            follow = next((a for a in spec.actions
+                           if a.tier == "read" and a.slug != first["action"]
+                           and len(a.required or []) == 1
+                           and "random" not in (a.url or "")), None)
+            if follow is not None:
+                steps.append(await _run_one(ws, entity, spec.slug, follow.slug,
+                                            {follow.required[0]: value}, body.dry_run))
 
     if not answer:
         answer = _summarise(goal, steps)

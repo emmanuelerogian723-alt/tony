@@ -446,6 +446,18 @@ async def agent(body: AgentIn, request: Request) -> dict[str, Any]:
             if answer:
                 break
 
+    # 3b. the model ran out of steps mid-plan: make it answer from what it has
+    if not answer and engine == "llm" and steps:
+        synthesis = messages + [{
+            "role": "user",
+            "content": ("Stop calling tools. Using only the tool results above, answer the original goal in "
+                        "under 120 words. Lead with the answer, then the specific evidence (titles, numbers, "
+                        "ids) that supports it. If something failed, say which part and what it means."),
+        }]
+        final = await _chat(synthesis, None, temperature=0.3)
+        if final and (final.get("content") or "").strip():
+            answer = final["content"].strip()
+
     # 4. never fail: if the model was unavailable, execute the best guess
     if not steps:
         spec = specs[0]

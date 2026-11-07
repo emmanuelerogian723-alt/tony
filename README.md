@@ -33,8 +33,20 @@ the OAuth apps to their own client IDs. Tony takes the opposite position:
 
 ## What is in the box
 
-- **65 apps / 169 actions** out of the box, across developer, communication, social,
-  productivity, commerce, finance, AI and open-data categories.
+- **7,854 apps / 20,084 actions** out of the box — the largest open integration
+  catalogue you can self-host. It is built from four layers, and the UI labels every app
+  with the layer it came from:
+
+  | Layer | Apps | What you get |
+  |---|---|---|
+  | Curated | 65 | Hand-written, live-tested actions for the apps people ask for first |
+  | OpenAPI | 2,329 | Real endpoints parsed from published specs, 5–10 actions each |
+  | API proxy | 730 | Base URL + auth mode known, so any path can be called directly |
+  | Directory | 4,730 | Every app in the open catalogues; connect with its API base + token |
+
+  Layer is not a marketing detail — it tells you what works with zero setup. Curated and
+  OpenAPI apps execute immediately; proxy apps need their documented host; directory apps
+  need a base URL at connect time. `GET /v1/stats` reports the split as `by_tier`. 
 - **OAuth 2.0 engine** with PKCE, automatic token refresh and per-provider client credentials.
 - **Credential vault**: every token encrypted with Fernet before it touches the database.
 - **Universal REST connector** — any API with a key or bearer token works on day one.
@@ -88,7 +100,7 @@ curl -X POST http://localhost:8000/v1/execute \
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/apps` | Catalogue (search, categories, action counts) |
+| `GET` | `/v1/apps` | Paginated catalogue search (q, category, tier, limit, offset) |
 | `GET` | `/v1/apps/{slug}` | One app with its full action list |
 | `GET` | `/v1/actions` | Flat action search |
 | `GET` | `/v1/tools?fmt=openai\|anthropic` | Tool schemas for function calling |
@@ -210,3 +222,20 @@ t.execute("github.list_repos", entity_id="user_42", args={"per_page": 5})
 ## License
 
 Apache-2.0. Built by MUTYINT.
+
+## The registry
+
+`tony/registry/apps.jsonl` is the generated long tail: one JSON object per app, produced by
+`scripts/build_registry.py` from open sources — APIs.guru's OpenAPI directory, Nango's
+provider catalogue, Pipedream's app directory, Activepieces and n8n community nodes, and
+Home Assistant integrations. `tony/apps/*.yaml` stays the curated, hand-written layer and
+always wins when the slugs collide.
+
+```bash
+python scripts/build_registry.py            # rebuild from the live sources (~30s)
+python -m tony.cli apps --tier actions      # see what works with zero setup
+```
+
+Why it is split this way: a catalogue that claims 7,000 integrations and delivers 200 real
+ones is a demo. Tony ships all 7,854, but tells you which layer each app is in, so an agent
+(or a human) never wonders why an action failed.

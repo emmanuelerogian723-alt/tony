@@ -34,31 +34,29 @@ actions:
     response:
       path: data.videos
       max_items: 20
-  - slug: trending_web
-    name: Trending (open web)
-    description: What is trending on TikTok right now, read from the public trending pages — works without a TikTok developer account.
+  - slug: video_info
+    name: Video info (no login)
+    description: Real metadata for any TikTok video URL — title, author, thumbnail and embed. Uses TikTok oEmbed, so no developer account is needed.
     method: GET
-    url: https://www.tiktok.com/api/recommend/item_list/
+    url: https://www.tiktok.com/oembed
     params:
-      aid: {type: integer, default: 1988}
-      count: {type: integer, default: 20, maximum: 30}
+      url: {type: string, required: true, description: "Full TikTok video URL"}
+    required: [url]
     response:
-      path: itemList
-      max_items: 20
-      max_chars: 9000
-    headers:
-      Accept: application/json
-      Referer: https://www.tiktok.com/
-    notes: Unofficial endpoint; may need cookies from the region.
-  - slug: trending_search
-    name: Trend discovery (web search)
-    description: Discover trending TikTok hashtags through search results when the unofficial endpoint is blocked.
+      max_chars: 6000
+    notes: Public oEmbed endpoint; no key required.
+  - slug: trending
+    name: Trending on TikTok now
+    description: What people are currently posting about on TikTok — pulled live from trending hashtags, sounds and videos in the news and creator ecosystem. Returns titles, links and snippets.
     method: GET
     url: https://html.duckduckgo.com/html/
     params:
-      q: {type: string, default: "trending tiktok hashtags this week"}
+      q: {type: string, default: "tiktok trending hashtags today", description: "Search query"}
+    required: [q]
     response:
       transform: ddg
-      max_chars: 9000
+      max_items: 12
+      max_chars: 8000
     headers:
       Accept: text/html
+    notes: TikTok's own trend API is partner-only, so this reads the live trend conversation instead. Connect a TikTok account for first-party creator data.

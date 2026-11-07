@@ -7,7 +7,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from urllib.parse import urlencode
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,6 +16,8 @@ from .accounts import router as account_router
 from .api import router as api_router
 from .billing import router as billing_router
 from .customtools import router as customtools_router
+from .assistant import router as assistant_router
+from .ecosystem import router as ecosystem_router
 from .mcp import router as mcp_router
 from .sessions import router as sessions_router
 
@@ -98,6 +100,8 @@ app.include_router(mcp_router)
 app.include_router(billing_router)
 app.include_router(sessions_router)
 app.include_router(customtools_router)
+app.include_router(assistant_router)
+app.include_router(ecosystem_router)
 
 
 _STATIC = Path(__file__).parent / "static"
@@ -194,6 +198,30 @@ def _old_dashboard(request: Request):
     except Exception as exc:
         logger.warning("demo bootstrap skipped: %s", exc)
     return HTMLResponse(dashboard_html(key=key, workspace_id=ws_id, demo_open=settings.demo_open))
+
+
+@app.get("/sdk", response_class=HTMLResponse, include_in_schema=False)
+def sdk_page():
+    """Download page for the five official clients."""
+    from .static_sdk import sdk_html
+
+    return HTMLResponse(sdk_html())
+
+
+@app.get("/sdk/{filename}", include_in_schema=False)
+def sdk_file(filename: str):
+    from pathlib import Path
+
+    from fastapi.responses import PlainTextResponse
+
+    allowed = {"tony_sdk.py": "python/tony_sdk.py", "tony.ts": "typescript/tony.ts",
+               "tony.js": "javascript/tony.js", "tony.go": "go/tony.go", "Tony.java": "java/Tony.java"}
+    rel = allowed.get(filename)
+    if not rel:
+        raise HTTPException(404, detail="Unknown SDK file")
+    path = Path(__file__).resolve().parent.parent / "sdk" / rel
+    return PlainTextResponse(path.read_text(), media_type="text/plain",
+                             headers={"content-disposition": f'attachment; filename="{filename}"'})
 
 
 @app.exception_handler(Exception)

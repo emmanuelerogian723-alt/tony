@@ -88,6 +88,40 @@ main{padding:18px 16px 96px;min-width:0}
 .tab.on{color:var(--ink);background:rgba(18,17,15,.06)}
 
 /* ── primitives ────────────────────────────────────────── */
+.ask-fab{position:fixed;right:22px;bottom:92px;z-index:70;display:flex;align-items:center;gap:8px;
+  background:var(--ink);color:var(--paper);border:1px solid var(--ink);border-radius:999px;
+  padding:11px 16px;font-size:13px;font-weight:600;box-shadow:0 12px 30px rgba(9,9,11,.22);
+  transition:transform .2s var(--ease),box-shadow .2s var(--ease)}
+.ask-fab:hover{transform:translateY(-2px);box-shadow:0 18px 40px rgba(9,9,11,.28)}
+.ask-fab svg{width:17px;height:17px}
+.ask{position:fixed;right:22px;bottom:92px;width:min(380px,calc(100vw - 32px));height:min(560px,calc(100vh - 140px));
+  z-index:80;background:var(--paper);border:1px solid var(--line-2);border-radius:16px;display:none;
+  flex-direction:column;overflow:hidden;box-shadow:0 30px 70px rgba(9,9,11,.26)}
+.ask.on{display:flex}
+.ask-h{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.ask-h b{display:block;font-size:13.5px}
+.ask-h span{display:block;font-size:11px;color:var(--muted)}
+.ask-dot{width:8px;height:8px;border-radius:50%;background:#1a7f4b;box-shadow:0 0 0 3px rgba(26,127,75,.14)}
+.ask-x{margin-left:auto;font-size:20px;line-height:1;color:var(--muted);padding:2px 6px}
+.ask-body{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:9px;background:var(--paper-2)}
+.ask-msg{font-size:13px;line-height:1.55;padding:10px 12px;border-radius:12px;max-width:92%;white-space:pre-wrap}
+.ask-msg.bot{background:var(--paper);border:1px solid var(--line);align-self:flex-start}
+.ask-msg.me{background:var(--ink);color:var(--paper);align-self:flex-end}
+.ask-msg.think{background:transparent;border:1px dashed var(--line-2);color:var(--muted);font-style:italic}
+.ask-quick{display:flex;gap:6px;padding:8px 12px;border-top:1px solid var(--line);overflow-x:auto;flex:none}
+.ask-quick button{font-size:11.5px;padding:5px 10px;border:1px solid var(--line-2);border-radius:999px;
+  white-space:nowrap;color:var(--muted)}
+.ask-quick button:hover{border-color:var(--ink);color:var(--ink)}
+.ask-in{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line);background:var(--paper)}
+.ask-in input{flex:1;height:38px;border:1px solid var(--line-2);border-radius:9px;padding:0 11px;
+  font-size:13px;font-family:inherit;background:var(--paper)}
+.ask-in button{width:38px;height:38px;border-radius:9px;background:var(--ink);color:var(--paper);display:grid;place-items:center}
+.ask-in button svg{width:16px;height:16px}
+.ec-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.ec-row:last-child{border-bottom:0}
+.ec-bar{height:4px;border-radius:2px;background:var(--line);flex:1;overflow:hidden}
+.ec-bar i{display:block;height:100%;background:var(--ink);border-radius:2px}
+@media (max-width:760px){.ask-fab{bottom:78px;right:14px}.ask{right:8px;left:8px;width:auto;bottom:74px}}
 .pg{display:none}
 .pg.on{display:block;animation:up .28s cubic-bezier(.2,.8,.2,1) both}
 @keyframes up{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
@@ -355,6 +389,7 @@ const NAV = [['overview','Overview','M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5'],
              ['keys','API keys','M14 7a4 4 0 10-3.5 4L4 17.5V21h3.5l6.5-6.5A4 4 0 0014 7z'],
              ['sessions','Sessions','M12 3a9 9 0 100 18 9 9 0 000-18zm0 4v5l3.5 2'],
              ['billing','Billing','M3 7h18M3 7l0 11a1 1 0 001 1h16a1 1 0 001-1V7M7 13h4'],
+             ['ecosystem','Ecosystem','M4 17V7m5 10V4m5 13v-7m5 7V9'],
              ['profile','Profile','M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0']];
 const MOBILE = ['apps','runs','sessions','billing','profile'];
 
@@ -382,13 +417,14 @@ function go(page){
   if(page==='overview'){ loadOverview() }
   if(page==='billing'){ loadBilling() }
   if(page==='sessions'){ loadSessions() }
+  if(page==='ecosystem'){ loadEcosystem() }
 }
 
 /* ── boot ───────────────────────────────────────────────── */
 async function boot(){
   renderWho(); buildNav(); checkBillingReturn();
   const h = (location.hash||'#overview').slice(1);
-  go(['overview','apps','connections','runs','keys','sessions','billing','profile'].includes(h) ? h : 'overview');
+  go(['overview','apps','connections','runs','keys','sessions','billing','ecosystem','profile'].includes(h) ? h : 'overview');
 }
 function renderWho(){
   const u = S.user || {};
@@ -887,6 +923,82 @@ async function createSession(){
   }catch(e){ toast(e.message) }
 }
 
+
+/* ── Tony assistant ─────────────────────────────────────── */
+let ASK_HISTORY = [];
+function toggleAsk(force){
+  const a = el('ask'), open = force===undefined ? !a.classList.contains('on') : force;
+  a.classList.toggle('on', open); a.setAttribute('aria-hidden', String(!open));
+  el('ask-fab').style.display = open ? 'none' : 'flex';
+  if(open) setTimeout(()=>el('ask-q').focus(), 60);
+}
+function askBubble(role, text){
+  const d = document.createElement('div');
+  d.className = 'ask-msg ' + role; d.textContent = text;
+  el('ask-body').appendChild(d); el('ask-body').scrollTop = el('ask-body').scrollHeight;
+  return d;
+}
+async function askTony(text){
+  text = (text||'').trim(); if(!text) return;
+  if(!el('ask').classList.contains('on')) toggleAsk(true);
+  askBubble('me', text); ASK_HISTORY.push({role:'user', content:text});
+  const t = askBubble('think', 'Reading your workspace…');
+  try{
+    const d = await api('/v1/assistant', {method:'POST', body:{message:text, history:ASK_HISTORY.slice(-6)}});
+    t.remove();
+    askBubble('bot', d.answer); ASK_HISTORY.push({role:'assistant', content:d.answer});
+    el('ask-quick').innerHTML = (d.suggestions||[]).map(q=>'<button></button>').join('');
+    el('ask-quick').querySelectorAll('button').forEach((b,i)=>{b.textContent=(d.suggestions||[])[i];b.onclick=()=>askTony(b.textContent)});
+  }catch(e){ t.textContent = 'That request failed: ' + e.message; t.className='ask-msg bot' }
+}
+function sendAsk(ev){
+  ev.preventDefault(); const q = el('ask-q'); const v = q.value; q.value=''; askTony(v); return false;
+}
+
+/* ── ecosystem ──────────────────────────────────────────── */
+async function loadEcosystem(){
+  try{
+    const [sum, use, rat, rev] = await Promise.all([
+      api('/v1/ecosystem/summary'), api('/v1/stats/usage?days=30'),
+      api('/v1/ratings'), api('/v1/revenue')]);
+    el('ec-meters').innerHTML =
+      '<div class="mtr"><div class="k">apps</div><div class="v">'+n(sum.apps)+'</div><div class="bar"><i style="width:100%"></i></div></div>'+
+      '<div class="mtr"><div class="k">actions</div><div class="v">'+n(sum.actions)+'</div><div class="bar"><i style="width:100%"></i></div></div>'+
+      '<div class="mtr"><div class="k">avg rating</div><div class="v">'+(sum.ratings.average||0)+' <small>/ 5</small></div><div class="bar"><i style="width:'+Math.round((sum.ratings.average||0)/5*100)+'%"></i></div></div>'+
+      '<div class="mtr"><div class="k">runs all time</div><div class="v">'+n(sum.runs_all_time)+'</div><div class="bar"><i style="width:100%"></i></div></div>';
+
+    const top = (use.by_app||[]).slice(0,6);
+    const max = Math.max(1, ...top.map(r=>r.runs));
+    el('ec-usage').innerHTML = top.length ? top.map(r=>
+      '<div class="ec-row"><span class="mono" style="min-width:110px">'+esc(r.app)+'</span>'+
+      '<span class="ec-bar"><i style="width:'+Math.round(r.runs/max*100)+'%"></i></span>'+
+      '<b style="font-size:12px">'+n(r.runs)+'</b><span class="tiny muted">'+r.avg_latency_ms+'ms</span></div>'
+    ).join('') : '<div class="empty">Send your first call and this fills in.</div>';
+
+    const apps = (rat.apps||[]).slice(0,6);
+    el('ec-ratings').innerHTML = apps.length ? apps.map(a=>
+      '<div class="ec-row"><span class="mono" style="min-width:110px">'+esc(a.app)+'</span>'+
+      '<span class="ec-bar"><i style="width:'+Math.round(a.average/5*100)+'%"></i></span>'+
+      '<b style="font-size:12px">'+a.average.toFixed(1)+'</b><span class="tiny muted">'+a.ratings+' votes</span></div>'
+    ).join('') : '<div class="empty">No ratings yet.</div>';
+
+    el('ec-rev-state').textContent = rev.eligible ? 'eligible' : 'not eligible';
+    const st = rev.statements||[];
+    el('ec-revenue').innerHTML =
+      '<div class="ec-row"><span class="mono">pending</span><span class="sp"></span><b>₦'+n(rev.pending_ngn)+'</b></div>'+
+      '<div class="ec-row"><span class="mono">paid</span><span class="sp"></span><b>₦'+n(rev.paid_ngn)+'</b></div>'+
+      (st.length ? st.map(x=>'<div class="ec-row">'+esc(x.period)+' · '+esc(x.app||'—')+
+        '<span class="sp"></span><span class="badge">'+esc(x.status)+'</span></div>').join('')
+        : '<p class="tiny muted" style="margin:8px 0 0">'+esc(rev.policy)+'</p>');
+
+    el('ec-security').innerHTML =
+      'Credentials: AES-256-GCM at rest, decrypted per call.<br>'+
+      'API keys: stored as hashes, bound to your workspace.<br>'+
+      'Writes: explicit approval with a preview and a full run log.<br>'+
+      'Sessions: app allowlist, tier ceiling, TTL, own run budget.';
+  }catch(e){ el('ec-meters').innerHTML='<div class="empty">'+esc(e.message)+'</div>' }
+}
+
 /* ── profile ────────────────────────────────────────────── */
 function renderProfile(){
   const u = S.user||{};
@@ -1173,8 +1285,54 @@ def console_html(user: Any = None) -> str:
             <span class="sp"></span><button class="btn ghost sm" style="color:var(--bad);border-color:rgba(163,34,23,.3)" onclick="deleteAccount()">Delete account</button></div>
         </div>
       </section>
+      <section class="pg" id="p-ecosystem">
+        <div class="hd"><div><h1>Ecosystem</h1><p>Ratings, changelogs, security verdicts, usage and builder revenue. The parts a gateway normally hides.</p></div></div>
+        <div class="meters" id="ec-meters"><div class="empty">Loading…</div></div>
+        <div class="grid" style="grid-template-columns:1fr;gap:12px">
+          <div class="card pad"><div class="row" style="margin-bottom:10px"><b style="font-size:14px">Most used apps</b>
+            <span class="sp"></span><span class="tiny muted">last 30 days</span></div>
+            <div id="ec-usage"><div class="empty">No runs yet.</div></div></div>
+          <div class="card pad"><div class="row" style="margin-bottom:10px"><b style="font-size:14px">Community ratings</b>
+            <span class="sp"></span><a class="tiny" href="/docs" style="color:var(--accent)">Rate an app</a></div>
+            <div id="ec-ratings"><div class="empty">No ratings yet. Be the first.</div></div></div>
+          <div class="card pad"><div class="row" style="margin-bottom:10px"><b style="font-size:14px">Builder revenue</b>
+            <span class="sp"></span><span class="badge" id="ec-rev-state">—</span></div>
+            <div id="ec-revenue"><div class="empty">Publish an integration to earn from its runs.</div></div></div>
+          <div class="card pad"><div class="row" style="margin-bottom:10px"><b style="font-size:14px">Security posture</b>
+            <span class="sp"></span><span class="tiny muted">encryption · approval gate</span></div>
+            <div id="ec-security" class="tiny muted" style="line-height:1.7"></div></div>
+        </div>
+      </section>
+
     </main>
   </div>
+
+  <button class="ask-fab" id="ask-fab" onclick="toggleAsk()" aria-label="Ask Tony">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16v11H8l-4 4z"/><path d="M8.5 9.5h7M8.5 12.5h4"/></svg>
+    <span>Ask Tony</span>
+  </button>
+  <aside class="ask" id="ask" aria-hidden="true">
+    <div class="ask-h">
+      <span class="ask-dot"></span>
+      <div style="flex:1;min-width:0"><b>Tony assistant</b><span>Answers about Tony only</span></div>
+      <button class="ask-x" onclick="toggleAsk(false)" aria-label="Close">×</button>
+    </div>
+    <div class="ask-body" id="ask-body">
+      <div class="ask-msg bot">Ask me about plans, quotas, connecting an app, keys, sessions, custom tools, MCP, SDKs or an error code. I read your live usage, so the numbers are yours.</div>
+    </div>
+    <div class="ask-quick" id="ask-quick">
+      <button onclick="askTony('How many runs do I have left?')">Runs left</button>
+      <button onclick="askTony('How do I connect an app without an API key?')">Connect an app</button>
+      <button onclick="askTony('What does Pro add?')">Plans</button>
+      <button onclick="askTony('How do I use this in Claude?')">Claude / MCP</button>
+    </div>
+    <form class="ask-in" onsubmit="return sendAsk(event)">
+      <input id="ask-q" placeholder="Ask about Tony…" autocomplete="off" maxlength="1200">
+      <button type="submit" aria-label="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+      </button>
+    </form>
+  </aside>
 
   <nav class="tabbar" id="tabbar"></nav>
 </div>

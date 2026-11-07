@@ -373,6 +373,24 @@ hr,.rule{background:var(--line)}
 .strip div{border:1px solid var(--line);border-radius:12px;padding:15px 16px;background:var(--paper-2)}
 .strip b{display:block;font-size:13.5px;margin-bottom:4px}
 .strip p{margin:0;font-size:12.4px;color:var(--muted);line-height:1.5}
+/* ecosystem + sdk + trust */
+.stackgrid{display:grid;gap:10px;grid-template-columns:1fr 1fr;margin-top:24px}
+@media (min-width:820px){.stackgrid{grid-template-columns:repeat(3,1fr)}}
+.stackgrid div{border:1px solid var(--line);border-radius:12px;padding:14px 15px;background:#fff}
+.stackgrid b{display:block;font-size:13.5px;letter-spacing:-.01em}
+.stackgrid span{display:block;font-size:11.6px;color:var(--muted);margin-top:3px;font-family:var(--mono)}
+.sdkrow{display:grid;gap:10px;grid-template-columns:1fr;margin-top:22px}
+@media (min-width:760px){.sdkrow{grid-template-columns:repeat(5,1fr)}}
+.sdkrow a{border:1px solid var(--line);border-radius:12px;padding:14px 14px;background:#fff;transition:.2s var(--ease)}
+.sdkrow a:hover{border-color:var(--ink);transform:translateY(-2px);box-shadow:0 12px 26px -14px rgba(9,9,11,.3)}
+.sdkrow b{display:block;font-size:13.5px}
+.sdkrow span{display:block;font-size:11px;color:var(--muted);margin-top:3px}
+.trust{border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-top:22px;background:#fff}
+.trust .tr{display:grid;grid-template-columns:1.1fr 1.4fr;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line);font-size:13px}
+.trust .tr:last-child{border-bottom:0}
+.trust .tr b{font-weight:600}
+.trust .tr span{color:var(--muted)}
+@media (max-width:560px){.trust .tr{grid-template-columns:1fr;gap:3px}}
 @media (max-width:430px){
   .wrap{padding:0 16px}
   h1{font-size:clamp(31px,10.4vw,44px)}
@@ -483,6 +501,7 @@ BODY = """
     <a href="#layers">Layers</a>
     <a href="#protocol">Protocol</a>
     <a href="#compare">Compare</a>
+    <a href="#stack">SDKs</a>
     <a href="#pricing">Pricing</a>
     <a href="/docs">Docs</a>
   </nav>
@@ -720,6 +739,76 @@ Authorization: Bearer tony_sk_...
         <p style="font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.05em;margin:14px 0 0;
           text-transform:uppercase">__APPS__ apps appear as tools in the next message</p>
       </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="stack" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head rise">
+      <div class="sec-num">04b / stack</div>
+      <div>
+        <h2>Works with <em>the AI you already use.</em></h2>
+        <p>Claude, Codex, Cursor and any MCP client get every action as a tool. Framework users get adapters
+          for LangChain, LlamaIndex, CrewAI and the Vercel AI SDK. Nothing new to learn, one URL to add.</p>
+      </div>
+    </div>
+    <div class="stackgrid">
+      <div><b>Claude Desktop & Code</b><span>add the MCP URL</span></div>
+      <div><b>ChatGPT · Codex</b><span>OpenAI tool schemas</span></div>
+      <div><b>Cursor</b><span>Settings → MCP</span></div>
+      <div><b>LangChain</b><span>tony.langchain_tools()</span></div>
+      <div><b>Vercel AI SDK</b><span>await tony.vercelTools()</span></div>
+      <div><b>Any MCP client</b><span>streamable HTTP + stdio</span></div>
+    </div>
+    <div class="sdkrow">
+      <a href="/sdk/tony_sdk.py"><b>Python</b><span>pip install tony-gateway</span></a>
+      <a href="/sdk/tony.ts"><b>TypeScript</b><span>zero dependencies</span></a>
+      <a href="/sdk/tony.js"><b>JavaScript</b><span>ESM + CJS</span></a>
+      <a href="/sdk/tony.go"><b>Go</b><span>context-aware</span></a>
+      <a href="/sdk/Tony.java"><b>Java</b><span>Java 17+</span></a>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="trust" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head rise">
+      <div class="sec-num">04c / trust</div>
+      <div>
+        <h2>Permissions you can <em>point at.</em></h2>
+        <p>Every integration carries a security verdict, a changelog and a rating. Every call carries a
+          record. This is what you show a reviewer, not a promise on a pricing page.</p>
+      </div>
+    </div>
+    <div class="trust">
+      <div class="tr"><b>Read actions</b><span>run immediately, logged with latency and response size</span></div>
+      <div class="tr"><b>Write & destructive actions</b><span>stop for approval, with a preview of exactly what will happen</span></div>
+      <div class="tr"><b>Credentials</b><span>AES-256-GCM at rest, decrypted in memory for one call, never returned by the API</span></div>
+      <div class="tr"><b>Your users</b><span>scoped sessions: app allowlist, tier ceiling, TTL, its own run budget</span></div>
+      <div class="tr"><b>Integrations</b><span>security verdict, version history and community rating on every app page</span></div>
+      <div class="tr"><b>Your infrastructure</b><span>MIT, self-hostable, SQLite or Postgres, no telemetry</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="ecosystem" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head rise">
+      <div class="sec-num">04d / ecosystem</div>
+      <div>
+        <h2>Built to <em>compound.</em></h2>
+        <p>Ratings tell you which integration actually works. Changelogs tell you what changed. Usage
+          statistics tell you what your agents lean on. And builders earn from the runs their work generates.</p>
+      </div>
+    </div>
+    <div class="strip" style="grid-template-columns:1fr;margin-top:18px">
+      <div><b>Community ratings</b><p>Rate any app; the average is public and rolls into discovery.</p></div>
+      <div><b>Version histories</b><p>Semantic versions with breaking-change flags, so upgrades are a decision.</p></div>
+      <div><b>Security reviews</b><p>Verdict, scopes and outstanding findings on every integration.</p></div>
+      <div><b>Usage statistics</b><p>Per-app runs and average latency over 30 days, straight from your run log.</p></div>
+      <div><b>Revenue sharing</b><p>60% of run revenue from a published integration, paid monthly.</p></div>
+      <div><b>Tony assistant</b><p>An in-console expert that only talks about Tony, reads your live limits and logs what it cannot answer.</p></div>
     </div>
   </div>
 </section>

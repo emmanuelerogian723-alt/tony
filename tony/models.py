@@ -266,3 +266,62 @@ class CustomTool(Base):
     tier: Mapped[str] = mapped_column(String(16), default="read")
     params_json: Mapped[str] = mapped_column(Text, default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class AssistantGap(Base):
+    """A question Tony could not answer. The weekly fix list starts here."""
+    __tablename__ = "assistant_gaps"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    workspace_id: Mapped[str] = mapped_column(String(32), index=True)
+    question: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class AppRating(Base):
+    """Community signal on an integration, per workspace, one row each."""
+    __tablename__ = "app_ratings"
+    __table_args__ = (UniqueConstraint("workspace_id", "app_slug", name="uq_app_rating"),)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    workspace_id: Mapped[str] = mapped_column(String(32), index=True)
+    app_slug: Mapped[str] = mapped_column(String(80), index=True)
+    stars: Mapped[int] = mapped_column(Integer, default=5)
+    review: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class AppVersion(Base):
+    """Changelog for an integration, so upgrading is a decision not a surprise."""
+    __tablename__ = "app_versions"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    app_slug: Mapped[str] = mapped_column(String(80), index=True)
+    version: Mapped[str] = mapped_column(String(24), default="1.0.0")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    breaking: Mapped[bool] = mapped_column(Boolean, default=False)
+    released_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class SecurityReview(Base):
+    """Public verdict: how an integration handles credentials and writes."""
+    __tablename__ = "security_reviews"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    app_slug: Mapped[str] = mapped_column(String(80), index=True)
+    verdict: Mapped[str] = mapped_column(String(24), default="pass")  # pass|review|fail
+    encryption: Mapped[str] = mapped_column(String(40), default="AES-256-GCM at rest")
+    scopes: Mapped[str] = mapped_column(Text, default="")
+    findings: Mapped[str] = mapped_column(Text, default="")
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class RevenueShare(Base):
+    """Builder earnings: a share of the runs a published integration generated."""
+    __tablename__ = "revenue_share"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    workspace_id: Mapped[str] = mapped_column(String(32), index=True)
+    app_slug: Mapped[str] = mapped_column(String(80), default="")
+    period: Mapped[str] = mapped_column(String(7), default="")  # YYYY-MM
+    runs: Mapped[int] = mapped_column(Integer, default=0)
+    amount_ngn: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="accruing")  # accruing|payable|paid
+    payout_on: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

@@ -325,3 +325,16 @@ class RevenueShare(Base):
     status: Mapped[str] = mapped_column(String(20), default="accruing")  # accruing|payable|paid
     payout_on: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class AgentMemory(Base):
+    """Per-entity key/value store so an agent can keep state between calls."""
+    __tablename__ = "agent_memory"
+    __table_args__ = (Index("ix_memory_lookup", "workspace_id", "entity_id", "key", unique=True),)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    workspace_id: Mapped[str] = mapped_column(String(32), index=True)
+    entity_id: Mapped[str] = mapped_column(String(160), index=True, default="default")
+    key: Mapped[str] = mapped_column(String(200), index=True)
+    value_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)

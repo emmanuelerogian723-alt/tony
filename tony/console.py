@@ -319,7 +319,7 @@ async function api(path, opts){
   let d = {}; const txt = await r.text();
   try{ d = txt ? JSON.parse(txt) : {} }catch(e){ d = {raw:txt} }
   if(r.status === 401){ showAuth(); throw new Error('Sign in to continue') }
-  if(!r.ok){ const e = new Error(d.detail || d.error || ('HTTP '+r.status)); e.status=r.status; throw e }
+  if(!r.ok){ const e = new Error(d.detail || d.error || ('HTTP '+r.status)); e.status=r.status; e.body=d; throw e }
   return d;
 }
 
@@ -653,6 +653,9 @@ function wireCode(){
 /* connect tab */
 function connectHTML(){
   const d = S.cur, conn = S.conns.find(x=>x.app===d.slug && x.status==='active');
+  const notice = d._notice ? '<div class="card pad" style="margin-bottom:10px;border-color:var(--warn,#b45309)">'+
+    '<b class="tiny" style="letter-spacing:.02em">One-time setup</b>'+
+    '<p class="tiny muted" style="margin:6px 0 0">'+esc(d._notice)+'</p></div>' : '';
   if(conn){
     return '<div class="card pad"><b>Connected</b>'+
       (conn.base_url?'<p class="mono tiny" style="margin:8px 0 0;word-break:break-all">'+esc(conn.base_url)+'</p>':'')+
@@ -661,7 +664,7 @@ function connectHTML(){
   }
   if(d.auth.type==='oauth2'){
     const ready = d.configured;
-    return '<div class="card pad"><b>Sign in with '+esc(d.name)+'</b>'+
+    return notice+'<div class="card pad"><b>Sign in with '+esc(d.name)+'</b>'+
       '<p class="tiny muted" style="margin:6px 0 14px">You never paste an API key. Tony opens '+esc(d.name)+
       '\u2019s own sign-in page, you log in, and the account comes back connected. Tokens stay encrypted on this server.</p>'+
       '<button class="btn sm" id="btn-oauth">Connect '+esc(d.name)+'</button>'+
@@ -675,7 +678,7 @@ function connectHTML(){
       '</div>';
   }
   const base = !!d.needs_base_url, token = d.auth.type!=='none';
-  return '<div class="card pad"><b>'+(base?'Point Tony at ':'Add your ')+esc(d.name)+'</b>'+
+  return notice+'<div class="card pad"><b>'+(base?'Point Tony at ':'Add your ')+esc(d.name)+'</b>'+
     '<p class="tiny muted" style="margin:6px 0 14px">'+esc(base
       ? 'This app ships documented paths but no fixed host. Paths get appended to the base URL you paste here.'
       : 'Stored encrypted on this server and never shown again.')+'</p>'+
@@ -698,7 +701,15 @@ function wireConnect(){
       const r = await api('/v1/connections/'+encodeURIComponent(d.slug)+'/start?entity_id=default', {method:'POST'});
       if(r.authorization_url) location.href = r.authorization_url;
       else { toast('Could not start'); oauth.disabled=false; oauth.textContent='Connect '+d.name }
-    }catch(e){ toast(e.message); oauth.disabled=false; oauth.textContent='Connect '+d.name }
+    }catch(e){
+      oauth.disabled=false; oauth.textContent='Connect '+d.name;
+      if(e.status===409 && e.body){
+        const b = e.body;
+        S.cur = Object.assign({}, d, {auth: Object.assign({}, d.auth, {type:'key'}), _notice: b.setup_hint || b.detail});
+        openApp(d.slug);
+        toast(b.mode==='oauth' ? 'One-time setup needed \u2014 paste a token or let the owner register the app' : 'Paste your key to connect');
+      } else { toast(e.message) }
+    }
   };
   const prov = el('btn-prov');
   if(prov) prov.onclick = async()=>{

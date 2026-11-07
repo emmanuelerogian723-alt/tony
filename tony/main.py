@@ -17,6 +17,7 @@ from .api import router as api_router
 from .billing import router as billing_router
 from .customtools import router as customtools_router
 from .assistant import router as assistant_router
+from .power import router as power_router
 from .ecosystem import router as ecosystem_router
 from .mcp import router as mcp_router
 from .sessions import router as sessions_router
@@ -102,6 +103,7 @@ app.include_router(sessions_router)
 app.include_router(customtools_router)
 app.include_router(assistant_router)
 app.include_router(ecosystem_router)
+app.include_router(power_router)
 
 
 _STATIC = Path(__file__).parent / "static"

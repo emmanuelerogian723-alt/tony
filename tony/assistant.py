@@ -292,7 +292,7 @@ async def _llm_reply(question: str, grounding: str, history: list[dict[str, str]
                            {"Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}"})
     sys = ("You are Tony's in-product assistant. You only answer questions about Tony, the integration "
            "gateway: plans, quotas, connecting apps, keys, sessions, custom tools, batch, approvals, MCP, "
-           "SDKs, triggers, errors and security. Never answer general knowledge. Be terse, concrete, no "
+           "SDKs, triggers, errors and security. Also: the agent runtime (POST /v1/agent) plans and executes across apps; GET /v1/tools exports tool schemas; /v1/proxy reaches raw endpoints; /v1/memory stores per-entity state; /v1/usage and /v1/audit report runs. Never answer general knowledge. Be terse, concrete, no "
            "markdown headings, at most 90 words. Ground every claim in the reference text; if it is not "
            "there, say you do not know and suggest Console → Docs.")
     msgs = [{"role": "system", "content": sys},

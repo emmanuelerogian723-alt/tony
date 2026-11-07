@@ -12,6 +12,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -186,69 +187,6 @@ def list_actions(search: str = "", app: str = "", tier: str = "", limit: int = 5
             "has_more": bool(limit) and offset + limit < len(out)}
 
 
-@router.get("/tools")
-def tool_schemas(request: Request, fmt: str = "openai", app: str = "") -> dict[str, Any]:
-    """Export the catalogue as LLM tool definitions, workspace custom tools included."""
-    tools: list[dict[str, Any]] = []
-    for spec in catalog.apps.values():
-        if app and spec.slug != app:
-            continue
-        for act in spec.actions:
-            name = f"{spec.slug}__{act.slug}"
-            desc = f"{spec.name}: {act.name}. {act.description}".strip()
-            if fmt == "anthropic":
-                tools.append({
-                    "name": name,
-                    "description": desc,
-                    "input_schema": {
-                        "type": "object",
-                        "properties": act.params,
-                        "required": act.required,
-                        "additionalProperties": False,
-                    },
-                })
-            else:
-                tools.append({
-                    "type": "function",
-                    "function": {
-                        "name": name,
-                        "description": desc,
-                        "parameters": {
-                            "type": "object",
-                            "properties": act.params,
-                            "required": act.required,
-                            "additionalProperties": False,
-                        },
-                    },
-                })
-    try:
-        ws, _ = workspace_from_request(request)
-        from .customtools import public as _custom_public
-        from .db import session as _sess
-        from .models import CustomTool as _CT
-        from sqlalchemy import select as _select
-        with _sess() as s2:
-            for row in s2.scalars(_select(_CT).where(_CT.workspace_id == ws)).all():
-                params = {}
-                for pm in json.loads(row.params_json or "[]"):
-                    if isinstance(pm, dict) and pm.get("name"):
-                        params[pm["name"]] = {"type": pm.get("type", "string"),
-                                              "description": pm.get("description", "")}
-                name = f"custom__{row.slug}"
-                desc = f"{row.name}: {row.description}".strip()
-                if fmt == "anthropic":
-                    tools.append({"name": name, "description": desc,
-                                  "input_schema": {"type": "object", "properties": params}})
-                else:
-                    tools.append({"type": "function", "function": {
-                        "name": name, "description": desc,
-                        "parameters": {"type": "object", "properties": params}}})
-    except Exception:  # noqa: BLE001 - anonymous callers just get the catalogue
-        pass
-    return {"tools": tools, "count": len(tools), "format": fmt}
-
-
-# ── connections ───────────────────────────────────────────────────────────
 @router.get("/connections")
 def list_connections(request: Request, entity_id: str = "") -> dict[str, Any]:
     ws, _demo = workspace_from_request(request)
@@ -280,12 +218,26 @@ async def connect_start(app_slug: str, request: Request, entity_id: str = "defau
             s.flush()
             return {"mode": "public", "connection": public_redact(acct)}
     if spec.auth.type != "oauth2":
-        raise HTTPException(400, detail="This app uses a key, not OAuth. POST /v1/connections/{app}/key with your credentials.")
+        return JSONResponse(status_code=409, content={
+            "detail": f"{spec.name} connects with a key, not a sign-in.",
+            "app": spec.slug, "needs_setup": True, "mode": "key",
+            "can_use_key": True, "setup_endpoint": f"/v1/connections/{spec.slug}/key",
+            "setup_hint": "Paste the API key or token for this app.",
+            "docs": spec.docs or "",
+        })
     _entity(ws, entity_id)
     try:
         session_id, url = await start_oauth(ws, entity_id, spec, redirect_after)
     except OAuthError as exc:
-        raise HTTPException(400, detail=str(exc)) from exc
+        return JSONResponse(status_code=409, content={
+            "detail": str(exc),
+            "app": spec.slug, "needs_setup": True, "mode": "oauth",
+            "can_use_key": True, "setup_endpoint": f"/v1/connections/{spec.slug}/key",
+            "provider_endpoint": f"/v1/account/providers/{spec.slug}",
+            "setup_hint": ("The workspace owner adds this app's OAuth client id and secret once, "
+                           "then everyone just signs in. A personal token also works."),
+            "docs": spec.docs or "",
+        })
     return {"mode": "oauth", "auth_session_id": session_id, "authorization_url": url}
 
 

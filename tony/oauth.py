@@ -38,8 +38,23 @@ def _client_creds(spec: AppSpec) -> tuple[str, str]:
         return cid, secret
     stored = stored_provider(spec.slug)
     if stored:
-        return stored.get("client_id", "") or cid, stored.get("client_secret", "") or secret
-    return cid, secret
+        stored_cid = _real_cred(stored.get("client_id", ""))
+        stored_secret = _real_cred(stored.get("client_secret", ""))
+        if stored_cid:
+            return stored_cid, stored_secret or secret
+    return _real_cred(cid), secret
+
+
+PLACEHOLDER_CREDS = {"cid_test", "test", "test_id", "changeme", "your_client_id", "your-client-id",
+                     "client_id", "xxx", "todo", "none", "null", "demo"}
+
+
+def _real_cred(value: str) -> str:
+    """Reject placeholder ids so a stale test row can never hijack a real sign-in."""
+    v = (value or "").strip()
+    if not v or v.lower() in PLACEHOLDER_CREDS or v.lower().startswith("cid_test"):
+        return ""
+    return v
 
 
 def stored_provider(app_slug: str) -> dict[str, str]:
@@ -52,7 +67,7 @@ def stored_provider(app_slug: str) -> dict[str, str]:
         secret = ""
         if row.secret_enc:
             try:
-                secret = decrypt_json({"v": row.secret_enc}).get("v", "")
+                secret = decrypt_json(row.secret_enc).get("v", "")
             except Exception:
                 secret = ""
         return {"client_id": row.client_id or "", "client_secret": secret}

@@ -321,14 +321,14 @@ const NAV = [['overview','Overview','M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5'],
              ['runs','Activity','M3 12h4l2.5-7 4 14L16 12h5'],
              ['keys','API keys','M14 7a4 4 0 10-3.5 4L4 17.5V21h3.5l6.5-6.5A4 4 0 0014 7z'],
              ['profile','Profile','M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0']];
-const MOBILE = ['apps','connections','runs','profile'];
+const MOBILE = ['apps','connections','runs','keys','profile'];
 
 function iconNav(d){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="'+d+'"/></svg>'}
 function buildNav(){
   el('rail-nav').innerHTML = NAV.map(([id,label,d])=>
     '<button class="nav" data-p="'+id+'">'+iconNav(d)+'<span>'+label+'</span></button>').join('');
   el('rail-nav').querySelectorAll('.nav').forEach(b=>b.onclick=()=>go(b.dataset.p));
-  const labels = {apps:'Apps', connections:'Connections', runs:'Activity', profile:'Profile'};
+  const labels = {apps:'Apps', connections:'Links', runs:'Activity', keys:'Keys', profile:'You'};
   const icons = Object.fromEntries(NAV.map(([id,l,d])=>[id,d]));
   el('tabbar').innerHTML = MOBILE.map(id=>
     '<button class="tab" data-p="'+id+'">'+iconNav(icons[id])+'<span>'+labels[id]+'</span></button>').join('');
@@ -771,7 +771,7 @@ def console_html(user: Any = None) -> str:
 
   <div style="min-width:0">
     <header class="top">
-      <span class="mark">{mark}<b>Tony</b></span>
+      <button class="mark" onclick="go('overview')" style="gap:9px">{mark}<b>Tony</b></button>
       <span class="sp"></span>
       <button class="x" id="top-av" onclick="go('profile')" style="border:none;background:none;padding:0"></button>
     </header>

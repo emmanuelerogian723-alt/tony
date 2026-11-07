@@ -339,6 +339,27 @@ def _summarise(goal: str, steps: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+@router.get("/llm/health")
+async def llm_health() -> dict[str, Any]:
+    """Which model endpoints this process can actually reach right now."""
+    chain = _llm_targets()
+    rows = []
+    for url, model, hdr in chain:
+        row = {"provider": url.split("/")[2], "model": model, "ok": False, "status": 0, "error": ""}
+        try:
+            async with httpx.AsyncClient(timeout=25) as c:
+                r = await c.post(url, json={"model": model, "messages": [{"role": "user", "content": "reply ok"}],
+                                            "max_tokens": 8}, headers={**hdr, "Content-Type": "application/json"})
+                row["status"] = r.status_code
+                row["ok"] = r.status_code < 400
+                if not row["ok"]:
+                    row["error"] = r.text[:220]
+        except Exception as exc:  # noqa: BLE001
+            row["error"] = f"{type(exc).__name__}: {exc}"[:220]
+        rows.append(row)
+    return {"targets": rows}
+
+
 @router.post("/agent")
 async def agent(body: AgentIn, request: Request) -> dict[str, Any]:
     """Give Tony a goal. It plans, calls real apps, and answers with receipts."""

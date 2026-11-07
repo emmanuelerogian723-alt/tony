@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-MAX_ACTIONS_PER_APP = 10
+MAX_ACTIONS_PER_APP = 40
 MAX_DESCRIPTION = 220
 MAX_ACTION_DESCRIPTION = 180
 
@@ -51,6 +51,7 @@ def _schema_to_params(schema: Any, required: list[str] | None = None) -> dict[st
         if not isinstance(prop, dict):
             continue
         typ = prop.get("type") or ("object" if "properties" in prop else "string")
+        typ = _scalar_type(typ)
         if typ not in {"string", "integer", "number", "boolean", "object", "array"}:
             typ = "string"
         spec: dict[str, Any] = {"type": typ}
@@ -139,6 +140,18 @@ def _action_slug(method: str, path: str, operation_id: str | None) -> str:
     return slug[:60] or f"{method.lower()}-action"
 
 
+_VALID_TYPES = {"string", "integer", "number", "boolean", "array", "object"}
+
+
+def _scalar_type(raw: Any) -> str:
+    """OpenAPI 3.1 allows a list of types; collapse to the first usable scalar."""
+    if isinstance(raw, list):
+        raw = next((t for t in raw if isinstance(t, str) and t in _VALID_TYPES), "string")
+    if not isinstance(raw, str) or raw not in _VALID_TYPES:
+        return "string"
+    return raw
+
+
 def from_openapi(slug: str, entry: dict[str, Any], spec: dict[str, Any]) -> dict[str, Any] | None:
     """Build an app manifest from an OpenAPI 3 / Swagger 2 document."""
     if not isinstance(spec, dict):
@@ -176,9 +189,7 @@ def from_openapi(slug: str, entry: dict[str, Any], spec: dict[str, Any]) -> dict
                     continue
                 if p.get("in") not in {"path", "query", "header"}:
                     continue
-                typ = (p.get("schema") or {}).get("type") or p.get("type") or "string"
-                if typ not in {"string", "integer", "number", "boolean", "array", "object"}:
-                    typ = "string"
+                typ = _scalar_type((p.get("schema") or {}).get("type") or p.get("type") or "string")
                 spec_p: dict[str, Any] = {"type": typ, "in": p["in"]}
                 if p.get("description"):
                     spec_p["description"] = _trim(p["description"], 120)
@@ -199,7 +210,11 @@ def from_openapi(slug: str, entry: dict[str, Any], spec: dict[str, Any]) -> dict
                         required.append(name)
 
             if method in {"post", "put", "patch"} and not body_schema:
-                continue  # opaque bodies: skip rather than guess
+                # No schema published: expose a raw JSON body so the write is still reachable.
+                params.setdefault("body", {
+                    "type": "object", "in": "body",
+                    "description": "Raw JSON body forwarded to the endpoint",
+                })
 
             tier = "read" if method == "get" else ("destructive" if method == "delete" else "write")
             actions.append({

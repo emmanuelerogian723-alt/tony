@@ -1,21 +1,21 @@
 {
-  "generated_at": "2026-11-07T12:38:35Z",
-  "apps": 7854,
-  "registry_apps": 7789,
+  "generated_at": "2026-11-07T14:28:07Z",
+  "apps": 7922,
+  "registry_apps": 7857,
   "curated_apps": 65,
-  "actions_registry": 19915,
+  "actions_registry": 40518,
   "by_source": {
-    "openapi": 2329,
+    "openapi": 2400,
     "nango": 1130,
-    "pipedream": 2717,
+    "pipedream": 2714,
     "activepieces": 330,
     "n8n": 111,
     "homeassistant": 1172
   },
   "by_tier": {
-    "actions": 2329,
-    "directory": 4730,
+    "actions": 2400,
+    "directory": 4727,
     "proxy": 730
   },
-  "build_seconds": 9.8
+  "build_seconds": 10.6
 }

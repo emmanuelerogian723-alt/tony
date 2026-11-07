@@ -53,6 +53,41 @@ def stats() -> dict[str, Any]:
     return {**base, "runs": runs, "connections": conns, "version": __version__}
 
 
+@router.get("/meta")
+def meta() -> dict[str, Any]:
+    """Agent-facing manifest: what Tony is, what it can do, how to call it."""
+    base = catalog.stats()
+    writes = 0
+    try:
+        for spec in catalog.apps.values():
+            for act in spec.actions:
+                if act.tier in ("write", "destructive"):
+                    writes += 1
+    except Exception:
+        writes = 0
+    return {
+        "name": "Tony",
+        "version": __version__,
+        "summary": "Self-hosted integration gateway: one HTTP call to run any action in any app.",
+        "apps": base["apps"],
+        "actions": base["actions"],
+        "write_actions": writes,
+        "reads": base["actions"] - writes,
+        "auth": {"scheme": "Bearer", "header": "Authorization",
+                 "note": "Workspace API key (tk_live_…) or a browser session cookie."},
+        "endpoints": {
+            "search_apps": "GET /v1/apps?search=&category=&tier=&limit=&offset=",
+            "search_actions": "GET /v1/actions?q=&limit=",
+            "app_detail": "GET /v1/apps/{slug}",
+            "run": "POST /v1/execute {action, args, approved, dry_run}",
+            "approve": "POST /v1/runs/{run_id}/approve",
+            "mcp": "POST /mcp (JSON-RPC, every action is a tool)",
+            "openapi": "GET /openapi.json",
+        },
+        "docs": {"openapi": "/openapi.json", "mcp": "/mcp", "ui": "/account"},
+    }
+
+
 @router.get("/apps")
 def list_apps(search: str = "", category: str = "", tier: str = "", source: str = "",
               with_actions: bool = False, limit: int = 60, offset: int = 0) -> dict[str, Any]:

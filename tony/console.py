@@ -306,7 +306,9 @@ async function doSignup(ev){
   const b = ev.target.querySelector('button[type=submit]'); b.disabled = true; b.textContent='Creating…';
   try{
     const d = await api('/v1/account/signup', {method:'POST', body:{name, email, password}});
-    S.user = d.user; location.hash='#overview'; showApp(); toast('Account created');
+    authMode('login'); el('li-email').value = (d.email || email); el('li-pass').value = '';
+    authMsg('Account created. Sign in to open your workspace.', 'info');
+    el('li-pass').focus();
   }catch(e){ authMsg(e.message) } finally { b.disabled=false; b.textContent='Create account' }
 }
 async function signOut(){
@@ -459,10 +461,11 @@ async function openApp(slug){
 }
 function sheetTab(tab){
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.t===tab));
-  el('sheet-bd').innerHTML = tab==='connect' ? connectHTML() : actionsHTML();
-  if(tab==='connect') wireConnect();
-  else { el('act-list').querySelectorAll('.act').forEach(b=>b.onclick=()=>pickAction(+b.dataset.i));
-         pickAction(0) }
+  if(tab==='connect'){ el('sheet-bd').innerHTML = connectHTML(); wireConnect(); return }
+  if(tab==='code'){ el('sheet-bd').innerHTML = codeHTML(); wireCode(); return }
+  el('sheet-bd').innerHTML = actionsHTML();
+  el('act-list').querySelectorAll('.act').forEach(b=>b.onclick=()=>pickAction(+b.dataset.i));
+  pickAction(0);
 }
 function actionsHTML(){
   const acts = S.cur.actions||[];
@@ -475,7 +478,11 @@ function actionsHTML(){
     '<span class="tiny muted" id="p-meta"></span></div>'+
     '<pre class="out" id="p-out">Pick an action.</pre>'+
     '<div class="row" style="margin-top:12px;gap:8px"><button class="btn acc" id="runbtn" style="flex:1" disabled>Run action</button>'+
-    '<label class="row tiny" style="gap:6px"><input type="checkbox" id="p-dry"> dry run</label></div>';
+    '<label class="row tiny" style="gap:6px"><input type="checkbox" id="p-dry"> dry run</label></div>'+
+    '<div id="approve-box" class="card pad" style="display:none;margin-top:12px;border-color:rgba(163,34,23,.35);background:#FDF3F1">'+
+    '<b style="font-size:13.5px">This writes to '+esc((S.cur&&S.cur.name)||'the app')+'</b>'+
+    '<p class="tiny" style="margin:6px 0 10px;color:var(--ink-2)" id="approve-msg"></p>'+
+    '<button class="btn sm" id="approve-btn" style="background:var(--bad);border-color:var(--bad)">Approve and run once</button></div>';
 }
 function pickAction(i){
   const a = S.cur.actions[i]; S.act = a;
@@ -514,15 +521,62 @@ async function runAction(){
   });
   const out = el('p-out'), meta = el('p-meta'), btn = el('runbtn');
   btn.disabled = true; out.textContent = 'Running…'; meta.textContent='';
+  el('approve-box').style.display = 'none';
   const t0 = performance.now();
   try{
     const d = await api('/v1/execute', {method:'POST', body:{action:S.cur.slug+'.'+a.slug, entity_id:'default',
-      args, approved:true, dry_run: el('p-dry').checked}});
-    meta.textContent = (d.status||'') + ' · ' + Math.round(performance.now()-t0) + 'ms';
+      args, approved:false, dry_run: el('p-dry').checked}});
+    meta.textContent = (d.status==='pending_approval' ? 'needs approval' : (d.status||'')) + ' · ' +
+      Math.round(performance.now()-t0) + 'ms';
     out.textContent = JSON.stringify(d, null, 2);
+    if(d.status === 'pending_approval') showApproval(d, args);
   }catch(e){ out.textContent = 'Error: ' + e.message; meta.textContent = '' }
   btn.disabled = false;
 }
+function showApproval(d, args){
+  const box = el('approve-box'); box.style.display='block';
+  el('approve-msg').textContent = (d.tier==='destructive' ? 'Destructive action. ' : 'Write action. ') +
+    'Tony paused it before touching ' + ((S.cur&&S.cur.name)||'the app') + '. Approve to send this exact request once.';
+  el('approve-btn').onclick = async()=>{
+    const btn = el('approve-btn'); btn.disabled = true; btn.textContent='Approving…';
+    try{
+      const r = await api('/v1/runs/'+encodeURIComponent(d.run_id)+'/approve', {method:'POST'});
+      el('p-out').textContent = JSON.stringify(r, null, 2);
+      el('p-meta').textContent = r.ok ? 'approved · ' + (r.latency_ms||0) + 'ms' : 'approved · failed';
+      if(r.ok){ box.style.display='none'; toast('Ran with write access') }
+    }catch(e){ toast(e.message) } finally { btn.disabled=false; btn.textContent='Approve and run once' }
+  };
+}
+
+/* code tab */
+function codeHTML(){
+  const d = S.cur, a = (S.cur.actions||[])[0] || {slug:'list'};
+  const action = d.slug + '.' + a.slug;
+  const base = CFG.public_url || location.origin;
+  const key = 'tk_live_YOUR_KEY';
+  const curl = 'curl -X POST ' + base + '/v1/execute \\\n  -H "Authorization: Bearer ' + key + '" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"action":"' + action + '","entity_id":"default","args":{}}\'';
+  const py = 'import httpx\n\nr = httpx.post(\n    "' + base + '/v1/execute",\n    headers={"Authorization": "Bearer ' + key + '"},\n    json={"action": "' + action + '", "entity_id": "default", "args": {}},\n    timeout=60,\n)\nprint(r.json()["data"])';
+  const js = "const r = await fetch('" + base + "/v1/execute', {\n  method: 'POST',\n  headers: { 'Authorization': 'Bearer " + key + "', 'Content-Type': 'application/json' },\n  body: JSON.stringify({ action: '" + action + "', entity_id: 'default', args: {} }),\n});\nconst out = await r.json();\nconsole.log(out.data);";
+  const mcp = JSON.stringify({ mcpServers: { tony: { type:'http', url: base + '/mcp',
+      headers: { Authorization: 'Bearer ' + key } } } }, null, 2);
+  const tool = JSON.stringify({ name: action.replace('.', '__'), description: a.name,
+      input_schema: { type:'object', properties: a.params||{}, required: a.required||[] } }, null, 2);
+  const block = (label, code, id)=>'<div class="row" style="margin:14px 0 6px"><b style="font-size:12.5px">'+label+
+    '</b><span class="sp"></span><button class="btn ghost sm" data-copy="'+id+'">Copy</button></div>'+
+    '<pre class="out" id="'+id+'">'+esc(code)+'</pre>';
+  return '<p class="tiny muted" style="margin:0 0 4px">Every action in this app is callable from your own agent. '+
+    'Create a key in <b>API keys</b>, then paste these.</p>'+
+    block('curl', curl, 'cs-curl') + block('Python', py, 'cs-py') + block('JavaScript', js, 'cs-js') +
+    block('MCP client (Claude, Cursor, any agent)', mcp, 'cs-mcp') + block('Tool schema for an LLM', tool, 'cs-tool');
+}
+function wireCode(){
+  document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=async()=>{
+    const t = el(b.dataset.copy).textContent;
+    try{ await navigator.clipboard.writeText(t); b.textContent='Copied'; setTimeout(()=>b.textContent='Copy',1400) }
+    catch(e){ toast('Select and copy manually') }
+  });
+}
+
 /* connect tab */
 function connectHTML(){
   const d = S.cur, conn = S.conns.find(x=>x.app===d.slug && x.status==='active');
@@ -691,7 +745,8 @@ def _google_script(client_id: str) -> str:
 def console_html(user: Any = None) -> str:
     import json
 
-    cfg = {"google_client_id": settings.google_client_id, "demo_open": settings.demo_open}
+    cfg = {"google_client_id": settings.google_client_id, "demo_open": settings.demo_open,
+           "public_url": (settings.base_url or "").rstrip("/")}
     me = None
     if user is not None:
         from .accounts import public_user
@@ -768,6 +823,7 @@ def console_html(user: Any = None) -> str:
     <nav id="rail-nav" style="display:grid;gap:3px"></nav>
     <div class="rail-foot">
       <button class="who" id="who" onclick="go('profile')"></button>
+      <button class="nav" onclick="signOut()" style="margin-top:4px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M15 12H4m0 0 3.5-3.5M4 12l3.5 3.5M13 4h5a2 2 0 012 2v12a2 2 0 01-2 2h-5"/></svg><span>Sign out</span></button>
     </div>
   </aside>
 
@@ -881,6 +937,7 @@ def console_html(user: Any = None) -> str:
   <div class="tabs">
     <button data-t="actions" class="on" onclick="sheetTab('actions')">Actions</button>
     <button data-t="connect" onclick="sheetTab('connect')">Connect</button>
+    <button data-t="code" onclick="sheetTab('code')">Code</button>
   </div>
   <div class="sheet-bd" id="sheet-bd"></div>
 </div></div>

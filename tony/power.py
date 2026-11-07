@@ -258,12 +258,19 @@ def _compact(data: Any) -> Any:
             blob[:MAX_TOOL_RESULT_CHARS]}
 
 
-def _items_of(step: dict[str, Any]) -> list[dict[str, Any]]:
+def _raw_items(step: dict[str, Any]) -> list[Any]:
     data = (step.get("data") or {})
     inner = data.get("data", data) if isinstance(data, dict) else data
-    if isinstance(inner, list):
-        return [x for x in inner if isinstance(x, dict)]
-    return []
+    if isinstance(inner, dict):
+        for key in ("items", "results", "data", "stories"):
+            if isinstance(inner.get(key), list):
+                return inner[key]
+        return []
+    return inner if isinstance(inner, list) else []
+
+
+def _items_of(step: dict[str, Any]) -> list[dict[str, Any]]:
+    return [x for x in _raw_items(step) if isinstance(x, dict)]
 
 
 def _headline(item: dict[str, Any]) -> str:
@@ -282,15 +289,25 @@ def _summarise(goal: str, steps: list[dict[str, Any]]) -> str:
     last = good[-1]
     lines = [f"{last['app']}.{last['action']} answered in {last.get('latency_ms', 0)} ms."]
     items = _items_of(last)
+    raw = _raw_items(last)
+    if not items and raw and isinstance(raw[0], (int, str, float)):
+        lines.append(f"{len(raw)} id(s) returned, first is {raw[0]}. The detail call follows.")
     if items:
         lines.append(f"{len(items)} result(s).")
         for item in items[:5]:
             head = _headline(item)
             if head:
                 lines.append(f"• {head}")
-    elif isinstance((last.get("data") or {}).get("data", last.get("data")), dict):
+    else:
         inner = (last.get("data") or {}).get("data", last.get("data"))
-        lines.append("Fields: " + ", ".join(list(inner)[:8]) + ".")
+        if isinstance(inner, dict):
+            head = _headline(inner)
+            if head:
+                lines.append(f"• {head}")
+                extra = inner.get("score") or inner.get("url") or inner.get("html_url")
+                if extra:
+                    lines.append(f"  {str(extra)[:120]}")
+            lines.append("Fields: " + ", ".join(list(inner)[:8]) + ".")
     if len(good) > 1:
         lines.append(f"{len(good) - 1} extra step(s) ran before that.")
     return "\n".join(lines)
@@ -395,14 +412,18 @@ async def agent(body: AgentIn, request: Request) -> dict[str, Any]:
         first = steps[0]
         spec = next((x for x in specs if x.slug == first["app"]), specs[0])
         items = _items_of(first)
+        raw = _raw_items(first)
+        value, id_key = None, ""
         if items:
             id_key = next((k for k in ("id", "key", "uuid", "number") if items[0].get(k) is not None), "")
             value = items[0].get(id_key) if id_key else None
+        elif raw and isinstance(raw[0], (int, str, float)):
+            value = raw[0]
             if value not in (None, ""):
                 follow = next((a for a in spec.actions
                                if a.tier == "read" and a.slug != first["action"]
                                and len(a.required or []) == 1
-                               and (a.required[0] in {"id", "item_id", "story_id", "issue_number", "number"})), None)
+                               and "random" not in (a.url or "")), None)
                 if follow is not None:
                     steps.append(await _run_one(ws, entity, spec.slug, follow.slug,
                                                 {follow.required[0]: value}, body.dry_run))

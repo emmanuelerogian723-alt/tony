@@ -211,11 +211,47 @@ async def _chat(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | No
     return None
 
 
-def _score_app(goal: str, spec: Any) -> int:
-    words = set(re.findall(r"[a-z0-9]{3,}", goal.lower()))
-    hay = " ".join([spec.slug, spec.name, spec.category, spec.description or ""]).lower()
-    score = sum(3 for w in words if w in hay)
-    score += sum(1 for a in spec.actions if any(w in a.slug or w in a.name.lower() for w in words))
+STOPWORDS = {"the", "and", "for", "with", "from", "this", "that", "into", "then", "right", "now", "please",
+             "can", "you", "get", "give", "show", "make", "let", "about", "what", "which", "how", "all", "any",
+             "top", "best", "summary", "summarize", "summarise", "list"}
+
+
+def _score_app(goal: str, spec: Any) -> float:
+    """How well an app fits the goal.
+
+    Name and slug evidence outweighs description text, and action matches are
+    capped, because a 900-action cloud API used to win on volume alone even when
+    the user clearly asked for something like Hacker News.
+    """
+    words = {w for w in re.findall(r"[a-z0-9]{3,}", goal.lower()) if w not in STOPWORDS}
+    if not words:
+        return 0.0
+    slug = spec.slug.lower()
+    name = (spec.name or "").lower()
+    name_tokens = set(re.findall(r"[a-z0-9]{3,}", f"{slug} {name}"))
+    desc = (spec.description or "").lower()
+    cat = (spec.category or "").lower()
+    score = 0.0
+    for w in words:
+        if w in name_tokens:
+            score += 12
+        elif w in slug or w in name:
+            score += 6
+        elif w in desc:
+            score += 3
+        elif w in cat:
+            score += 2
+    hits = 0
+    for a in spec.actions[:400]:
+        hay = f"{a.slug} {a.name}".lower()
+        if any(w in hay for w in words):
+            hits += 1
+            if hits >= 8:
+                break
+    score += hits * 0.6
+    if getattr(spec, "source", "") == "curated":
+        score += 4
+    score -= min(len(slug) * 0.05, 3)   # long generated slugs lose ties to real names
     return score
 
 
@@ -377,10 +413,14 @@ async def agent(body: AgentIn, request: Request) -> dict[str, Any]:
     if body.apps:
         specs = _pick_apps(body.apps)
     else:
-        ranked = sorted(catalog.apps.values(), key=lambda s: _score_app(goal, s), reverse=True)
-        specs = [s for s in ranked[:3] if _score_app(goal, s) > 0]
+        ranked = sorted(catalog.apps.values(),
+                        key=lambda s: (_score_app(goal, s), -len(s.slug)), reverse=True)
+        specs = [s for s in ranked[:3] if _score_app(goal, s) >= 6]
         if not specs:
-            specs = [s for s in ranked[:1] if s.actions]
+            return {"answer": ("I could not match that goal to an app. Name the app you want "
+                               "(for example 'hackernews' or 'github') or use GET /v1/apps?q= to search the catalogue."),
+                    "steps": [], "elapsed_ms": int((time.perf_counter() - started) * 1000),
+                    "engine": "no-match"}
     if not specs:
         return {"answer": "No app in the catalogue matches that. Search with GET /v1/apps?q=.",
                 "steps": [], "elapsed_ms": 0, "engine": "none"}

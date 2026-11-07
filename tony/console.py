@@ -383,6 +383,7 @@ async function signOut(){
 
 /* ── routing ────────────────────────────────────────────── */
 const NAV = [['overview','Overview','M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5'],
+             ['agent','Agent','M12 3v3m0 12v3M3 12h3m12 0h3M12 8.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z'],
              ['apps','Apps','M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v6H4zM13 14h7v6h-7z'],
              ['connections','Connections','M9 15l6-6M7.5 4.5 6 6a4 4 0 105.7 5.7M16.5 19.5 18 18a4 4 0 10-5.7-5.7'],
              ['runs','Activity','M3 12h4l2.5-7 4 14L16 12h5'],
@@ -418,13 +419,62 @@ function go(page){
   if(page==='billing'){ loadBilling() }
   if(page==='sessions'){ loadSessions() }
   if(page==='ecosystem'){ loadEcosystem() }
+  if(page==='agent'){ mountAgent() }
+}
+
+/* ── agent ──────────────────────────────────────────────── */
+let AG = {writes:false, on:false};
+const AG_EX = ['summarise the top hacker news stories right now',
+               'look up a random wikipedia article and summarise it',
+               'find the newest stories on the front page and pick the best one',
+               'what is trending in tech today'];
+function mountAgent(){
+  if(AG.on) return; AG.on = true;
+  const box = el('ag-goal'), runBtn = el('ag-run');
+  el('ag-example').onclick = ()=>{ box.value = AG_EX[Math.floor(Math.random()*AG_EX.length)]; };
+  el('ag-writes').onclick = ()=>{
+    AG.writes = !AG.writes;
+    el('ag-writes').textContent = AG.writes ? 'Writes allowed' : 'Allow writes';
+    el('ag-mode').textContent = AG.writes ? 'writes on' : 'writes off';
+    el('ag-mode').style.borderColor = AG.writes ? 'var(--ink)' : '';
+  };
+  runBtn.onclick = runAgent;
+  box.addEventListener('keydown', e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='Enter') runAgent(); });
+}
+async function runAgent(){
+  const goal = (el('ag-goal').value||'').trim();
+  if(!goal){ toast('Describe the outcome first'); return; }
+  const btn = el('ag-run'), out = el('ag-answer'), steps = el('ag-steps');
+  btn.disabled = true; btn.textContent = 'Working…';
+  el('ag-meta').textContent = '';
+  out.innerHTML = '<span class="muted">Choosing apps and planning…</span>';
+  steps.innerHTML = '<div class="empty">Running…</div>';
+  try{
+    const r = await fetch('/v1/agent', {method:'POST', headers:authHeaders(),
+      body: JSON.stringify({goal, max_steps: 4, approve_writes: AG.writes})});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || ('HTTP '+r.status));
+    el('ag-meta').textContent = (d.engine||'') + ' · ' + (d.elapsed_ms||0) + ' ms';
+    out.textContent = d.answer || 'No answer came back.';
+    const rows = (d.steps||[]).map(st=>{
+      const good = st.ok;
+      return '<div class="row" style="align-items:flex-start;gap:10px;padding:9px 0;border-top:1px solid var(--line)">'+
+        '<span class="mono-b" style="color:'+(good?'#12724a':'#a33')+'">'+(good?'OK':'FAIL')+'</span>'+
+        '<div style="flex:1;min-width:0"><div class="mono-b">'+esc(st.app||'-')+'.'+esc(st.action||'-')+'</div>'+
+        '<div class="tiny muted" style="margin-top:2px">'+esc((st.error||'').slice(0,200) || ((st.latency_ms||0)+' ms'))+'</div></div></div>';
+    }).join('');
+    steps.innerHTML = rows || '<div class="empty">The model answered without calling a tool.</div>';
+  }catch(e){
+    out.textContent = 'That run failed: ' + e.message;
+    steps.innerHTML = '<div class="empty">No calls recorded.</div>';
+  }finally{ btn.disabled = false; btn.textContent = 'Run'; }
 }
 
 /* ── boot ───────────────────────────────────────────────── */
 async function boot(){
   renderWho(); buildNav(); checkBillingReturn();
   const h = (location.hash||'#overview').slice(1);
-  go(['overview','apps','connections','runs','keys','sessions','billing','ecosystem','profile'].includes(h) ? h : 'overview');
+  go(['overview','agent','apps','connections','runs','keys','sessions','billing','ecosystem','profile'].includes(h) ? h : 'overview');
 }
 function renderWho(){
   const u = S.user || {};
@@ -1294,6 +1344,31 @@ def console_html(user: Any = None) -> str:
         <div class="card pad">
           <div class="row wrap"><button class="btn ghost sm" onclick="signOut()">Sign out</button>
             <span class="sp"></span><button class="btn ghost sm" style="color:var(--bad);border-color:rgba(163,34,23,.3)" onclick="deleteAccount()">Delete account</button></div>
+        </div>
+      </section>
+      <section class="pg" id="p-agent">
+        <div class="hd"><div><h1>Agent</h1><p>Describe the outcome. Tony plans across apps, runs the calls, and shows what each one returned.</p></div>
+          <span class="pill" id="ag-mode">writes off</span></div>
+        <div class="grid" style="grid-template-columns:1.1fr .9fr;gap:12px">
+          <div class="card pad">
+            <b style="font-size:14px">Goal</b>
+            <textarea id="ag-goal" class="inp" rows="5" style="width:100%;margin-top:10px;resize:vertical;font-family:var(--mono);font-size:12.5px"
+              placeholder="summarise the top hacker news stories right now"></textarea>
+            <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+              <button class="btn acc" id="ag-run">Run</button>
+              <button class="btn" id="ag-writes">Allow writes</button>
+              <button class="btn" id="ag-example">Try an example</button>
+            </div>
+            <p class="tiny muted" style="margin-top:10px">Every call is recorded in Activity, including failures.</p>
+          </div>
+          <div class="card pad">
+            <div class="row"><b style="font-size:14px">Answer</b><span class="sp"></span><span class="tiny muted" id="ag-meta"></span></div>
+            <div id="ag-answer" style="margin-top:10px;font-size:13.5px;line-height:1.6">Nothing has run yet.</div>
+          </div>
+        </div>
+        <div class="card pad" style="margin-top:12px">
+          <div class="row"><b style="font-size:14px">Steps</b><span class="sp"></span><span class="tiny muted">app.action · status · latency</span></div>
+          <div id="ag-steps" style="margin-top:8px"><div class="empty">No calls yet.</div></div>
         </div>
       </section>
       <section class="pg" id="p-ecosystem">

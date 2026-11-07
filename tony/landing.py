@@ -358,7 +358,7 @@ hr,.rule{background:var(--line)}
   border:1px solid var(--line);border-radius:16px;background:#fff}
 .tier.hot{border-color:var(--ink)!important;box-shadow:0 2px 4px rgba(9,9,11,.05),0 26px 60px -22px rgba(9,9,11,.28)!important}
 .tier .tname{font-family:var(--serif);font-size:21px;letter-spacing:-.02em}
-.tier .tag{font-size:13px;color:var(--muted);min-height:38px;line-height:1.45}
+.tier .tag{font-size:13px;color:var(--muted);min-height:38px;line-height:1.45;white-space:normal;overflow-wrap:anywhere}
 .tier .amt{display:flex;align-items:baseline;gap:6px}
 .tier .amt b{font-family:var(--serif);font-size:38px;letter-spacing:-.035em;line-height:1}
 .tier .amt span{font-size:12px;color:var(--muted)}

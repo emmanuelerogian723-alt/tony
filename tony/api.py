@@ -658,3 +658,40 @@ def create_workspace_api(body: WorkspaceIn, request: Request) -> dict[str, Any]:
     from .db import create_workspace
     ws, key = create_workspace(body.name)
     return {"workspace_id": ws.id, "api_key": key, "note": "Store this key now, it is not shown again."}
+
+
+@router.post("/admin/db-setup", include_in_schema=False)
+def db_setup(request: Request, body: dict[str, Any]) -> dict[str, Any]:
+    """Create a database inside this instance for an adjacent service.
+
+    Guarded by TONY_SETUP_TOKEN because it is a one-time provisioning hook, not a
+    feature. It only ever creates a database; it never drops or alters anything.
+    """
+    import os as _os
+    import re as _re
+
+    token = request.headers.get("x-setup-token", "")
+    expected = _os.getenv("TONY_SETUP_TOKEN", "")
+    if not expected or token != expected:
+        raise HTTPException(401, detail="Bad setup token")
+    name = str(body.get("database") or "").strip()
+    if not _re.fullmatch(r"[a-z][a-z0-9_]{2,30}", name):
+        raise HTTPException(400, detail="database must be a safe identifier")
+    import psycopg2
+    from .config import settings as _settings
+
+    url = _os.getenv("DATABASE_URL", "") or getattr(_settings, "database_url", "")
+    if not url:
+        raise HTTPException(400, detail="No DATABASE_URL on this instance")
+    admin_url = _re.sub(r"/[^/?]+(\?|$)", "/postgres\\1", url, count=1)
+    try:
+        conn = psycopg2.connect(admin_url, connect_timeout=15)
+        conn.autocommit = True
+        cur = conn.cursor()
+        cur.execute("select 1 from pg_database where datname = %s", (name,))
+        if cur.fetchone():
+            return {"ok": True, "database": name, "created": False}
+        cur.execute(f'CREATE DATABASE "{name}"')
+        return {"ok": True, "database": name, "created": True}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, detail=f"Could not create database: {exc}") from exc

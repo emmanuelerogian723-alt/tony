@@ -17,7 +17,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from . import __version__
-from . import nango
 from .auth import rate_limit, workspace_from_request
 from .billing import check_capacity, check_run, enforce_session, rate_for, resolve_session, touch_session
 from .catalog import catalog
@@ -298,53 +297,6 @@ def connect_key(app_slug: str, body: KeyIn, request: Request) -> dict[str, Any]:
     _entity(ws, body.entity_id)
     acct = store_api_key(ws, body.entity_id, spec, values, body.label)
     return {"mode": "key", "connection": public_redact(acct)}
-
-
-@router.get("/nango/status")
-def nango_status() -> dict[str, Any]:
-    return {"configured": nango.configured(), "host": nango.host(),
-            "webhook": "/v1/nango/webhook", "provider_config_key": "app slug"}
-
-
-@router.post("/connections/{app_slug}/nango-session")
-async def nango_session(app_slug: str, request: Request, entity_id: str = "default") -> dict[str, Any]:
-    ws, _ = workspace_from_request(request)
-    spec = catalog.get(app_slug)
-    if not spec:
-        raise HTTPException(404, detail="Unknown app")
-    if not nango.configured():
-        return JSONResponse(status_code=409, content={"needs_setup": True, "app": app_slug,
-            "detail": "Nango is not configured. Set NANGO_HOST and NANGO_SECRET_KEY.",
-            "setup_endpoint": "/v1/nango/status"})
-    check_capacity(ws, "connections")
-    try:
-        sess = await nango.create_session(spec.slug, ws, _entity(ws, entity_id))
-    except Exception as exc:
-        raise HTTPException(502, detail=f"Nango session failed: {exc}") from exc
-    return {"mode": "nango", "authorization_url": sess.get("url"), "app": spec.slug}
-
-
-@router.post("/nango/webhook")
-async def nango_webhook(request: Request) -> dict[str, Any]:
-    raw = await request.body()
-    sig = request.headers.get("x-nango-signature", "") or request.headers.get("x-signature", "")
-    if not nango.verify_webhook(raw, sig):
-        raise HTTPException(401, detail="Bad Nango signature")
-    body = json.loads(raw or b"{}")
-    provider = body.get("providerConfigKey") or body.get("provider_config_key") or ""
-    connection_id = body.get("connectionId") or body.get("connection_id") or ""
-    end_user = str((body.get("endUser") or body.get("end_user") or {}).get("id") or body.get("endUserId") or "")
-    if ":" not in end_user:
-        raise HTTPException(400, detail="Nango end user must look like '<workspace>:<entity>'")
-    ws, entity = end_user.split(":", 1)
-    spec = catalog.get(provider)
-    if not spec or not connection_id:
-        raise HTTPException(404, detail="Unknown app or missing connectionId")
-    creds = await nango.fetch_credentials(provider, connection_id)
-    if not creds:
-        raise HTTPException(502, detail="Nango returned no credentials")
-    nango.store_connection(ws, entity, spec, creds)
-    return {"ok": True, "app": provider, "entity_id": entity}
 
 
 @router.delete("/connections/{app_slug}")
@@ -677,6 +629,7 @@ def db_setup(request: Request, body: dict[str, Any]) -> dict[str, Any]:
     name = str(body.get("database") or "").strip()
     if not _re.fullmatch(r"[a-z][a-z0-9_]{2,30}", name):
         raise HTTPException(400, detail="database must be a safe identifier")
+    drop = bool(body.get("drop"))
     import psycopg2
     from .config import settings as _settings
 
@@ -689,7 +642,16 @@ def db_setup(request: Request, body: dict[str, Any]) -> dict[str, Any]:
         conn.autocommit = True
         cur = conn.cursor()
         cur.execute("select 1 from pg_database where datname = %s", (name,))
-        if cur.fetchone():
+        exists = bool(cur.fetchone())
+        if drop:
+            if name in {"postgres", "template0", "template1"}:
+                raise HTTPException(400, detail="refusing to drop a system database")
+            if not exists:
+                return {"ok": True, "database": name, "dropped": False}
+            cur.execute("select pg_terminate_backend(pid) from pg_stat_activity where datname = %s", (name,))
+            cur.execute(f'DROP DATABASE "{name}"')
+            return {"ok": True, "database": name, "dropped": True}
+        if exists:
             return {"ok": True, "database": name, "created": False}
         cur.execute(f'CREATE DATABASE "{name}"')
         return {"ok": True, "database": name, "created": True}

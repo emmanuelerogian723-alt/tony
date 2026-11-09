@@ -50,6 +50,17 @@ def workspace_from_key(key: str) -> str | None:
 
 def workspace_from_request(request: Request) -> tuple[str, bool]:
     """Returns (workspace_id, is_demo_session). Raises 401 when unavailable."""
+    from . import agenttokens
+
+    raw = _extract_key(request.headers.get("authorization"), request.headers.get("x-api-key"))
+    scope = agenttokens.verify(raw) if raw else None
+    if scope:
+        request.state.agent_scope = scope
+        return scope["ws"], False
+    return _workspace_from_request_inner(request)
+
+
+def _workspace_from_request_inner(request: Request) -> tuple[str, bool]:
     key = _extract_key(request.headers.get("authorization"), request.headers.get("x-api-key"))
     if key:
         ws = workspace_from_key(key)

@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from . import __version__
+from . import agenttokens
 from .auth import rate_limit, workspace_from_request
 from .billing import check_capacity, check_run, enforce_session, rate_for, resolve_session, touch_session
 from .catalog import catalog
@@ -322,6 +323,32 @@ class ExecuteIn(BaseModel):
     source: str = "api"
 
 
+class AgentTokenIn(BaseModel):
+    name: str = "agent"
+    apps: list[str] = Field(default_factory=list)
+    tiers: list[str] = Field(default_factory=lambda: ["read"])
+    ttl_days: int = 7
+
+
+@router.post("/agent-tokens")
+def mint_agent_token(body: AgentTokenIn, request: Request) -> dict[str, Any]:
+    """Give an AI agent its own narrow key instead of your full workspace key."""
+    ws, _ = workspace_from_request(request)
+    if getattr(request.state, "agent_scope", None):
+        raise HTTPException(403, detail="An agent token cannot mint another token")
+    unknown = [a for a in body.apps if not catalog.get(a)]
+    if unknown:
+        raise HTTPException(400, detail=f"Unknown app(s): {', '.join(unknown[:5])}")
+    return agenttokens.issue(ws, body.name, body.apps, body.tiers, body.ttl_days)
+
+
+@router.get("/agent-tokens/scopes")
+def agent_token_scopes(request: Request) -> dict[str, Any]:
+    payload = getattr(request.state, "agent_scope", None)
+    return {"agent_token": bool(payload), "scope": payload or {},
+            "description": agenttokens.describe(payload)}
+
+
 def _log_run(ws: str, entity: str, spec, action, status: str, result=None, request_payload=None,
              error: str = "") -> str:
     with session() as s:
@@ -353,6 +380,11 @@ async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
     if not resolved:
         raise HTTPException(404, detail=f"Unknown action '{body.action}'. Try app.action, e.g. github.list_repos")
     spec, action = resolved
+    scope = getattr(request.state, "agent_scope", None)
+    if not agenttokens.allows(scope, spec.slug, action.tier):
+        raise HTTPException(403, detail=(
+            f"This agent token grants {agenttokens.describe(scope)}, not "
+            f"{spec.slug}.{action.slug} ({action.tier})"))
     sess = resolve_session(request, ws)
     enforce_session(sess, spec.slug, action.tier)
     rate_limit(f"ws:{ws}", rate_for(ws))

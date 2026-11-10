@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from .billing import check_capacity, ensure_subscription, summary
+from . import auth0
 from .auth import rate_limit
 from .config import settings
 from .crypto import new_api_key
@@ -378,3 +379,57 @@ def remove_provider(app_slug: str, request: Request) -> dict[str, Any]:
 
     drop_provider(app_slug)
     return {"ok": True}
+
+
+# ── Auth0 (OIDC authorization code) ───────────────────────────────────────
+def _redirect_uri(request: Request) -> str:
+    base = (settings.base_url or str(request.base_url)).rstrip("/")
+    return f"{base}/v1/account/auth0/callback"
+
+
+@router.get("/auth0/login")
+def auth0_login(request: Request, next: str = "/account", connection: str = ""):
+    from fastapi.responses import RedirectResponse
+
+    if not auth0.configured():
+        raise HTTPException(503, detail="Auth0 is not configured on this server")
+    state = auth0.make_state(next)
+    return RedirectResponse(auth0.authorize_url(_redirect_uri(request), state, connection))
+
+
+@router.get("/auth0/callback")
+async def auth0_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    from fastapi.responses import RedirectResponse
+
+    if error:
+        return RedirectResponse(f"/account?auth_error={error}")
+    next_path = auth0.check_state(state)
+    if not next_path:
+        return RedirectResponse("/account?auth_error=bad_state")
+    if not code:
+        return RedirectResponse("/account?auth_error=missing_code")
+    try:
+        claims = await auth0.exchange(code, _redirect_uri(request))
+    except Exception as exc:  # noqa: BLE001
+        return RedirectResponse(f"/account?auth_error={type(exc).__name__}")
+
+    from fastapi import Response
+
+    response = Response()
+    email = claims["email"]
+    with session() as s:
+        user = s.scalar(select(User).where(User.email == email))
+        if user is None:
+            ws = _new_workspace(s, f"{claims['name']}'s workspace")
+            user = User(email=email, name=claims["name"], password_hash="", workspace_id=ws.id)
+            s.add(user)
+            s.flush()
+            ensure_subscription(s, user)
+        _start_session(s, user, request, response)
+        s.commit()
+
+    redirect = RedirectResponse(next_path if next_path.startswith("/") else "/account")
+    for header, value in response.headers.items():
+        if header.lower() == "set-cookie":
+            redirect.headers.append("set-cookie", value)
+    return redirect

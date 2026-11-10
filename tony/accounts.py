@@ -18,6 +18,7 @@ from sqlalchemy import select
 
 from .billing import check_capacity, ensure_subscription, summary
 from . import auth0
+from . import firebase
 from .auth import rate_limit
 from .config import settings
 from .crypto import new_api_key
@@ -515,3 +516,36 @@ def two_factor_disable(body: CodeIn, request: Request) -> dict[str, Any]:
         s.delete(row)
         s.commit()
     return {"enabled": False}
+
+
+# ── Firebase identity (email or Google, verified by Google's own keys) ────
+class FirebaseIn(BaseModel):
+    id_token: str
+
+
+@router.post("/firebase")
+def firebase_login(body: FirebaseIn, request: Request, response: Response) -> dict[str, Any]:
+    rate_limit(f"firebase:{_client_ip(request)}", 20)
+    if not firebase.enabled():
+        raise HTTPException(503, detail="Firebase sign-in is not configured on this server")
+    try:
+        claims = firebase.verify(body.id_token)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(401, detail=f"Firebase sign-in failed: {exc}") from exc
+    email = claims["email"]
+    with session() as s:
+        user = s.scalar(select(User).where(User.email == email))
+        if user is None:
+            ws = _new_workspace(s, f"{claims['name']}'s workspace")
+            user = User(email=email, name=claims["name"], picture=claims.get("picture", ""),
+                        workspace_id=ws.id)
+            s.add(user)
+            s.flush()
+            ensure_subscription(s, user)
+        _start_session(s, user, request, response)
+        return {"user": public_user(user), "provider": claims["provider"]}
+
+
+@router.get("/firebase/status")
+def firebase_status() -> dict[str, Any]:
+    return {"enabled": firebase.enabled(), "project": firebase.project_id()}

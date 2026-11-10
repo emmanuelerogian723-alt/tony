@@ -1,6 +1,7 @@
 """Tony console: signed-in workspace app (apps, connections, runs, keys, profile)."""
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from .config import settings
@@ -337,8 +338,35 @@ function authMsg(text, kind){
   const m = el('auth-msg'); m.className = 'msg' + (text ? ' on ' + (kind||'err') : ''); m.textContent = text||'';
 }
 let _gisTries = 0;
+function mountFirebaseGoogle(){
+  const fb = CFG.firebase || {};
+  if(!fb.api_key){ return false }
+  el('g-wrap').innerHTML = '<button id="fb-google" style="width:100%;padding:11px 14px;border-radius:9px;'+
+    'border:1px solid var(--line-2);background:#fff;color:#111;font-weight:600;cursor:pointer">'+
+    'Continue with Google</button>';
+  el('fb-google').onclick = async function(){
+    authMsg('');
+    try{
+      if(!window.firebase || !firebase.auth) throw new Error('Firebase is still loading. Try again in a second.');
+      if(!firebase.apps.length){
+        firebase.initializeApp({apiKey:fb.api_key, authDomain:fb.auth_domain, projectId:fb.project_id});
+      }
+      const provider = new firebase.auth.GoogleAuthProvider();
+      const cred = await firebase.auth().signInWithPopup(provider);
+      const token = await cred.user.getIdToken();
+      const d = await api('/v1/account/firebase', {method:'POST', body:{id_token:token}});
+      S.user = d.user; location.hash = '#overview'; showApp(); toast('Signed in as ' + d.user.email);
+    }catch(e){
+      const code = (e && (e.code || e.message)) || 'Google sign-in failed';
+      authMsg(String(code).replace('auth/',''));
+    }
+  };
+  return true;
+}
 function mountGoogle(){
-  if(!CFG.google_client_id){ el('g-wrap').innerHTML='<span class="tiny muted" style="padding:10px">Google sign-in is not configured on this server</span>'; return }
+  if(!CFG.google_client_id){
+    if(!mountFirebaseGoogle()) el('g-wrap').innerHTML='<span class="tiny muted" style="padding:10px">Google sign-in is not configured on this server</span>';
+    return }
   if(!window.google || !google.accounts){
     if(_gisTries++ < 40) return setTimeout(mountGoogle, 350);
     el('g-wrap').innerHTML='<span class="tiny muted" style="padding:10px">Could not load Google. Use email below.</span>'; return;
@@ -1101,6 +1129,13 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeSheet() });
 """
 
 
+def _firebase_scripts() -> str:
+    if not os.getenv("FIREBASE_API_KEY"):
+        return ""
+    return ('<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>'
+            '<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>')
+
+
 def _google_script(client_id: str) -> str:
     if not client_id:
         return ""
@@ -1111,6 +1146,9 @@ def console_html(user: Any = None) -> str:
     import json
 
     cfg = {"google_client_id": settings.google_client_id, "demo_open": settings.demo_open,
+           "firebase": {"api_key": (os.getenv("FIREBASE_API_KEY") or ""),
+                        "auth_domain": (os.getenv("FIREBASE_AUTH_DOMAIN") or f"{(os.getenv('FIREBASE_PROJECT_ID') or 'ominiassist-ai')}.firebaseapp.com"),
+                        "project_id": (os.getenv("FIREBASE_PROJECT_ID") or "ominiassist-ai")},
            "public_url": (settings.base_url or "").rstrip("/")}
     me = None
     if user is not None:
@@ -1437,6 +1475,7 @@ def console_html(user: Any = None) -> str:
 </div></div>
 
 <div id="toast"></div>
+{_firebase_scripts()}
 {_google_script(settings.google_client_id)}
 <script>{js}</script>
 </body></html>"""

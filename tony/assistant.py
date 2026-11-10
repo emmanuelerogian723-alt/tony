@@ -330,21 +330,26 @@ async def ask(body: AskIn, request: Request) -> dict[str, Any]:
     best_score, idx = ranked[0]
     topic = KB[idx]["topic"] if best_score >= 1 else "fallback"
 
+    curated = _render_answer(topic, ws) if topic != "fallback" else ""
     if topic == "fallback":
-        answer = (
-            "That one is outside what I track. I answer questions about Tony itself: plans and quotas, "
-            "connecting an app, keys and ownership, sessions, custom tools, batch calls, approvals, MCP, "
-            "SDKs, triggers, error codes and security. Try one of those, or open Console → Docs for the "
-            "full reference."
-        )
         with session() as s:
             s.add(AssistantGap(workspace_id=ws, question=body.message[:500]))
+        grounding = (
+            "No curated entry matched this question, so answer from your own knowledge as Tony's assistant. "
+            "Be concrete, and say plainly when you are unsure. Runtime facts you may rely on: 7,923 apps and "
+            "40,692 typed actions; POST /v1/agent to plan and execute; POST /v1/execute for a single action; "
+            "GET /v1/tools for tool schemas; /mcp for MCP clients; POST /v1/agent-tokens for scoped agent keys "
+            "with app names, tiers and expiry; authenticator two-factor and Firebase sign-in on accounts; "
+            "/v1/proxy for raw endpoints."
+        )
     else:
-        answer = _render_answer(topic, ws)
+        grounding = curated
 
-    polished = await _llm_reply(body.message, answer, body.history) if topic != "fallback" else None
-    if polished and len(polished) > 40:
-        answer = polished
+    polished = await _llm_reply(body.message, grounding, body.history)
+    answer = polished if (polished and len(polished) > 40) else (curated or (
+        "I can help with Tony itself (plans, quotas, connecting apps, keys, sessions, custom tools, batch, "
+        "approvals, MCP, SDKs, triggers, errors, security) and with general developer or writing work. "
+        "Ask again in a moment, or open Console then Docs for the full reference."))
 
     return {
         "answer": answer,

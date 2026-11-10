@@ -364,6 +364,7 @@ function mountFirebaseGoogle(){
   return true;
 }
 function mountGoogle(){
+  if(CFG.firebase && CFG.firebase.api_key && mountFirebaseGoogle()) return;
   if(!CFG.google_client_id){
     if(!mountFirebaseGoogle()) el('g-wrap').innerHTML='<span class="tiny muted" style="padding:10px">Google sign-in is not configured on this server</span>';
     return }

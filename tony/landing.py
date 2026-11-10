@@ -59,10 +59,11 @@ def _ticker() -> str:
 
 CSS = """
 :root{
-  --black:#040406; --coal:#08080c; --slate:#0c0c12; --slate-2:#111119;
-  --blue:#2f6bff; --blue-2:#5f8cff; --blue-3:#9dbaff; --blue-deep:#0d2a6b;
-  --white:#ffffff; --ink:#eef1f7; --ink-2:#b9c0cf; --mut:#8a91a2; --dim:#5b6272;
-  --line:rgba(255,255,255,.10); --line-2:rgba(255,255,255,.18); --line-blue:rgba(47,107,255,.42);
+  /* paper + ink + sky: the 2f6bff accent is retired but kept for reference */
+  --black:#f7f8fa; --coal:#ffffff; --slate:#f1f3f6; --slate-2:#e9edf2;
+  --blue:#0284c7; --blue-2:#0ea5e9; --blue-3:#7dd3fc; --blue-deep:#e0f2fe;
+  --white:#ffffff; --ink:#0a0c11; --ink-2:#3b4451; --mut:#5f6875; --dim:#8b939f;
+  --line:rgba(10,12,17,.10); --line-2:rgba(10,12,17,.16); --line-blue:rgba(14,165,233,.40);
   --display:"Bricolage Grotesque","Inter Tight",system-ui,sans-serif;
   --ui:"Manrope","Inter Tight",system-ui,-apple-system,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -81,24 +82,24 @@ svg{display:block}
 
 /* ── backdrop: real geometry ───────────────────────────────────────────── */
 .back{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:
-  radial-gradient(1100px 620px at 50% -12%,rgba(47,107,255,.20),transparent 66%),
-  radial-gradient(760px 560px at 92% 8%,rgba(47,107,255,.10),transparent 70%),var(--black)}
+  radial-gradient(1100px 620px at 50% -12%,rgba(14,165,233,.20),transparent 66%),
+  radial-gradient(760px 560px at 92% 8%,rgba(14,165,233,.10),transparent 70%),var(--black)}
 .back .mesh{position:absolute;inset:0;background-image:
-  linear-gradient(to right,rgba(255,255,255,.055) 1px,transparent 1px),
-  linear-gradient(to bottom,rgba(255,255,255,.055) 1px,transparent 1px);
+  linear-gradient(to right,rgba(10,12,17,.055) 1px,transparent 1px),
+  linear-gradient(to bottom,rgba(10,12,17,.055) 1px,transparent 1px);
   background-size:58px 58px;
   -webkit-mask-image:radial-gradient(ellipse 80% 62% at 50% 0%,#000 8%,transparent 76%);
   mask-image:radial-gradient(ellipse 80% 62% at 50% 0%,#000 8%,transparent 76%)}
-.back .ring{position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,.075)}
+.back .ring{position:absolute;border-radius:50%;border:1px solid rgba(10,12,17,.075)}
 .back .r1{width:1280px;height:1280px;left:50%;top:-880px;transform:translateX(-50%)}
 .back .r2{width:940px;height:940px;left:50%;top:-700px;transform:translateX(-50%);
-  border-color:rgba(47,107,255,.24)}
+  border-color:rgba(14,165,233,.24)}
 .back .r3{width:640px;height:640px;left:50%;top:-520px;transform:translateX(-50%);
-  border-style:dashed;border-color:rgba(255,255,255,.10);animation:spin 120s linear infinite}
+  border-style:dashed;border-color:rgba(10,12,17,.10);animation:spin 120s linear infinite}
 .back .arc{position:absolute;border-radius:50%;border:2px solid transparent;
-  border-top-color:rgba(47,107,255,.55);border-right-color:rgba(47,107,255,.15);
+  border-top-color:rgba(14,165,233,.55);border-right-color:rgba(14,165,233,.15);
   width:1500px;height:1500px;left:50%;top:-1080px;transform:translateX(-50%);
-  animation:spin 60s linear infinite;filter:drop-shadow(0 0 18px rgba(47,107,255,.35))}
+  animation:spin 60s linear infinite;filter:drop-shadow(0 0 18px rgba(14,165,233,.35))}
 .back .pluses{position:absolute;inset:0;background-image:none}
 @keyframes spin{to{transform:translateX(-50%) rotate(360deg)}}
 .cross{position:absolute;width:12px;height:12px;opacity:.35}
@@ -108,12 +109,12 @@ svg{display:block}
 .c1{left:7vw;top:22vh}.c2{right:9vw;top:34vh}.c3{left:16vw;top:68vh}.c4{right:18vw;top:76vh}
 
 .cursorlight{position:fixed;inset:0;z-index:1;pointer-events:none;
-  background:radial-gradient(420px circle at var(--mx,50%) var(--my,0%),rgba(47,107,255,.13),transparent 68%)}
+  background:radial-gradient(420px circle at var(--mx,50%) var(--my,0%),rgba(14,165,233,.13),transparent 68%)}
 
 /* ── chrome ────────────────────────────────────────────────────────────── */
 .wrap{width:min(1160px,91vw);margin-inline:auto;position:relative;z-index:2}
 .top{position:sticky;top:0;z-index:50;border-bottom:1px solid var(--line);
-  background:rgba(4,4,6,.72);backdrop-filter:blur(20px) saturate(150%)}
+  background:rgba(255,255,255,.80);backdrop-filter:blur(20px) saturate(150%)}
 .top .wrap{height:64px;display:flex;align-items:center;gap:20px}
 .mark{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:-.02em;font-size:16.5px}
 .mark .dish{width:27px;height:27px}
@@ -125,13 +126,13 @@ svg{display:block}
 .top nav a:hover::after{right:0}
 .grow{flex:1}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:42px;padding:0 18px;
-  border-radius:10px;border:1px solid var(--line-2);background:rgba(255,255,255,.03);color:#fff;
+  border-radius:10px;border:1px solid var(--line-2);background:rgba(10,12,17,.03);color:#fff;
   font-family:var(--ui);font-weight:600;font-size:13.5px;cursor:pointer;
   transition:transform .16s,background .2s,border-color .2s,box-shadow .25s}
-.btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.32)}
+.btn:hover{transform:translateY(-1px);background:rgba(10,12,17,.07);border-color:rgba(10,12,17,.32)}
 .btn.solid{background:var(--blue);border-color:transparent;
-  box-shadow:0 10px 30px -12px rgba(47,107,255,.95),inset 0 1px 0 rgba(255,255,255,.28)}
-.btn.solid:hover{background:#3f79ff;box-shadow:0 16px 40px -12px rgba(47,107,255,1),inset 0 1px 0 rgba(255,255,255,.3)}
+  box-shadow:0 10px 30px -12px rgba(14,165,233,.95),inset 0 1px 0 rgba(10,12,17,.28)}
+.btn.solid:hover{background:#3f79ff;box-shadow:0 16px 40px -12px rgba(14,165,233,1),inset 0 1px 0 rgba(10,12,17,.3)}
 .btn.ghost{background:transparent}
 .btn.sm{height:35px;padding:0 14px;font-size:12.5px;border-radius:9px}
 .btn.wide{width:100%}
@@ -142,9 +143,9 @@ svg{display:block}
 /* ── hero ──────────────────────────────────────────────────────────────── */
 .hero{padding:clamp(48px,7vw,92px) 0 0}
 .tag{display:inline-flex;align-items:center;gap:10px;height:31px;padding:0 14px 0 10px;border-radius:999px;
-  border:1px solid var(--line-blue);background:rgba(47,107,255,.10);font-family:var(--mono);font-size:10.5px;
+  border:1px solid var(--line-blue);background:rgba(14,165,233,.10);font-family:var(--mono);font-size:10.5px;
   letter-spacing:.14em;text-transform:uppercase;color:var(--blue-3)}
-.tag .led{width:6px;height:6px;border-radius:50%;background:var(--blue-2);box-shadow:0 0 0 4px rgba(47,107,255,.18);
+.tag .led{width:6px;height:6px;border-radius:50%;background:var(--blue-2);box-shadow:0 0 0 4px rgba(14,165,233,.18);
   animation:led 2.6s ease-in-out infinite}
 @keyframes led{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.86)}}
 .hero h1{font-family:var(--display);font-weight:600;font-size:clamp(38px,6.2vw,74px);line-height:1.06;padding-bottom:.06em;
@@ -160,8 +161,8 @@ svg{display:block}
 /* search */
 .find{margin-top:28px;position:relative;display:flex;align-items:center;gap:10px;padding:6px 6px 6px 15px;
   border:1px solid var(--line-2);border-radius:13px;background:rgba(12,12,18,.9);
-  box-shadow:0 0 0 1px rgba(47,107,255,.10),0 22px 50px -30px rgba(47,107,255,.7)}
-.find:focus-within{border-color:var(--line-blue);box-shadow:0 0 0 3px rgba(47,107,255,.14),0 22px 50px -30px rgba(47,107,255,.8)}
+  box-shadow:0 0 0 1px rgba(14,165,233,.10),0 22px 50px -30px rgba(14,165,233,.7)}
+.find:focus-within{border-color:var(--line-blue);box-shadow:0 0 0 3px rgba(14,165,233,.14),0 22px 50px -30px rgba(14,165,233,.8)}
 .find svg{color:var(--blue-2);flex:none}
 .find input{flex:1;min-width:0;border:0;outline:0;background:none;color:#fff;font-family:var(--mono);
   font-size:13px;padding:13px 0}
@@ -171,10 +172,10 @@ svg{display:block}
 .quicks{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
 .quicks span{font-family:var(--mono);font-size:11px;color:var(--ink-2);border:1px solid var(--line);
   border-radius:999px;padding:5px 11px;cursor:pointer;transition:border-color .18s,color .18s,background .18s}
-.quicks span:hover{border-color:var(--line-blue);color:#fff;background:rgba(47,107,255,.12)}
+.quicks span:hover{border-color:var(--line-blue);color:#fff;background:rgba(14,165,233,.12)}
 .hits{margin-top:10px}
 .hit{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
-  background:rgba(255,255,255,.022);margin-top:6px;animation:pop .3s cubic-bezier(.2,.7,.3,1) both}
+  background:rgba(10,12,17,.022);margin-top:6px;animation:pop .3s cubic-bezier(.2,.7,.3,1) both}
 .hit .slug{font-family:var(--mono);font-size:11px;color:var(--blue-2)}
 .hit .nm{font-size:13px;color:var(--ink)}
 .hit .cat{margin-left:auto;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
@@ -184,15 +185,15 @@ svg{display:block}
 /* orbit diagram: apps orbiting one executor */
 .orbit{position:relative;width:100%;max-width:460px;aspect-ratio:1/1;margin-inline:auto;display:grid;place-items:center}
 .orbit .halo{position:absolute;inset:0;border-radius:50%;
-  background:radial-gradient(circle at 50% 50%,rgba(47,107,255,.22),transparent 62%)}
-.orbit .track{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(255,255,255,.09)}
-.orbit .t2{inset:13%;border-color:rgba(47,107,255,.28);border-style:dashed;animation:spin2 46s linear infinite}
-.orbit .t3{inset:27%;border-color:rgba(255,255,255,.12)}
+  background:radial-gradient(circle at 50% 50%,rgba(14,165,233,.22),transparent 62%)}
+.orbit .track{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(10,12,17,.09)}
+.orbit .t2{inset:13%;border-color:rgba(14,165,233,.28);border-style:dashed;animation:spin2 46s linear infinite}
+.orbit .t3{inset:27%;border-color:rgba(10,12,17,.12)}
 @keyframes spin2{to{transform:rotate(360deg)}}
 .orbit .core{position:relative;width:36%;aspect-ratio:1;border-radius:50%;
   background:radial-gradient(circle at 34% 28%,#2a5cf0,#0a1b46 68%);
   border:1px solid rgba(157,186,255,.5);display:grid;place-items:center;text-align:center;
-  box-shadow:0 0 0 8px rgba(47,107,255,.08),0 26px 70px -22px rgba(47,107,255,.95),inset 0 1px 0 rgba(255,255,255,.35)}
+  box-shadow:0 0 0 8px rgba(14,165,233,.08),0 26px 70px -22px rgba(14,165,233,.95),inset 0 1px 0 rgba(10,12,17,.35)}
 .orbit .core b{font-family:var(--display);font-size:clamp(18px,2.6vw,26px);letter-spacing:-.02em;line-height:1}
 .orbit .core span{display:block;margin-top:5px;font-family:var(--mono);font-size:9px;letter-spacing:.16em;
   text-transform:uppercase;color:var(--blue-3)}
@@ -207,9 +208,9 @@ svg{display:block}
 
 /* terminal */
 .term{position:relative;border:1px solid var(--line-2);border-radius:16px;overflow:hidden;background:#07070b;
-  box-shadow:0 40px 90px -50px rgba(47,107,255,.8),0 26px 60px -40px #000}
+  box-shadow:0 40px 90px -50px rgba(14,165,233,.8),0 26px 60px -40px #000}
 .term .bar{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);
-  background:rgba(255,255,255,.025)}
+  background:rgba(10,12,17,.025)}
 .term .bar i{width:8px;height:8px;border-radius:50%;background:#26262f}
 .term .bar i:first-child{background:var(--blue)}
 .term .bar .file{margin-left:6px;font-family:var(--mono);font-size:11px;color:var(--dim)}
@@ -217,7 +218,7 @@ svg{display:block}
   color:#d6dbe6;overflow-x:auto}
 .term .k{color:#8fb0ff}.term .s{color:#c9d7ff}.term .f{color:#6f9bff}.term .c{color:#5b6272}.term .n{color:#fff}
 .term .run{border-top:1px solid var(--line);padding:11px 16px;display:flex;align-items:center;gap:9px;
-  font-family:var(--mono);font-size:10.5px;color:var(--ink-2);background:rgba(47,107,255,.07)}
+  font-family:var(--mono);font-size:10.5px;color:var(--ink-2);background:rgba(14,165,233,.07)}
 .term .run b{color:#fff}
 .term .run .dot{width:6px;height:6px;border-radius:50%;background:#41d18a;box-shadow:0 0 9px #41d18a}
 
@@ -242,7 +243,7 @@ svg{display:block}
 @keyframes tape{to{transform:translate3d(-50%,0,0)}}
 .tape span{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;
   text-transform:uppercase;color:var(--dim);padding:12px 20px;border-right:1px solid var(--line);white-space:nowrap}
-.tape span i{width:5px;height:5px;border-radius:50%;background:rgba(47,107,255,.7)}
+.tape span i{width:5px;height:5px;border-radius:50%;background:rgba(14,165,233,.7)}
 .tape span:hover{color:#fff}
 
 /* sections */
@@ -250,7 +251,7 @@ svg{display:block}
 .head{max-width:62ch}
 .kick{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:10px;letter-spacing:.22em;
   text-transform:uppercase;color:var(--blue-2)}
-.kick::after{content:"";height:1px;width:96px;background:linear-gradient(90deg,rgba(47,107,255,.65),transparent)}
+.kick::after{content:"";height:1px;width:96px;background:linear-gradient(90deg,rgba(14,165,233,.65),transparent)}
 h2{font-family:var(--display);font-weight:600;font-size:clamp(28px,4vw,46px);line-height:1.06;
   letter-spacing:-.03em;margin:14px 0 0}
 h2 .blue{color:var(--blue-2)}
@@ -272,11 +273,11 @@ h2 .blue{color:var(--blue-2)}
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-top:30px}
 @media (max-width:900px){.grid3{grid-template-columns:1fr}}
 .tile{position:relative;padding:23px 21px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;
-  background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012));
+  background:linear-gradient(180deg,rgba(10,12,17,.04),rgba(10,12,17,.012));
   transition:transform .25s,border-color .25s}
-.tile:hover{transform:translateY(-3px);border-color:rgba(47,107,255,.45)}
+.tile:hover{transform:translateY(-3px);border-color:rgba(14,165,233,.45)}
 .tile .pic{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--blue-2);
-  border:1px solid rgba(47,107,255,.35);background:rgba(47,107,255,.10)}
+  border:1px solid rgba(14,165,233,.35);background:rgba(14,165,233,.10)}
 .tile h3{margin:15px 0 7px;font-size:16px;font-weight:700;letter-spacing:-.01em}
 .tile p{color:var(--mut);font-size:13.6px}
 .tile .meta{margin-top:13px;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
@@ -286,10 +287,10 @@ h2 .blue{color:var(--blue-2)}
 .compare{margin-top:30px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .compare table{width:100%;border-collapse:collapse;font-size:13.4px}
 .compare th,.compare td{padding:13px 15px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
-.compare th{background:rgba(47,107,255,.08);font-family:var(--mono);font-size:10px;letter-spacing:.14em;
+.compare th{background:rgba(14,165,233,.08);font-family:var(--mono);font-size:10px;letter-spacing:.14em;
   text-transform:uppercase;color:var(--blue-3);font-weight:500}
 .compare td:first-child{color:var(--ink-2)}
-.compare td.tony{color:#fff;background:rgba(47,107,255,.055);font-weight:600}
+.compare td.tony{color:#fff;background:rgba(14,165,233,.055);font-weight:600}
 .compare tr:last-child td{border-bottom:0}
 @media (max-width:640px){.compare{overflow-x:auto}.compare table{min-width:560px}}
 
@@ -309,11 +310,11 @@ h2 .blue{color:var(--blue-2)}
 @media (min-width:880px){.plans{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .tier{position:relative;display:flex;flex-direction:column;gap:13px;min-width:0;padding:25px 21px 20px;
   border:1px solid var(--line);border-radius:var(--r-lg);
-  background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.008));
+  background:linear-gradient(180deg,rgba(10,12,17,.035),rgba(10,12,17,.008));
   transition:transform .25s,border-color .25s,box-shadow .3s}
 .tier:hover{transform:translateY(-3px);border-color:var(--line-2)}
-.tier.hot{border-color:rgba(47,107,255,.6);background:linear-gradient(180deg,rgba(47,107,255,.13),rgba(255,255,255,.01));
-  box-shadow:0 0 0 1px rgba(47,107,255,.25),0 30px 70px -42px rgba(47,107,255,1)}
+.tier.hot{border-color:rgba(14,165,233,.6);background:linear-gradient(180deg,rgba(14,165,233,.13),rgba(10,12,17,.01));
+  box-shadow:0 0 0 1px rgba(14,165,233,.25),0 30px 70px -42px rgba(14,165,233,1)}
 .tier .flag{position:absolute;top:-10px;right:16px;background:var(--blue);color:#fff;border-radius:999px;
   padding:4px 10px;font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase}
 .tname{font-family:var(--display);font-size:22px;letter-spacing:-.02em}
@@ -337,11 +338,11 @@ h2 .blue{color:var(--blue-2)}
 
 /* close */
 .final{margin-top:clamp(54px,8vw,96px);position:relative;overflow:hidden;border-radius:24px;padding:clamp(26px,4.6vw,52px);
-  border:1px solid rgba(47,107,255,.38);background:
-  radial-gradient(600px circle at 12% -30%,rgba(47,107,255,.32),transparent 62%),
-  radial-gradient(520px circle at 92% 130%,rgba(47,107,255,.20),transparent 62%),#07070c}
+  border:1px solid rgba(14,165,233,.38);background:
+  radial-gradient(600px circle at 12% -30%,rgba(14,165,233,.32),transparent 62%),
+  radial-gradient(520px circle at 92% 130%,rgba(14,165,233,.20),transparent 62%),#07070c}
 .final::after{content:"";position:absolute;right:-90px;top:-90px;width:280px;height:280px;border-radius:50%;
-  border:1px solid rgba(255,255,255,.14);box-shadow:0 0 0 26px rgba(255,255,255,.03),0 0 0 54px rgba(255,255,255,.02)}
+  border:1px solid rgba(10,12,17,.14);box-shadow:0 0 0 26px rgba(10,12,17,.03),0 0 0 54px rgba(10,12,17,.02)}
 .final h2{max-width:17ch}
 .final .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:24px;position:relative;z-index:2}
 .final .mono{font-family:var(--mono);font-size:11px;color:var(--mut)}
@@ -357,6 +358,24 @@ footer a:hover{color:var(--blue-2)}
   *{animation:none!important;transition:none!important}
   .rv{opacity:1;transform:none}
 }
+
+.adv{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:26px}
+.adv-i{border:1px solid var(--line);border-radius:var(--r);background:var(--coal);padding:20px 20px 18px;
+  transition:transform .35s cubic-bezier(.2,.7,.2,1),border-color .35s,box-shadow .35s}
+.adv-i:hover{transform:translateY(-3px);border-color:var(--line-blue);box-shadow:0 18px 40px rgba(10,12,17,.07)}
+.adv-i h3{font-family:var(--display);font-size:17px;letter-spacing:-.01em;margin-bottom:6px}
+.adv-i p{color:var(--ink-2);font-size:14.5px;line-height:1.6}
+.pri{margin:24px 0 0;padding:0;list-style:none;counter-reset:pri;display:grid;gap:12px}
+.pri li{counter-increment:pri;position:relative;padding:16px 18px 16px 56px;border:1px solid var(--line);
+  border-radius:var(--r);background:var(--coal);color:var(--ink-2);font-size:14.5px}
+.pri li:before{content:counter(pri,decimal-leading-zero);position:absolute;left:18px;top:15px;
+  font-family:var(--mono);font-size:12px;color:var(--blue);letter-spacing:.08em}
+.pri b{color:var(--ink);font-weight:600}
+.authstrip{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px;font-size:12px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-2)}
+.authstrip span{border:1px solid var(--line-2);border-radius:999px;padding:7px 13px;background:var(--coal)}
+@media (max-width:820px){.adv{grid-template-columns:1fr}}
+
 """
 
 BODY = """
@@ -371,9 +390,9 @@ BODY = """
   <div class="wrap">
     <a class="mark" href="/">
       <svg class="dish" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#0a0a11" stroke="rgba(47,107,255,.55)"/>
+        <rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#0a0a11" stroke="rgba(14,165,233,.55)"/>
         <circle cx="16" cy="16" r="8.4" stroke="#ffffff" stroke-width="1.6"/>
-        <path d="M16 7.6v16.8M7.6 16h16.8" stroke="rgba(255,255,255,.22)" stroke-width="1"/>
+        <path d="M16 7.6v16.8M7.6 16h16.8" stroke="rgba(10,12,17,.22)" stroke-width="1"/>
         <circle cx="16" cy="16" r="3.4" fill="#2f6bff"/>
       </svg>
       Tony
@@ -396,10 +415,11 @@ BODY = """
   <div class="wrap hero-grid">
     <div>
       <span class="tag"><i class="led"></i>__APPS__ apps &middot; __ACTIONS__ actions &middot; one endpoint</span>
-      <h1><span class="line">Your agent decides.</span><span class="line blue">Tony executes.</span></h1>
-      <p class="lede">An execution layer for AI agents: connect an account once, then let your model call real
-        apps with real writes. Credentials, approvals, retries and receipts are handled before you write a line of
-        glue code.</p>
+      <h1><span class="line">One connection. One execution engine.</span>
+        <span class="line blue">Any application. Any AI agent.</span></h1>
+      <p class="lede">Connect an account once, then let any model call real apps with real writes. Tony finds the
+        right tool from plain intent, picks the authentication a service actually needs, and runs it with retries,
+        budgets and receipts, so Tony executes while your model reasons. No glue code, no credential sprawl.</p>
 
       <form class="find" id="find" onsubmit="return false" role="search">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
@@ -518,6 +538,52 @@ BODY = """
       <div class="tile"><div class="mono t">GET /v1/usage</div><h3>Honest meters</h3><p>Runs by day, success rate, top apps. The same numbers billing reads, so nothing drifts.</p></div>
       <div class="tile"><div class="mono t">GET /v1/audit</div><h3>Receipts</h3><p>Every run with latency, provider status and payload size, kept for the workspace that ran it.</p></div>
     </div>
+  </div>
+</section>
+
+<section class="sec" id="advantage">
+  <div class="wrap">
+    <span class="kicker mono">Why Tony wins</span>
+    <h2>Built where the others stop at the demo.</h2>
+    <div class="adv">
+      <div class="adv-i"><h3>Faster tool discovery</h3><p>Intent search ranks actions across __APPS__ apps, so an
+        agent asks for what it wants in words and gets the exact action, not a schema dump.</p></div>
+      <div class="adv-i"><h3>Lower execution overhead</h3><p>One endpoint, one session, one receipt. No per-app
+        SDK, no per-tool glue, no cold chain of HTTP wrappers.</p></div>
+      <div class="adv-i"><h3>Efficient authentication</h3><p>OAuth 2.0, API keys, bearer tokens, basic auth and
+        custom schemes are resolved before the call, not by the model.</p></div>
+      <div class="adv-i"><h3>Broader API coverage</h3><p>Curated actions plus an OpenAPI importer, a raw proxy and
+        a directory layer: __ACTIONS__ typed actions and counting.</p></div>
+      <div class="adv-i"><h3>Reliable at scale</h3><p>Retries with backoff, circuit breakers, rate-limit handling,
+        and an audit trail you can read back line by line.</p></div>
+      <div class="adv-i"><h3>Own your infrastructure</h3><p>Self-hostable. Postgres you control, credentials
+        encrypted at rest, no vendor holding your users' tokens.</p></div>
+      <div class="adv-i"><h3>Effortless developer experience</h3><p>MCP for any client, a typed REST surface, and a
+        console that shows what ran, what waited for approval, and what failed.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="priorities">
+  <div class="wrap">
+    <span class="kicker mono">What we are sharpening</span>
+    <h2>Six things that separate an integration toy from an execution layer.</h2>
+    <ol class="pri">
+      <li><b>Intelligent authentication orchestration.</b> Detect the auth method, scopes and connection a service
+        needs, then walk the user through only that.</li>
+      <li><b>Adaptive tool discovery.</b> Rank by intent instead of loading thousands of schemas into a context
+        window that cannot hold them.</li>
+      <li><b>Execution optimisation.</b> Parallel calls, caching, retries, circuit breakers and honest rate-limit
+        handling.</li>
+      <li><b>Universal agent identity.</b> Every end-user and every agent gets isolated permissions, credentials
+        and an execution budget.</li>
+      <li><b>Integration health intelligence.</b> Broken APIs, expired permissions and schema drift surface before
+        your users hit them.</li>
+      <li><b>Authentication coverage.</b> OAuth 2.0, API keys, bearer tokens, basic auth and custom configurations,
+        in one model.</li>
+    </ol>
+    <div class="authstrip mono"><span>OAuth 2.0</span><span>API keys</span><span>Bearer tokens</span>
+      <span>Basic auth</span><span>Custom schemes</span></div>
   </div>
 </section>
 

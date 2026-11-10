@@ -37,6 +37,16 @@ def _fernet() -> Fernet:
     return Fernet(base64.urlsafe_b64encode(digest))
 
 
+def encrypt_text(value: str) -> str:
+    return _fernet().encrypt(value.encode()).decode()
+
+
+def decrypt_text(token: str) -> str:
+    if not token:
+        return ""
+    return _fernet().decrypt(token.encode()).decode()
+
+
 def encrypt_json(payload: dict[str, Any]) -> str:
     """Encrypt a credentials dict for storage."""
     return _fernet().encrypt(json.dumps(payload, separators=(",", ":")).encode()).decode()

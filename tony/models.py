@@ -338,3 +338,13 @@ class AgentMemory(Base):
     value_json: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class UserTotp(Base):
+    """An authenticator-app secret for a console user. Optional second factor."""
+    __tablename__ = "user_totp"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(String(32), index=True, unique=True)
+    secret_enc: Mapped[str] = mapped_column(Text, default="")
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

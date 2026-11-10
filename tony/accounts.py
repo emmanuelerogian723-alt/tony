@@ -111,6 +111,7 @@ class SignupIn(BaseModel):
 class LoginIn(BaseModel):
     email: str
     password: str
+    code: str = ""
 
 
 @router.post("/signup")
@@ -138,6 +139,16 @@ def login(body: LoginIn, request: Request, response: Response) -> dict[str, Any]
     email = body.email.strip().lower()
     with session() as s:
         user = s.scalar(select(User).where(User.email == email))
+        if user is not None and check_password(body.password, user.password_hash):
+            from . import totp
+            from .models import UserTotp
+            from .crypto import decrypt_text
+
+            factor = s.scalar(select(UserTotp).where(UserTotp.user_id == user.id))
+            if factor is not None and factor.confirmed:
+                secret = decrypt_text(factor.secret_enc)
+                if not totp.verify(secret, body.code or ""):
+                    raise HTTPException(401, detail="Enter the 6-digit code from your authenticator app")
         if user is None or not check_password(body.password, user.password_hash):
             if user is not None and not user.password_hash and user.google_sub:
                 raise HTTPException(400, detail="This account uses Google. Use Continue with Google.")
@@ -433,3 +444,74 @@ async def auth0_callback(request: Request, code: str = "", state: str = "", erro
         if header.lower() == "set-cookie":
             redirect.headers.append("set-cookie", value)
     return redirect
+
+
+# ── authenticator-app two-factor ──────────────────────────────────────────
+class CodeIn(BaseModel):
+    code: str
+
+
+@router.get("/2fa")
+def two_factor_status(request: Request) -> dict[str, Any]:
+    from .models import UserTotp
+
+    user = require_user(request)
+    with session() as s:
+        row = s.scalar(select(UserTotp).where(UserTotp.user_id == user.id))
+        return {"enabled": bool(row and row.confirmed), "pending": bool(row and not row.confirmed)}
+
+
+@router.post("/2fa/start")
+def two_factor_start(request: Request) -> dict[str, Any]:
+    from . import totp
+    from .crypto import encrypt_text
+    from .models import UserTotp
+
+    user = require_user(request)
+    secret = totp.new_secret()
+    with session() as s:
+        row = s.scalar(select(UserTotp).where(UserTotp.user_id == user.id))
+        if row is None:
+            row = UserTotp(user_id=user.id)
+            s.add(row)
+        row.secret_enc = encrypt_text(secret)
+        row.confirmed = False
+        s.commit()
+    return {"secret": secret, "otpauth_url": totp.provisioning_uri(secret, user.email),
+            "next": "Scan the QR with Google Authenticator or 1Password, then POST /v1/account/2fa/enable with a code."}
+
+
+@router.post("/2fa/enable")
+def two_factor_enable(body: CodeIn, request: Request) -> dict[str, Any]:
+    from . import totp
+    from .crypto import decrypt_text
+    from .models import UserTotp
+
+    user = require_user(request)
+    with session() as s:
+        row = s.scalar(select(UserTotp).where(UserTotp.user_id == user.id))
+        if row is None:
+            raise HTTPException(400, detail="Start setup first")
+        if not totp.verify(decrypt_text(row.secret_enc), body.code):
+            raise HTTPException(400, detail="That code did not match. Try the next one.")
+        row.confirmed = True
+        s.commit()
+    return {"enabled": True}
+
+
+@router.post("/2fa/disable")
+def two_factor_disable(body: CodeIn, request: Request) -> dict[str, Any]:
+    from . import totp
+    from .crypto import decrypt_text
+    from .models import UserTotp
+
+    user = require_user(request)
+    with session() as s:
+        row = s.scalar(select(UserTotp).where(UserTotp.user_id == user.id))
+        if row is None or not row.confirmed:
+            return {"enabled": False}
+        if not totp.verify(decrypt_text(row.secret_enc), body.code):
+            raise HTTPException(400, detail="Code did not match")
+        s.delete(row)
+        s.commit()
+    return {"enabled": False}

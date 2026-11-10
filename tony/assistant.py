@@ -64,6 +64,20 @@ KB: list[dict[str, Any]] = [
         ),
     },
     {
+        "topic": "agent_tokens",
+        "keys": "agent token scoped key read only read-only permission permissions restrict narrow expiry expire ttl least privilege give an ai a key hand off delegate claude cursor sub agent",
+        "answer": (
+            "Mint a scoped agent token instead of sharing your workspace key:\n\n"
+            "```\nPOST /v1/agent-tokens\n{\"name\":\"cursor\",\"apps\":[\"hackernews\",\"notion\"],"
+            "\"tiers\":[\"read\"],\"ttl_days\":7}\n```\n\n"
+            "It returns a token starting `tony_at_`. Send it as `Authorization: Bearer tony_at_...`; the same "
+            "token works over REST, the agent and MCP. Tony refuses calls outside the grant before touching the "
+            "app, and the refusal names what the token does allow. `apps` empty means every app, `tiers` defaults "
+            "to read only, and the token dies on its own at `ttl_days`. An agent token cannot mint another token. "
+            "Check your own scope with `GET /v1/agent-tokens/scopes`."
+        ),
+    },
+    {
         "topic": "sessions",
         "keys": "session sessions per user end-user multi-tenant scope allowlist entity budget ttl x-tony-session",
         "answer": (
@@ -269,6 +283,7 @@ def _suggestions(topic: str) -> list[str]:
         "connect": ["Connect GitHub", "How do sessions work?"],
         "sessions": ["Create a session", "What tiers can I allow?"],
         "custom_tools": ["Show a custom tool example", "Can it write to my API?"],
+        "agent_tokens": ["Give Cursor read-only access", "How long should a token last?"],
     }
     return pool.get(topic, ["How do I connect an app?", "What are my limits?", "How do I use this in Claude?"])
 

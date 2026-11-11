@@ -40,6 +40,11 @@ def make_provider(port: int) -> FastAPI:
             "token_type": "Bearer", "scope": "read write",
         })
 
+    @app.get("/echo")
+    def echo(request: Request):
+        return {"authorization": request.headers.get("authorization", ""),
+                "path": str(request.url.path)}
+
     @app.get("/userinfo")
     def userinfo():
         STATE["userinfo"] += 1
@@ -87,7 +92,9 @@ def wiring(provider, monkeypatch):
         slug="mockapp", name="Mock App", category="Testing", description="Mock OAuth app",
         docs="", logo="", auth=AuthSpec(type="oauth2"),
         actions=[ActionSpec(slug="whoami", name="Who am I", description="who am i",
-                            method="GET", url=f"{provider}/userinfo", tier="read")],
+                            method="GET", url=f"{provider}/userinfo", tier="read"),
+                 ActionSpec(slug="echo", name="Echo", description="echo auth",
+                            method="GET", url=f"{provider}/echo", tier="read")],
         base_url=provider,
     )
     catalog_mod.catalog.apps["mockapp"] = reg.apply(spec)
@@ -239,3 +246,30 @@ def test_providers_registry_is_ready_for_core_apps():
         assert p is not None, slug
         assert p.authorize_url and p.token_url, slug
         assert p.identity_url, slug
+
+
+def test_executor_sends_the_users_token_to_the_provider(client, wiring, monkeypatch):
+    """The whole point: after consent, real calls carry that user's token."""
+    import asyncio
+    from sqlalchemy import select
+
+    # the mock provider is loopback; production keeps the SSRF guard on
+    monkeypatch.setenv("TONY_ALLOW_PRIVATE", "1")
+    from tony import config as _cfg
+    monkeypatch.setattr(_cfg.settings, "allow_private_networks", True)
+
+    from tony.db import session
+    from tony.models import ConnectedAccount
+
+    body = connect(client)
+    finish(client, body["authorization_url"])
+    with session() as s:
+        ws = s.scalars(select(ConnectedAccount).where(
+            ConnectedAccount.app_slug == "mockapp")).first().workspace_id
+
+    from tony.power import _run_one
+
+    out = asyncio.run(_run_one(ws, "playground", "mockapp", "echo", {}, False))
+    assert out.get("ok"), out
+    payload = str(out.get("data"))
+    assert "at-123" in payload, payload

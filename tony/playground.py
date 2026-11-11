@@ -322,3 +322,78 @@ def playground_page() -> Any:
 @router.get("/welcome", response_class=HTMLResponse)
 def survey_page() -> Any:
     return HTMLResponse(survey_html())
+
+
+# ── app icons ─────────────────────────────────────────────────────────────────
+import hashlib as _hl
+import re as _re
+from urllib.parse import urlparse as _urlparse
+
+from fastapi.responses import RedirectResponse as _Redirect, Response as _Response
+
+_PALETTE = ["#E2542B", "#2563EB", "#16A34A", "#9333EA", "#D97706", "#0891B2", "#DB2777", "#4F46E5",
+            "#0D9488", "#CA8A04", "#7C3AED", "#EA580C"]
+
+
+def _initial_tile(name: str, slug: str) -> str:
+    letter = (_re.sub(r"[^A-Za-z0-9]", "", name or slug)[:1] or "?").upper()
+    color = _PALETTE[int(_hl.md5((slug or name).encode()).hexdigest(), 16) % len(_PALETTE)]
+    return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">'
+            f'<rect width="64" height="64" rx="16" fill="{color}"/>'
+            '<text x="32" y="43" text-anchor="middle" font-family="Inter,Arial,sans-serif" '
+            f'font-size="32" font-weight="700" fill="#fff">{letter}</text></svg>')
+
+
+def icon_url(spec: Any) -> str:
+    """Best remote icon for an app: its own logo, else a favicon of its real domain."""
+    logo = (getattr(spec, "logo", "") or "").strip()
+    if logo.startswith("http") and "favicons?domain=" not in logo:
+        return logo
+    host = ""
+    for u in (getattr(spec, "base_url", ""), getattr(spec, "docs", "")):
+        try:
+            h = _urlparse(u or "").netloc.lower()
+        except Exception:
+            h = ""
+        if h and "{" not in h:
+            host = h
+            break
+    if host:
+        parts = host.split(".")
+        root = ".".join(parts[-2:]) if len(parts) > 2 and parts[-2] not in ("co", "com") else host
+        if root.startswith("api."):
+            root = root[4:]
+        return f"https://www.google.com/s2/favicons?domain={root}&sz=128"
+    return logo
+
+
+@router.get("/v1/icon/{slug}")
+def app_icon(slug: str) -> Any:
+    """Always answers with a usable image: the real logo, or a clean colored tile."""
+    spec = catalog.catalog.resolve(slug) or catalog.catalog.get(slug)
+    name = getattr(spec, "name", slug.replace("_", " ").replace("-", " ").title())
+    local = None
+    try:
+        from pathlib import Path as _P
+        base = _P(__file__).parent / "static" / "brand" / "icons"
+        for cand in (slug, slug.replace("_", "").replace("-", ""), getattr(spec, "slug", "")):
+            if cand and (base / f"{cand}.svg").exists():
+                local = f"/static/brand/icons/{cand}.svg"
+                break
+    except Exception:
+        local = None
+    if local:
+        return _Redirect(local, status_code=302, headers={"Cache-Control": "public, max-age=86400"})
+    url = icon_url(spec) if spec else ""
+    if url:
+        return _Redirect(url, status_code=302, headers={"Cache-Control": "public, max-age=86400"})
+    return _Response(_initial_tile(name, slug), media_type="image/svg+xml",
+                     headers={"Cache-Control": "public, max-age=86400"})
+
+
+@router.get("/v1/icon-tile/{slug}")
+def app_icon_tile(slug: str) -> Any:
+    spec = catalog.catalog.resolve(slug) or catalog.catalog.get(slug)
+    name = getattr(spec, "name", slug.replace("_", " ").replace("-", " ").title())
+    return _Response(_initial_tile(name, slug), media_type="image/svg+xml",
+                     headers={"Cache-Control": "public, max-age=86400"})

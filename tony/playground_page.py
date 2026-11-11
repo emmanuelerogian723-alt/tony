@@ -137,6 +137,57 @@ button{font:inherit;color:inherit;cursor:pointer}
 .modal .err{color:var(--err);font-size:12.5px;margin:2px 0 8px;text-align:left}
 .modal .sec{display:flex;justify-content:center;align-items:center;gap:7px;padding:12px;background:#fafaf9;border-top:1px solid var(--line);color:var(--mut);font-size:11.5px}
 .modal .lnk{color:var(--mut);font-size:12px;text-decoration:underline;cursor:pointer;background:none;border:0}
+
+/* app icons */
+.ico{width:100%;height:100%;object-fit:contain;display:block}
+.tile{display:grid;place-items:center;flex:none;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tile.s24{width:24px;height:24px;border-radius:7px}.tile.s34{width:34px;height:34px}.tile.s52{width:52px;height:52px;border-radius:14px}
+.tile img{width:70%;height:70%;object-fit:contain}
+.tile.fill img{width:100%;height:100%}
+/* timeline */
+.tl{display:flex;flex-direction:column;gap:2px}
+.ev{display:flex;align-items:center;gap:10px;padding:7px 2px;font-size:13px;color:var(--ink2)}
+.ev .lead{width:18px;height:18px;flex:none;display:grid;place-items:center}
+.ev .lead img{width:16px;height:16px}
+.ev .t{flex:1;min-width:0}
+.ev .t b{font-weight:600;color:var(--ink)}
+.ev .chip{font:11.5px ui-monospace,Menlo,monospace;color:var(--mut);background:#f4f3ef;border:1px solid var(--line);border-radius:7px;padding:2px 8px;white-space:nowrap}
+.ev .m{color:var(--mut);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ev.ok .ck{color:var(--ok)}.ev.bad .ck{color:var(--err)}.ev.wait .ck{color:var(--warn)}
+.ev button.mini{border:1px solid var(--line2);background:#fff;border-radius:8px;padding:4px 10px;font-size:12px}
+.ev button.mini:hover{background:#f6f5f2}
+.ev-detail{margin:0 0 6px 28px;border:1px solid var(--line);border-radius:10px;background:#fafaf9;font:11.5px/1.55 ui-monospace,Menlo,monospace;padding:9px 12px;overflow:auto;max-height:220px;white-space:pre-wrap;word-break:break-word;color:#33312c;display:none}
+.ev-detail.on{display:block}
+/* connect card (inline, like Nango) */
+.cc{border:1px solid var(--line2);border-radius:13px;background:#fff;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 2px rgba(13,13,12,.04)}
+.cc.done{background:#f6fbf7;border-color:#cfe8d6}
+.cc .tx b{display:block;font-size:13.5px}.cc .tx small{color:var(--mut);font-size:12px}
+.btn.go{background:var(--hot);display:inline-flex;align-items:center;gap:6px}
+.btn.go:hover{background:#cc4722}
+/* answer card */
+.ans{border:1px solid var(--line);border-radius:13px;background:#fff;padding:14px 16px;font-size:14.5px;line-height:1.65}
+.ans p{margin:0 0 8px}.ans p:last-child{margin:0}
+.ans ol,.ans ul{margin:4px 0 8px;padding-left:20px}.ans li{margin:3px 0}
+.ans code{font:12.5px ui-monospace,Menlo,monospace;background:#f1f0ec;border-radius:6px;padding:1px 6px}
+.ans a{color:#1d4ed8}
+/* modal polish */
+.modal .big{width:64px;height:64px;border-radius:16px;box-shadow:0 4px 16px rgba(13,13,12,.08)}
+.modal .big .tile{width:100%;height:100%;border:0;border-radius:16px}
+.modal .btn.hot{background:var(--hot)}
+.modal .row2{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:10px}
+.modal .ok{color:var(--ok);font-size:13px;margin:6px 0}
+/* connections drawer */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:340px;max-width:92vw;background:#fff;border-left:1px solid var(--line);box-shadow:-20px 0 60px rgba(13,13,12,.12);transform:translateX(104%);transition:transform .2s;z-index:45;display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.drawer h4{padding:16px 18px;font-size:14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.drawer .list{flex:1;overflow:auto;padding:8px}
+.drawer .row{display:flex;align-items:center;gap:11px;padding:10px;border-radius:11px}
+.drawer .row:hover{background:#f7f6f3}
+.drawer .row .nm{flex:1;min-width:0;font-size:13.5px;font-weight:550}.drawer .row .nm small{display:block;color:var(--mut);font-weight:400;font-size:11.5px}
+.drawer .empty{color:var(--mut);text-align:center;padding:40px 20px;font-size:13px}
+.drawer .search{margin:8px;padding:9px 12px;border:1px solid var(--line2);border-radius:10px;font:inherit;font-size:13px;outline:0;width:calc(100% - 16px)}
+.dot-on{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+
 /* mobile */
 .menu{display:none}
 @media(max-width:820px){
@@ -166,22 +217,27 @@ _JS = r"""
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const ENTITY='playground';
-const logoOf=slug=>'https://cdn.simpleicons.org/'+encodeURIComponent((slug||'').replace(/_/g,''))+'/0d0d0c';
+const pretty=o=>{try{return JSON.stringify(o,null,2).slice(0,6000)}catch(e){return String(o)}};
+const prettyName=s=>String(s||'').replace(/[_-]/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+
+/* ── app icons: real logo -> favicon -> colored letter tile, never a broken image ── */
+function tile(slug,size,fill){
+  const sl=encodeURIComponent(slug||'app');
+  return `<span class="tile s${size||34}${fill?' fill':''}"><img alt="" loading="lazy" src="/v1/icon/${sl}" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='/v1/icon-tile/${sl}';this.parentNode.classList.add('fill')}"></span>`;
+}
 const SUGG=[
- {t:"What's on my Google Calendar today?",a:'google_calendar',l:'googlecalendar'},
- {t:"Summarize my 3 latest emails in Gmail",a:'gmail',l:'gmail'},
- {t:"Star Tony's GitHub repo",a:'github',l:'github'},
- {t:'Send me "Hello, world!" on Slack',a:'slack',l:'slack'},
- {t:"Top 5 stories on Hacker News right now",a:'hackernews',l:'ycombinator'},
- {t:"What is the price of Bitcoin?",a:'coingecko',l:'coingecko'},
+ {t:"What's on my Google Calendar today?",a:'google_calendar'},
+ {t:"Summarize my 3 latest emails in Gmail",a:'gmail'},
+ {t:"Create an issue on GitHub",a:'github'},
+ {t:'Send "Hello, world!" on Slack',a:'slack'},
+ {t:"Top 5 stories on Hacker News right now",a:'hackernews'},
+ {t:"What is the price of Bitcoin?",a:'coingecko'},
 ];
-let history=[], busy=false, pendingConn=null;
+let history=[], busy=false, pendingConn=null, connected=new Set(), lastGoal='';
 
-// suggestions
-$('#sug').innerHTML=SUGG.map((s,i)=>`<button data-i="${i}"><img alt="" src="https://cdn.simpleicons.org/${s.l}" onerror="this.style.visibility='hidden'"><span>${esc(s.t)}</span><em>→</em></button>`).join('');
-$$('#sug button').forEach(b=>b.onclick=()=>{$('#q').value=SUGG[+b.dataset.i].t;send()});
+$('#sug').innerHTML=SUGG.map((s,i)=>`<button data-i="${i}">${tile(s.a,24)}<span>${esc(s.t)}</span><em>→</em></button>`).join('');
+$$('#sug button').forEach(b=>b.onclick=()=>{q.value=SUGG[+b.dataset.i].t;send()});
 
-// composer
 const q=$('#q');
 q.addEventListener('input',()=>{q.style.height='auto';q.style.height=Math.min(160,q.scrollHeight)+'px';$('#go').disabled=!q.value.trim()||busy});
 q.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
@@ -190,20 +246,38 @@ $('#menu').onclick=()=>$('#side').classList.toggle('on');
 $('#new').onclick=()=>{history=[];$('#thread').innerHTML='';$('#hero').style.display='';$('#sugw').style.display='';q.value='';q.focus()};
 
 async function api(url,opt){
-  const r=await fetch(url,opt); const t=await r.text(); let j; try{j=JSON.parse(t)}catch(e){j={raw:t}}
-  j._status=r.status; return j;
+  const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),(opt&&opt.timeout)||90000);
+  try{
+    const r=await fetch(url,Object.assign({signal:ctl.signal},opt||{})); const t=await r.text(); let j; try{j=JSON.parse(t)}catch(e){j={raw:t}}
+    if(j===null||typeof j!=='object')j={raw:j}; j._status=r.status; return j;
+  }catch(e){return {error:e.name==='AbortError'?'The request timed out. Try again.':String(e),_status:0}}
+  finally{clearTimeout(to)}
 }
-function scrollEnd(){const s=$('#scroll');s.scrollTop=s.scrollHeight}
-function row(kind,icon,text,meta){
-  const ic={ok:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
-   bad:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
-   wait:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2"/></svg>',
-   run:'<span class="spin"></span>'}[icon];
-  return `<div class="tr ${kind}"><span class="ic">${ic}</span><span class="t">${text}</span><span class="m">${meta||''}</span></div>`;
+const scrollEnd=()=>{const s=$('#scroll');s.scrollTop=s.scrollHeight};
+
+/* markdown-lite for agent answers */
+function md(t){
+  let h=esc(t||'');
+  h=h.replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').replace(/`([^`\n]+)`/g,'<code>$1</code>');
+  h=h.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const lines=h.split(/\n/); let out='',list=null;
+  for(const ln of lines){
+    const m=ln.match(/^\s*(\d+)[.)]\s+(.*)/), b=ln.match(/^\s*[-*•]\s+(.*)/);
+    if(m||b){const tag=m?'ol':'ul'; if(list!==tag){if(list)out+=`</${list}>`;out+=`<${tag}>`;list=tag} out+=`<li>${(m?m[2]:b[1])}</li>`}
+    else{if(list){out+=`</${list}>`;list=null} if(ln.trim())out+=`<p>${ln}</p>`}
+  }
+  if(list)out+=`</${list}>`; return out;
 }
-function pretty(o){try{return JSON.stringify(o,null,2).slice(0,6000)}catch(e){return String(o)}}
+const CHK='<svg class="ck" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const BAD='<svg class="ck" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const WAIT='<svg class="ck" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2"/></svg>';
+function ev(kind,lead,text,chip,meta,detail){
+  const l=lead==='spin'?'<span class="spin"></span>':lead;
+  const id='d'+Math.random().toString(36).slice(2,8);
+  return `<div class="ev ${kind}"><span class="lead">${l}</span><span class="t">${text}</span>${chip?`<span class="chip">${chip}</span>`:''}${meta?`<span class="m">${meta}</span>`:''}${detail?`<button class="mini" data-d="${id}">details</button>`:''}</div>${detail?`<div class="ev-detail" id="${id}">${esc(detail)}</div>`:''}`;
+}
 function itemsOf(step){
-  const d=step&&(step.data!==undefined?step.data:step.result);
+  const d=step&&step.data&&step.data.data!==undefined?step.data.data:(step&&step.data);
   let arr=Array.isArray(d)?d:(d&&typeof d==='object'?(d.items||d.results||d.data||d.events||d.messages||d.stories||null):null);
   if(!Array.isArray(arr))return[];
   return arr.slice(0,6).map(x=>{
@@ -214,98 +288,100 @@ function itemsOf(step){
   });
 }
 
-async function send(){
-  const text=q.value.trim(); if(!text||busy)return;
-  busy=true; $('#go').disabled=true; q.value=''; q.style.height='auto';
+async function send(textOverride){
+  const text=(typeof textOverride==='string'?textOverride:q.value).trim(); if(!text||busy)return;
+  busy=true; $('#go').disabled=true; q.value=''; q.style.height='auto'; lastGoal=text;
   $('#hero').style.display='none'; $('#sugw').style.display='none';
   const th=$('#thread');
   th.insertAdjacentHTML('beforeend',`<div class="msg user">${esc(text)}</div>`);
   const id='a'+Date.now();
-  th.insertAdjacentHTML('beforeend',`<div class="agent" id="${id}"><div class="av">${LOGO28}</div><div class="body"><div class="trace" id="${id}t"></div><div id="${id}x"></div></div></div>`);
-  const tr=$('#'+id+'t'), box=$('#'+id+'x');
-  const t0=performance.now();
-  tr.innerHTML=row('','run','Reading your request…');scrollEnd();
-  // 1) match
-  let m={};
-  try{m=await api('/v1/queries',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text,source:'playground'})})}catch(e){}
-  let h=row('ok','ok','Understood the goal','');
-  if(m.action){h+=row('ok','ok',`Picked <code>${esc(m.action)}</code>${m.app?' in '+esc(m.app.name):''}`,m.confidence+'%')}
-  else{h+=row('ok','ok','No single app needed. Thinking it through','')}
-  tr.innerHTML=h+row('','run','Running with your connections…');scrollEnd();
-  // 2) run the agent
+  th.insertAdjacentHTML('beforeend',`<div class="agent" id="${id}"><div class="av">${LOGO28}</div><div class="body"><div class="tl" id="${id}t"></div><div id="${id}x" style="display:flex;flex-direction:column;gap:9px"></div></div></div>`);
+  const tl=$('#'+id+'t'), box=$('#'+id+'x'); const t0=performance.now();
+  tl.innerHTML=ev('','spin','Starting an agent session…');scrollEnd();
+  const m=await api('/v1/queries',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text,source:'playground'}),timeout:30000});
+  let head=ev('ok',CHK,'Started an agent session','','');
+  if(m.app) head+=ev('ok',tile(m.app.slug,24,0).replace('tile s24','tile s24'),`Searching the right tool <b>"${esc(text.slice(0,48))}"</b>`,m.action?esc(m.action):'',m.confidence?m.confidence+'%':'');
+  tl.innerHTML=head+ev('','spin','Running with your connections…');scrollEnd();
+
   const dry=$('#dry').checked;
-  let r;
-  try{
-    r=await api('/v1/agent',{method:'POST',headers:{'content-type':'application/json'},
-      body:JSON.stringify({goal:text,entity_id:ENTITY,history:history.slice(-6),dry_run:dry,approve_writes:!dry})});
-  }catch(e){r={error:String(e)}}
+  const r=await api('/v1/agent',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({goal:text,entity_id:ENTITY,history:history.slice(-6),dry_run:dry,approve_writes:!dry}),timeout:120000});
   const ms=Math.round(performance.now()-t0);
-  h=row('ok','ok','Understood the goal','');
-  if(m.action)h+=row('ok','ok',`Picked <code>${esc(m.action)}</code>${m.app?' in '+esc(m.app.name):''}`,m.confidence+'%');
-  let need=null, approvals=[];
+  let h=head, need=null, approvals=[], items=[];
   (r.steps||[]).forEach(s=>{
-    const nm=`<code>${esc((s.app||'')+(s.action?'.'+s.action:''))}</code>`;
-    if(s.needs_connection){need=s.needs_connection;h+=row('wait','wait',`${nm||'App'} needs a connection`,'')}
-    else if(s.status==='pending_approval'){approvals.push(s.run_id||'');h+=row('wait','wait',`${nm} needs your approval`,'')}
-    else if(s.ok){h+=row('ok','ok',`Ran ${nm}`,s.elapsed_ms?s.elapsed_ms+' ms':'')}
-    else{h+=row('bad','bad',`${nm} failed: ${esc((s.error||'error').slice(0,110))}`,'')}
+    const nm=esc(prettyName(s.app||'')+(s.action?' · '+s.action:''));
+    const lead=tile(s.app||'app',24,0);
+    if(s.needs_connection){need=s.needs_connection;h+=ev('wait',lead,`<b>${esc(prettyName(s.app||s.needs_connection))}</b> needs access`,'','')}
+    else if(s.status==='pending_approval'){approvals.push(s.run_id||'');h+=ev('wait',lead,`${nm} needs your approval`,'','')}
+    else if(s.ok){h+=ev('ok',lead,`Ran <b>${nm}</b>`,esc(s.tier||''),s.latency_ms?s.latency_ms+' ms':'',pretty(s.data))}
+    else{h+=ev('bad',lead,`${nm} failed: ${esc(String(s.error||'error').slice(0,120))}`,'','')}
   });
-  if(!(r.steps||[]).length&&!r.error)h+=row('ok','ok','Answered directly','');
-  h+=row(r.error||r._status>=400?'bad':'ok',r.error||r._status>=400?'bad':'ok',r.error||r._status>=400?'Request failed':'Done',ms+' ms');
-  tr.innerHTML=h;
+  if(!(r.steps||[]).length&&!r.error)h+=ev('ok',CHK,'Answered directly','','');
+  const failed=r.error||r._status>=400||r._status===0;
+  h+=ev(failed?'bad':'ok',failed?BAD:CHK,failed?'Request failed':'Done','',ms+' ms');
+  tl.innerHTML=h;
+  $$('#'+id+'t .mini').forEach(b=>b.onclick=()=>{const d=document.getElementById(b.dataset.d);d.classList.toggle('on');b.textContent=d.classList.contains('on')?'hide':'details';scrollEnd()});
+
   let out='';
   const answer=r.answer||(r.detail?('⚠ '+(typeof r.detail==='string'?r.detail:pretty(r.detail))):'')||(r.error?('⚠ '+r.error):'');
-  if(answer)out+=`<div class="ans">${esc(answer)}</div>`;
-  (r.steps||[]).forEach(s=>{
-    const its=s.ok?itemsOf(s):[];
-    if(its.length)out+=`<div class="res"><div class="items">${its.map(i=>`<div class="it">${esc(i.h)}${i.s?`<small>${esc(i.s)}</small>`:''}</div>`).join('')}</div></div>`;
-  });
-  approvals.filter(Boolean).forEach(rid=>{out+=`<div class="cc"><div class="tx"><b>Approve a write</b><small>Tony stopped before changing anything.</small></div><button class="btn" data-approve="${esc(rid)}">Approve and run</button></div>`});
-  if(need){out+=`<div class="cc" id="${id}c"><div class="lg" style="display:grid;place-items:center;background:#fff;border:1px solid var(--line)"><img id="${id}i" alt="" style="width:22px;height:22px" src="${logoOf(need)}" onerror="this.style.visibility='hidden'"></div><div class="tx"><b>Connect ${esc(prettyName(need))}</b><small>Sign in once so Tony can act on your account.</small></div><button class="btn hot" data-app="${esc(need)}" data-goal="${esc(text)}">Connect</button></div>`}
-  if((r.steps||[]).length||r.error)out+=`<details class="res"><summary>Raw response · ${r.engine||'api'} · ${ms} ms</summary><pre>${esc(pretty(r))}</pre></details>`;
+  if(answer)out+=`<div class="ans">${md(answer)}</div>`;
+  (r.steps||[]).forEach(s=>{const its=s.ok?itemsOf(s):[];
+    if(its.length)out+=`<div class="res"><div class="items">${its.map(i=>`<div class="it">${esc(i.h)}${i.s?`<small>${esc(i.s)}</small>`:''}</div>`).join('')}</div></div>`});
+  approvals.filter(Boolean).forEach(rid=>{out+=`<div class="cc"><span class="tile s34">${WAIT}</span><div class="tx"><b>Approve a write</b><small>Tony stopped before changing anything.</small></div><button class="btn" data-approve="${esc(rid)}">Approve and run</button></div>`});
+  if(need){out+=`<div class="cc" data-card="${esc(need)}">${tile(need,34)}<div class="tx"><b>Connect ${esc(prettyName(need))}</b><small>The agent needs access to continue.</small></div><button class="btn go" data-app="${esc(need)}">Connect <span>→</span></button></div>`}
+  if((r.steps||[]).length||r.error)out+=`<details class="res"><summary>Raw response · ${esc(r.engine||'api')} · ${ms} ms</summary><pre>${esc(pretty(r))}</pre></details>`;
   box.innerHTML=out;
-  $$('#'+id+'x .btn[data-app]').forEach(b=>b.onclick=()=>openConnect(b.dataset.app,b.dataset.goal));
-  if(need){api('/v1/apps/'+encodeURIComponent(need)).then(a=>{const im=$('#'+id+'i');if(im&&a&&a.logo)im.src=a.logo});}
+  $$('#'+id+'x .btn[data-app]').forEach(b=>b.onclick=()=>openConnect(b.dataset.app,text));
   $$('#'+id+'x .btn[data-approve]').forEach(b=>b.onclick=async()=>{
     const rid=b.dataset.approve; b.disabled=true; b.textContent='Approving…';
     const a=await api('/v1/runs/'+rid+'/approve',{method:'POST'});
-    b.textContent=a.ok?'Approved':'Not approved';
-    if(a.ok)box.insertAdjacentHTML('beforeend',`<div class="res"><summary>Approved · ${esc(a.status||'ran')}</summary><pre>${esc(pretty(a))}</pre></div>`);
+    b.textContent=a.ok?'Done':'Failed';
+    box.insertAdjacentHTML('beforeend',`<details class="res" open><summary>${a.ok?'Approved and ran':'Not approved'}</summary><pre>${esc(pretty(a))}</pre></details>`);scrollEnd();
   });
-  history.push({role:'user',content:text});
-  if(r.answer)history.push({role:'assistant',content:r.answer});
+  history.push({role:'user',content:text}); if(r.answer)history.push({role:'assistant',content:r.answer});
   busy=false; $('#go').disabled=!q.value.trim(); scrollEnd(); q.focus();
 }
-function prettyName(s){return String(s).replace(/[_-]/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}
 
-// ── connect modal ──
+/* ── connect modal (Link <App> Account) ── */
+let PROVIDERS={};
+async function loadProviders(){
+  const r=await api('/v1/providers');
+  (r.providers||[]).forEach(p=>PROVIDERS[p.app]=p);
+}
 async function openConnect(slug,goal){
   pendingConn={slug,goal};
   const app=await api('/v1/apps/'+encodeURIComponent(slug));
-  const name=app.name||prettyName(slug);
+  if(app._status===404||!app.slug){pendingConn=null;alert('Tony does not know an app called "'+slug+'".');return}
+  pendingConn.real=app.slug; const name=app.name||prettyName(slug);
   const isOauth=app.auth&&app.auth.type==='oauth2';
   const needsBase=!!app.needs_base_url, needsToken=app.needs_token!==false;
-  if(!needsToken&&!needsBase){
-    $('#mask').classList.remove('on');
-    const c=await api('/v1/connections/'+encodeURIComponent(slug)+'/start?entity_id='+ENTITY,{method:'POST'});
-    if(c.connection||c.mode==='public'){await refreshConn();if(goal){q.value=goal;send()}}
-    else $('#mErr').textContent=(c.detail||'Could not connect this app.');
+  const prov=PROVIDERS[app.slug]||PROVIDERS[(app.slug||'').replace(/-/g,'_')];
+  if(prov&&prov.ready&&app.auth&&app.auth.type==='oauth2'){
+    // managed OAuth: one click, straight to the provider, no key form at all
+    const w=window.open('about:blank','tony_oauth','width=540,height=720');
+    const r=await api('/v1/connections/'+encodeURIComponent(app.slug)+'/start?entity_id='+ENTITY+'&redirect_after=/playground',{method:'POST'});
+    if(r.authorization_url){ if(w)w.location=r.authorization_url; else location.href=r.authorization_url; watchConn(app.slug); }
+    else { if(w)w.close(); alert(r.detail||'Could not start sign-in.'); }
     return;
   }
-  $('#mApp').innerHTML=`<img alt="" src="${logoOf(slug)}" onerror="this.style.visibility='hidden'">`;
+  if(!needsToken&&!needsBase){
+    const c=await api('/v1/connections/'+encodeURIComponent(app.slug)+'/start?entity_id='+ENTITY,{method:'POST'});
+    if(c.connection||c.mode==='public'){await afterConnected(app.slug,name)}
+    return;
+  }
+  $('#mApp').innerHTML=tile(app.slug,52,0);
   $('#mTitle').textContent='Link '+name+' Account';
   $('#mErr').textContent=''; $('#mTok').value=''; $('#mBase').value='';
-  $('#mBase').style.display=(needsBase||!needsToken)?'':'none';
-  $('#mBase').placeholder=needsBase?'API base URL, e.g. https://api.vendor.com/v1':'API base URL (optional)';
+  $('#mBase').style.display=(needsBase)?'':'none';
+  $('#mBase').placeholder='API base URL, e.g. https://api.vendor.com/v1';
   $('#mDocs').href=app.docs||'#'; $('#mDocs').style.display=app.docs?'':'none';
-  $('#mOauth').style.display=isOauth?'':'none';
-  $('#mOr').style.display=isOauth?'':'none';
   $('#mSub').textContent=isOauth?`We'll connect you to ${name}. A pop-up will open, please make sure your browser doesn't block pop-ups.`:`${name} connects with an API key or token. It is encrypted before it is stored.`;
-  $('#mTokWrap').style.display=(isOauth&&needsToken)?'none':'';
-  $('#mTokLink').style.display=(isOauth&&needsToken)?'':'none';
-  $('#mOauth').style.display=(isOauth&&needsToken)?'':'none';
-  $('#mOr').style.display=(isOauth&&needsToken)?'':'none';
-  if(needsBase&&!needsToken){$('#mSave').textContent='Save and connect'}
+  const oauthFirst=isOauth&&needsToken;
+  $('#mOauth').style.display=oauthFirst?'':'none';
+  $('#mOr').style.display=oauthFirst?'':'none';
+  $('#mTokLink').style.display=oauthFirst?'':'none';
+  $('#mTokWrap').style.display=oauthFirst?'none':'';
+  $('#mSave').textContent=needsToken?'Save and connect':'Save and connect';
   $('#mask').classList.add('on');
 }
 function closeConnect(){$('#mask').classList.remove('on');pendingConn=null}
@@ -313,38 +389,61 @@ $('#mX').onclick=closeConnect; $('#mask').addEventListener('click',e=>{if(e.targ
 $('#mTokLink').onclick=()=>{$('#mTokWrap').style.display='';$('#mTokLink').style.display='none';$('#mTok').focus()};
 $('#mOauth').onclick=async()=>{
   if(!pendingConn)return; const b=$('#mOauth'); b.disabled=true; b.textContent='Opening…';
-  const slug=pendingConn.slug;
-  // open synchronously-ish to avoid popup blockers
+  const slug=pendingConn.real||pendingConn.slug;
   const w=window.open('about:blank','tony_oauth','width=520,height=700');
   const r=await api('/v1/connections/'+slug+'/start?entity_id='+ENTITY+'&redirect_after=/playground');
   b.disabled=false; b.textContent='Connect';
   if(r.authorization_url){ if(w)w.location=r.authorization_url; else location.href=r.authorization_url; watchConn(slug); }
   else{ if(w)w.close();
-    $('#mErr').textContent=(r.detail||'Could not start sign-in.')+' You can connect with a token instead.';
+    $('#mErr').textContent=(typeof r.detail==='string'?r.detail:'Could not start sign-in.')+' You can connect with a token instead.';
     $('#mTokWrap').style.display='';$('#mTokLink').style.display='none'; }
 };
 $('#mSave').onclick=async()=>{
-  if(!pendingConn)return; const v=$('#mTok').value.trim(); if(!v){$('#mErr').textContent='Paste a token first.';return}
-  const vals={token:v,api_key:v,access_token:v}; const bu=$('#mBase').value.trim(); if(bu)vals.base_url=bu;
-  $('#mSave').disabled=true; $('#mSave').textContent='Saving…';
-  const r=await api('/v1/connections/'+pendingConn.slug+'/key',{method:'POST',headers:{'content-type':'application/json'},
+  if(!pendingConn)return; const v=$('#mTok').value.trim(); const bu=$('#mBase').value.trim();
+  if(!v&&$('#mTok').offsetParent!==null){$('#mErr').textContent='Paste a key or token first.';return}
+  const vals={}; if(v){vals.token=v;vals.api_key=v;vals.access_token=v} if(bu)vals.base_url=bu;
+  $('#mSave').disabled=true; $('#mSave').textContent='Connecting…';
+  const slug=pendingConn.real||pendingConn.slug;
+  const r=await api('/v1/connections/'+slug+'/key',{method:'POST',headers:{'content-type':'application/json'},
     body:JSON.stringify({entity_id:ENTITY,values:vals,label:'playground'})});
   $('#mSave').disabled=false; $('#mSave').textContent='Save and connect';
-  if(r.connection){const g=pendingConn.goal; closeConnect(); refreshConn(); if(g){q.value=g;send()}}
-  else{$('#mErr').textContent=(typeof r.detail==='string'?r.detail:'Could not save that token.')}
+  if(r.connection){const nm=$('#mTitle').textContent.replace(/^Link | Account$/g,''); await afterConnected(slug,nm)}
+  else{$('#mErr').textContent=(typeof r.detail==='string'?r.detail:'Could not save that. Check the key and try again.')}
 };
 function watchConn(slug){
   let n=0; const t=setInterval(async()=>{
     n++; const c=await api('/v1/connections?entity_id='+ENTITY);
-    if((c.connections||[]).some(x=>x.app===slug&&x.status==='active')){clearInterval(t);const g=pendingConn&&pendingConn.goal;closeConnect();refreshConn();if(g){q.value=g;send()}}
-    if(n>90)clearInterval(t);
+    if((c.connections||[]).some(x=>x.app===slug&&x.status==='active')){clearInterval(t);await afterConnected(slug,prettyName(slug))}
+    if(n>90||!pendingConn)clearInterval(t);
   },2000);
 }
+async function afterConnected(slug,name){
+  const goal=pendingConn&&pendingConn.goal;
+  closeConnect(); await refreshConn();
+  $$('.cc[data-card="'+slug+'"], .cc[data-card]').forEach(c=>{ if(c.dataset.card===slug||c.dataset.card.replace(/[-_]/g,'')===slug.replace(/[-_]/g,'')){
+    c.classList.add('done'); c.innerHTML=`${tile(slug,34)}<div class="tx"><b>${esc(name)} connected</b><small>Resuming your request…</small></div><span class="dot-on"></span>`}});
+  if(goal){history=history.slice(0,-2);busy=false;send(goal)}
+}
+
+/* ── connections drawer ── */
 async function refreshConn(){
   const c=await api('/v1/connections?entity_id='+ENTITY);
-  const n=(c.connections||[]).filter(x=>x.status==='active').length;
-  $('#connN').textContent=n+' connected';
+  const act=(c.connections||[]).filter(x=>x.status==='active');
+  connected=new Set(act.map(x=>x.app));
+  $('#connN').textContent=act.length+' connected'; $('#connN').classList.toggle('off',!act.length);
+  $('#dList').innerHTML=act.length?act.map(x=>`<div class="row">${tile(x.app,34)}<div class="nm">${esc(prettyName(x.app))}<small>${esc(x.identity||x.label||'connected')}${x.is_default?' · default':''}</small></div><span class="dot-on"></span><button class="btn-s" data-rm="${esc(x.id)}">Remove</button></div>`).join(''):'<div class="empty">No apps connected yet.<br>Ask the agent for something and Tony will offer to connect the app it needs.</div>';
+  $$('#dList [data-rm]').forEach(b=>b.onclick=async()=>{b.disabled=true;await api('/v1/connections/id/'+b.dataset.rm,{method:'DELETE'});refreshConn()});
 }
+$('#connN').onclick=()=>{$('#drawer').classList.add('on');refreshConn()};
+$('#dX').onclick=()=>$('#drawer').classList.remove('on');
+let st; $('#dSearch').addEventListener('input',()=>{clearTimeout(st);st=setTimeout(async()=>{
+  const v=$('#dSearch').value.trim(); if(!v){$('#dRes').innerHTML='';return}
+  const r=await api('/v1/apps?search='+encodeURIComponent(v)+'&limit=8&dedupe=true');
+  $('#dRes').innerHTML=(r.apps||[]).map(a=>`<div class="row">${tile(a.slug,34)}<div class="nm">${esc(a.name)}<small>${esc(a.category||'')} · ${esc((a.auth&&a.auth.type)||'')}</small></div>${connected.has(a.slug)?'<span class="dot-on"></span>':`<button class="btn go" data-add="${esc(a.slug)}">Connect</button>`}</div>`).join('')||'<div class="empty">No matching apps.</div>';
+  $$('#dRes [data-add]').forEach(b=>b.onclick=()=>{$('#drawer').classList.remove('on');openConnect(b.dataset.add,'')});
+},250)});
+
+loadProviders();
 refreshConn();
 (async()=>{const h=await api('/health');if(h&&h.apps)$('#appN').textContent=h.apps.toLocaleString()+' apps · '+(h.actions||0).toLocaleString()+' actions'})();
 q.focus();
@@ -356,8 +455,8 @@ def playground_page() -> str:
            ("plug", "Integrations", "/providers", False), ("key", "Connections", "/account", False),
            ("log", "Logs", "/app", False), ("book", "Docs", "/sdk", False)]
     nav_html = "".join(f'<a href="{h}" class="{"on" if on else ""}">{_I[i]}{t}</a>' for i, t, h, on in nav)
-    sats = ("".join(f'<span class="sat s{n}"><img alt="" src="https://cdn.simpleicons.org/{s}"></span>'
-                    for n, s in ((1, "slack"), (2, "github"), (3, "googlecalendar"), (4, "notion"))))
+    sats = ("".join(f'<span class="sat s{n}"><img alt="" src="/v1/icon/{s}"></span>'
+                    for n, s in ((1, "slack"), (2, "github"), (3, "google_calendar"), (4, "notion"))))
     lines = ('<svg class="ln" viewBox="0 0 200 150" fill="none" stroke="#e2e1dd" stroke-width="1.2" stroke-dasharray="3 4">'
              '<path d="M24 26L100 75M178 20L100 75M38 126L100 75M162 118L100 75"/></svg>')
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -375,7 +474,7 @@ def playground_page() -> str:
   <div class="top"><button class="menu" id="menu" aria-label="Menu">{_I["menu"]}</button>
    <b>Agent Playground</b><span class="hide-m">· test Tony end to end</span><span class="grow"></span>
    <span class="pill hide-m" id="appN"><i></i>Tony</span>
-   <span class="pill off" id="connN"><i></i>0 connected</span>
+   <button class="pill off" id="connN" style="cursor:pointer"><i></i>0 connected</button>
    <button class="btn-s" id="new">New chat</button></div>
   <div class="scroll" id="scroll"><div class="col">
    <div class="hero" id="hero"><div class="orbit">{lines}{sats}<div class="core">{logo(34, 'c')}</div></div>
@@ -401,4 +500,8 @@ def playground_page() -> str:
   <div class="err" id="mErr"></div><button class="btn" id="mSave">Save and connect</button>
   <a class="lnk" id="mDocs" href="#" target="_blank" rel="noopener" style="display:none">Open the API docs ↗</a></div>
  </div><div class="sec">{_I["lock"]} Secured by Tony · encrypted at rest</div></div></div>
+<aside class="drawer" id="drawer"><h4>Connections<button class="btn-s" id="dX">Close</button></h4>
+ <a href="/connections" style="display:block;margin:8px 12px 0;font-size:12.5px;color:#6b6a63;text-decoration:none">Manage all accounts and permissions →</a>
+ <input class="search" id="dSearch" placeholder="Search 7,900 apps to connect…" autocomplete="off">
+ <div class="list"><div id="dRes"></div><div id="dList"></div></div></aside>
 <script>const LOGO28={json.dumps(logo(28,'m'))};{_JS}</script></body></html>"""

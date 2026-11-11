@@ -141,6 +141,8 @@ async def shield_mw(request, call_next):
 
 app.include_router(install_router)
 app.include_router(health_router)
+from .authflow import router as authflow_router  # one-click connect + connected accounts
+app.include_router(authflow_router)
 app.include_router(connect_router)
 app.include_router(security_router)
 app.include_router(billing_router)

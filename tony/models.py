@@ -93,6 +93,7 @@ class AuthSession(Base):
     app_slug: Mapped[str] = mapped_column(String(80))
     code_verifier: Mapped[str] = mapped_column(String(128), default="")
     redirect_after: Mapped[str] = mapped_column(String(400), default="/app")
+    new_account: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     consumed: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -410,3 +411,22 @@ class ResumeTask(Base):
     result: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ConnectionEvent(Base):
+    """Audit trail for account authentication: connect, refresh, revoke, failure.
+
+    Tokens never appear here. Only the app, the account identity and the outcome,
+    so a user can answer "who connected what, and when".
+    """
+    __tablename__ = "connection_events"
+    __table_args__ = (Index("ix_connevent_ws", "workspace_id", "created_at"),)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    workspace_id: Mapped[str] = mapped_column(String(32), index=True)
+    entity_id: Mapped[str] = mapped_column(String(160), default="")
+    app_slug: Mapped[str] = mapped_column(String(80), index=True)
+    account_id: Mapped[str] = mapped_column(String(32), default="")
+    kind: Mapped[str] = mapped_column(String(24), default="connect")  # connect|refresh|revoke|error|disconnect
+    identity: Mapped[str] = mapped_column(String(200), default="")
+    detail: Mapped[str] = mapped_column(String(400), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

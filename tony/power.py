@@ -91,7 +91,8 @@ def _tool_schema(app_slug: str, action: Any) -> dict[str, Any]:
 def _pick_apps(names: list[str], limit: int = 40) -> list[Any]:
     out = []
     for raw in names:
-        spec = catalog.get(raw.strip()) if raw.strip() else None
+        key = raw.strip()
+        spec = (catalog.resolve(key) or catalog.get(key)) if key else None
         if spec:
             out.append(spec)
         if len(out) >= limit:
@@ -340,7 +341,14 @@ async def _run_one(ws: str, entity: str, app_slug: str, action_slug: str | None,
         return {"ok": False, "error": "no actions"}
     creds = credentials_for(ws, entity, spec)
     if spec.auth.type != "none" and creds is None and not action.public:
-        return {"ok": False, "error": f"{spec.name} is not connected", "needs_connection": spec.slug}
+        from urllib.parse import quote as _q
+        link = (f"/connect/{spec.slug}?entity_id={_q(entity)}&next=/playground"
+                if spec.auth.type == "oauth2" else f"/connections?app={spec.slug}&mode=key")
+        return {"ok": False, "app": spec.slug, "action": action.slug,
+                "error": f"{spec.name} is not connected",
+                "needs_connection": spec.slug,
+                "connect_url": link,
+                "connect_mode": "oauth2" if spec.auth.type == "oauth2" else "key"}
     check_run(ws)
     started = time.perf_counter()
     status, code, error, body = "error", 0, "", None
@@ -545,7 +553,17 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
     else:
         ranked = sorted(catalog.apps.values(),
                         key=lambda s: (_score_app(goal, s), -len(s.slug)), reverse=True)
-        specs = [s for s in ranked[:3] if _score_app(goal, s) >= 6]
+        specs, seen = [], set()
+        for cand in ranked[:14]:
+            if _score_app(goal, cand) < 6:
+                break
+            canon = catalog.resolve(cand.slug) or cand     # skip empty duplicate twins
+            if canon.slug in seen:
+                continue
+            seen.add(canon.slug)
+            specs.append(canon)
+            if len(specs) >= 3:
+                break
         if not specs:
             text = await _direct_answer(goal, body.history)
             return {"answer": text, "steps": [],
@@ -668,10 +686,28 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
 
     if not answer:
         answer = _summarise(goal, steps)
+
+    # hand the client everything it needs to finish the job: which app, and the
+    # exact link that starts one-click sign-in, so it can resume automatically
+    missing: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for st in steps:
+        slug = st.get("needs_connection")
+        if slug and slug not in seen:
+            seen.add(slug)
+            spec = catalog.resolve(slug) or catalog.get(slug)
+            missing.append({
+                "app": slug,
+                "name": getattr(spec, "name", slug),
+                "connect_url": st.get("connect_url", f"/connect/{slug}"),
+                "mode": st.get("connect_mode", "oauth2"),
+            })
     elapsed = int((time.perf_counter() - started) * 1000)
     return {
         "answer": answer,
         "steps": steps,
+        "needs_connection": missing,
+        "resume_after_connect": bool(missing),
         "apps_considered": [s.slug for s in specs],
         "engine": engine,
         "elapsed_ms": elapsed,

@@ -241,7 +241,7 @@ def list_connections(request: Request, entity_id: str = "") -> dict[str, Any]:
 
 @router.post("/connections/{app_slug}/start")
 async def connect_start(app_slug: str, request: Request, entity_id: str = "default",
-                        redirect_after: str = "/app") -> dict[str, Any]:
+                        redirect_after: str = "/app", new_account: bool = False) -> dict[str, Any]:
     ws, _ = workspace_from_request(request)
     spec = catalog.get(app_slug)
     if not spec:
@@ -268,7 +268,7 @@ async def connect_start(app_slug: str, request: Request, entity_id: str = "defau
         })
     _entity(ws, entity_id)
     try:
-        session_id, url = await start_oauth(ws, entity_id, spec, redirect_after)
+        session_id, url = await start_oauth(ws, entity_id, spec, redirect_after, new_account=new_account)
     except OAuthError as exc:
         return JSONResponse(status_code=409, content={
             "detail": str(exc),
@@ -340,16 +340,102 @@ def connect_key(app_slug: str, body: KeyIn, request: Request) -> dict[str, Any]:
 
 
 @router.delete("/connections/{app_slug}")
-def disconnect(app_slug: str, request: Request, entity_id: str = "default") -> dict[str, Any]:
+async def disconnect(app_slug: str, request: Request, entity_id: str = "default") -> dict[str, Any]:
+    """Revoke every account for one app (provider-side revocation included)."""
+    from .oauth import disconnect as _disconnect
+
     ws, _ = workspace_from_request(request)
     with session() as s:
         rows = s.scalars(select(ConnectedAccount).where(
             ConnectedAccount.workspace_id == ws,
             ConnectedAccount.entity_id == entity_id,
             ConnectedAccount.app_slug == app_slug)).all()
-        for row in rows:
-            s.delete(row)
-    return {"deleted": len(rows)}
+    revoked = 0
+    for row in rows:
+        res = await _disconnect(row)
+        revoked += 1 if res.get("revoked_remote") else 0
+    return {"deleted": len(rows), "revoked_remote": revoked}
+
+
+@router.delete("/connections/id/{account_id}")
+async def disconnect_one(account_id: str, request: Request) -> dict[str, Any]:
+    """Remove one connected account: revoke at the provider, then forget it."""
+    from .oauth import disconnect as _disconnect, purge
+
+    ws, _ = workspace_from_request(request)
+    with session() as s:
+        row = s.get(ConnectedAccount, account_id)
+        if row is None or row.workspace_id != ws:
+            raise HTTPException(404, detail="No such connection")
+    res = await _disconnect(row)
+    purge(account_id)
+    return {"ok": True, **res}
+
+
+@router.post("/connections/id/{account_id}/default")
+def make_default(account_id: str, request: Request) -> dict[str, Any]:
+    """Pin one account as the one the agent uses for that app."""
+    ws, _ = workspace_from_request(request)
+    with session() as s:
+        rows = s.scalars(select(ConnectedAccount).where(
+            ConnectedAccount.workspace_id == ws)).all()
+        target = next((r for r in rows if r.id == account_id), None)
+        if target is None:
+            raise HTTPException(404, detail="No such connection")
+        for r in rows:
+            if r.app_slug != target.app_slug:
+                continue
+            from .oauth import account_meta, set_account_meta
+            set_account_meta(r, is_default=(r.id == account_id))
+            if r.id == account_id:
+                r.meta_json = r.meta_json  # touched below by the flush
+        s.flush()
+    return {"ok": True, "account_id": account_id}
+
+
+@router.get("/providers")
+def managed_providers() -> dict[str, Any]:
+    """Every managed integration, its scopes and whether one-click sign-in is armed."""
+    from . import provider_registry as managed
+
+    out = []
+    for slug, p in managed.PROVIDERS.items():
+        spec = catalog.get(slug)
+        out.append({
+            "app": slug,
+            "name": p.name,
+            "category": p.category,
+            "logo": getattr(spec, "logo", "") if spec else "",
+            "scopes": list(p.scopes),
+            "ready": managed.ready(slug),
+            "managed_by": managed.managed_by_platform(slug),
+            "env": list(p.env),
+            "docs": p.docs,
+            "authorize_url": p.authorize_url,
+            "pkce": p.pkce,
+            "setup_endpoint": f"/v1/account/providers/{slug}",
+            "connect_url": f"/connect/{slug}",
+        })
+    return {"providers": out, "total": len(out),
+            "ready": sum(1 for x in out if x["ready"])}
+
+
+@router.get("/connections/events")
+def connection_events(request: Request, limit: int = 50, app: str = "") -> dict[str, Any]:
+    """Audit trail of authentication events. Tokens are never recorded."""
+    from .models import ConnectionEvent
+
+    ws, _ = workspace_from_request(request)
+    with session() as s:
+        q = select(ConnectionEvent).where(ConnectionEvent.workspace_id == ws)
+        if app:
+            q = q.where(ConnectionEvent.app_slug == app)
+        rows = s.scalars(q.order_by(ConnectionEvent.created_at.desc()).limit(min(limit, 200))).all()
+        return {"events": [{
+            "id": r.id, "app": r.app_slug, "kind": r.kind, "identity": r.identity,
+            "account_id": r.account_id, "detail": r.detail,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        } for r in rows]}
 
 
 # ── execution ─────────────────────────────────────────────────────────────

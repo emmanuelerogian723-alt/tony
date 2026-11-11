@@ -375,6 +375,23 @@ class Catalog:
                     if not spec.base_url:
                         spec.base_url = infer_base_url(spec)
                     self.apps[spec.slug] = attach_universal(spec)
+        self._apply_managed_auth()
+
+    def _apply_managed_auth(self) -> None:
+        """Give the core providers their real OAuth metadata, once per load."""
+        try:
+            from . import provider_registry as managed
+        except Exception:  # pragma: no cover - registry is optional
+            return
+        for spec in list(self.apps.values()):
+            try:
+                managed.apply(spec)
+            except Exception as exc:  # noqa: BLE001 - a bad override must not kill the catalog
+                self.errors.append(f"managed auth {spec.slug}: {type(exc).__name__}")
+        try:
+            managed.ensure_apps(self)
+        except Exception:  # pragma: no cover
+            pass
 
     # ── lookups ──────────────────────────────────────────────────────────
         self._mark_shadowed()

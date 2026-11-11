@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -175,10 +176,11 @@ def redirect_uri(spec: AppSpec) -> str:
     return f"{settings.base_url}/oauth/callback"
 
 
-async def start_oauth(workspace_id: str, entity_id: str, spec: AppSpec, redirect_after: str = "/app") -> tuple[str, str]:
+async def start_oauth(workspace_id: str, entity_id: str, spec: AppSpec, redirect_after: str = "/app",
+                      new_account: bool = False) -> tuple[str, str]:
     """Create an auth session and return (session_id, authorization_url)."""
     cid, _secret = _client_creds(spec)
-    if cid and not _secret and not spec.auth.pkce:
+    if cid and not _secret:
         # An id with no secret starts a sign-in that the provider then refuses at the token step,
         # which looks like a dead button. Refuse early and honestly instead.
         raise OAuthError(
@@ -198,6 +200,7 @@ async def start_oauth(workspace_id: str, entity_id: str, spec: AppSpec, redirect
             app_slug=spec.slug,
             code_verifier=verifier,
             redirect_after=redirect_after or "/app",
+            new_account=bool(new_account),
         )
         s.add(row)
         s.flush()
@@ -266,13 +269,12 @@ async def complete_oauth(state: str, code: str) -> ConnectedAccount:
         if token_data.get("expires_in"):
             expires_at = datetime.now(timezone.utc) + timedelta(seconds=int(token_data["expires_in"]) - 30)
 
-        account = s.scalar(
-            select(ConnectedAccount).where(
-                ConnectedAccount.workspace_id == pending.workspace_id,
-                ConnectedAccount.entity_id == pending.entity_id,
-                ConnectedAccount.app_slug == spec.slug,
-            )
-        )
+        stmt = select(ConnectedAccount).where(
+            ConnectedAccount.workspace_id == pending.workspace_id,
+            ConnectedAccount.entity_id == pending.entity_id,
+            ConnectedAccount.app_slug == spec.slug,
+        ).order_by(ConnectedAccount.created_at.asc())
+        account = None if getattr(pending, "new_account", False) else s.scalars(stmt).first()
         if account is None:
             account = ConnectedAccount(
                 workspace_id=pending.workspace_id,
@@ -285,10 +287,18 @@ async def complete_oauth(state: str, code: str) -> ConnectedAccount:
         account.credentials_enc = encrypt_json(creds)
         account.scopes = str(creds["scope"] or "")
         account.expires_at = expires_at
-        account.label = str(creds.get("scope") or "")[:120]
+        account.label = ""
         pending.consumed = True
+        s.flush()
         account._redirect_after = pending.redirect_after or "/app"
         s.flush()
+        who = await fetch_identity(spec, creds)
+        set_account_meta(account, identity=who.get("identity", ""), name=who.get("name", ""),
+                         connected_via="oauth2", provider=spec.slug)
+        account.label = (who.get("identity") or who.get("name") or spec.name)[:160]
+        s.flush()
+        audit(account.workspace_id, account.entity_id, account.app_slug, "connect",
+              account.id, account.label, " ".join(creds.get("scope", "").split())[:300])
         return account
 
 
@@ -314,18 +324,20 @@ def store_api_key(workspace_id: str, entity_id: str, spec: AppSpec, values: dict
         return account
 
 
-def credentials_for(workspace_id: str, entity_id: str, spec: AppSpec) -> dict[str, Any] | None:
+def credentials_for(workspace_id: str, entity_id: str, spec: AppSpec,
+                    account_id: str = "") -> dict[str, Any] | None:
     import os as _os
 
     with session() as s:
-        account = s.scalar(
-            select(ConnectedAccount).where(
-                ConnectedAccount.workspace_id == workspace_id,
-                ConnectedAccount.entity_id == entity_id,
-                ConnectedAccount.app_slug == spec.slug,
-                ConnectedAccount.status == "active",
-            )
+        stmt = select(ConnectedAccount).where(
+            ConnectedAccount.workspace_id == workspace_id,
+            ConnectedAccount.entity_id == entity_id,
+            ConnectedAccount.app_slug == spec.slug,
+            ConnectedAccount.status == "active",
         )
+        if account_id:
+            stmt = stmt.where(ConnectedAccount.id == account_id)
+        account = s.scalars(stmt.order_by(ConnectedAccount.created_at.asc())).first()
         if account is None:
             if spec.auth.static_env:
                 val = _os.getenv(spec.auth.static_env, "").strip()
@@ -369,19 +381,183 @@ async def refresh_if_needed(account: ConnectedAccount, spec: AppSpec) -> None:
         creds["refresh_token"] = token_data["refresh_token"]
     account.credentials_enc = encrypt_json(creds)
     account.status = "active"
+    set_account_meta(account, refreshed_at=datetime.now(timezone.utc).isoformat())
+    audit(account.workspace_id, account.entity_id, account.app_slug, "refresh", account.id,
+          account_meta(account).get("identity", ""), "access token refreshed")
     if token_data.get("expires_in"):
         account.expires_at = datetime.now(timezone.utc) + timedelta(seconds=int(token_data["expires_in"]) - 30)
 
 
+# ── identity, audit, revocation ───────────────────────────────────────────────
+def _dig(data: Any, path: str) -> Any:
+    cur = data
+    for part in path.split("."):
+        if isinstance(cur, dict):
+            cur = cur.get(part)
+        elif isinstance(cur, list) and part.isdigit() and int(part) < len(cur):
+            cur = cur[int(part)]
+        else:
+            return None
+        if cur in (None, ""):
+            return None
+    return cur
+
+
+async def fetch_identity(spec: AppSpec, creds: dict[str, Any]) -> dict[str, str]:
+    """Ask the provider who just signed in, so the dashboard shows a real account.
+
+    Failures are never fatal: a connection without a label still works, it just
+    reads "Connected" instead of "user@company.com".
+    """
+    from . import provider_registry as managed
+
+    provider = managed.provider_for(spec.slug)
+    if provider is None or not provider.identity_url:
+        return {}
+    token = creds.get("access_token") or creds.get("api_key") or ""
+    if not token:
+        return {}
+    url = provider.identity_url
+    if "{token}" in url:
+        url = url.replace("{token}", token)
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    if spec.slug.startswith("notion"):
+        headers["Notion-Version"] = "2022-06-28"
+    try:
+        async with httpx.AsyncClient(timeout=12) as client:
+            if provider.identity_method == "POST":
+                resp = await client.post(url, headers=headers, json={})
+            else:
+                resp = await client.get(url, headers=headers)
+        if resp.status_code >= 400:
+            return {}
+        data = resp.json()
+    except Exception:  # noqa: BLE001 - identity is decoration, never a blocker
+        return {}
+    out: dict[str, str] = {}
+    for path in provider.identity_json:
+        val = _dig(data, path)
+        if isinstance(val, str) and val.strip():
+            out["identity"] = val.strip()[:200]
+            break
+    name = _dig(data, "name") or _dig(data, "display_name") or _dig(data, "bot.owner.user.name")
+    if isinstance(name, str) and name.strip():
+        out["name"] = name.strip()[:200]
+    if isinstance(data, dict):
+        out["raw"] = json.dumps({k: v for k, v in data.items()
+                                 if isinstance(v, (str, int, float, bool))})[:800]
+    return out
+
+
+def audit(workspace_id: str, entity_id: str, app_slug: str, kind: str,
+          account_id: str = "", identity: str = "", detail: str = "") -> None:
+    """Record an authentication event. Never stores credential material."""
+    from .models import ConnectionEvent
+
+    try:
+        with session() as s:
+            s.add(ConnectionEvent(workspace_id=workspace_id, entity_id=entity_id or "",
+                                  app_slug=app_slug, account_id=account_id or "",
+                                  kind=kind, identity=(identity or "")[:200],
+                                  detail=(detail or "")[:400]))
+    except Exception:  # noqa: BLE001 - auditing must never break a sign-in
+        pass
+
+
+def account_meta(account: ConnectedAccount) -> dict[str, Any]:
+    try:
+        return json.loads(account.meta_json or "{}")
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def set_account_meta(account: ConnectedAccount, **values: Any) -> None:
+    meta = account_meta(account)
+    meta.update({k: v for k, v in values.items() if v is not None})
+    account.meta_json = json.dumps(meta, default=str)[:4000]
+
+
+async def revoke_remote(spec: AppSpec, creds: dict[str, Any]) -> bool:
+    """Tell the provider to invalidate the token. Best effort, never raises."""
+    from . import provider_registry as managed
+
+    provider = managed.provider_for(spec.slug)
+    if provider is None or not provider.revoke_url:
+        return False
+    token = creds.get("refresh_token") or creds.get("access_token") or ""
+    if not token:
+        return False
+    cid, secret = _client_creds(spec)
+    url = provider.revoke_url.replace("{client_id}", cid)
+    try:
+        async with httpx.AsyncClient(timeout=12) as client:
+            if provider.revoke_mode == "basic":
+                resp = await client.delete(url, auth=httpx.BasicAuth(cid, secret),
+                                           json={"access_token": token})
+            elif provider.revoke_mode == "bearer":
+                resp = await client.post(url, headers={"Authorization": f"Bearer {token}"})
+            elif provider.revoke_mode == "json":
+                resp = await client.post(url, json={"token": token, "client_id": cid,
+                                                    "client_secret": secret})
+            else:
+                resp = await client.post(url, params={"token": token},
+                                         headers={"Content-Type": "application/x-www-form-urlencoded"})
+        return resp.status_code < 400
+    except Exception:  # noqa: BLE001
+        return False
+
+
+async def disconnect(account: ConnectedAccount, spec: AppSpec | None = None) -> dict[str, Any]:
+    """Revoke at the provider, then forget the local credentials."""
+    from .catalog import catalog as _catalog
+
+    spec = spec or _catalog.get(account.app_slug)
+    creds: dict[str, Any] = {}
+    if account.credentials_enc:
+        try:
+            creds = decrypt_json(account.credentials_enc)
+        except ValueError:
+            creds = {}
+    revoked = await revoke_remote(spec, creds) if spec else False
+    with session() as s:
+        row = s.get(ConnectedAccount, account.id)
+        if row is not None:
+            row.status = "revoked"
+            row.credentials_enc = ""
+            row.scopes = ""
+            row.expires_at = None
+            set_account_meta(row, revoked_remote=revoked)
+            s.flush()
+            audit(row.workspace_id, row.entity_id, row.app_slug, "revoke", row.id,
+                  account_meta(row).get("identity", ""),
+                  "revoked at provider" if revoked else "removed locally")
+    return {"ok": True, "revoked_remote": revoked}
+
+
+def purge(account_id: str) -> None:
+    """Hard delete after revocation (used by the dashboard's remove action)."""
+    with session() as s:
+        row = s.get(ConnectedAccount, account_id)
+        if row is not None:
+            s.delete(row)
+
+
 def public_redact(account: ConnectedAccount) -> dict[str, Any]:
+    meta = account_meta(account)
     return {
         "id": account.id,
         "app": account.app_slug,
         "entity_id": account.entity_id,
         "status": account.status,
+        "auth_type": account.auth_type,
         "label": account.label,
+        "identity": meta.get("identity", "") or account.label,
+        "display_name": meta.get("name", ""),
+        "is_default": bool(meta.get("is_default")),
+        "revoked_remote": meta.get("revoked_remote"),
         "scopes": account.scopes.split() if account.scopes else [],
         "created_at": account.created_at.isoformat() if account.created_at else None,
+        "updated_at": account.updated_at.isoformat() if account.updated_at else None,
         "expires_at": account.expires_at.isoformat() if account.expires_at else None,
         "base_url": _safe_base_url(account),
     }

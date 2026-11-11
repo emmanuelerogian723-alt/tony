@@ -75,9 +75,13 @@ def _migrate(backend: str) -> None:
     """Additive, idempotent schema upgrades for existing deployments."""
     stmts = [
         "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS user_id VARCHAR(32)",
+        "ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS new_account BOOLEAN DEFAULT FALSE",
     ]
     if backend != "postgres":
-        stmts = ["ALTER TABLE api_keys ADD COLUMN user_id VARCHAR(32)"]
+        stmts = [
+            "ALTER TABLE api_keys ADD COLUMN user_id VARCHAR(32)",
+            "ALTER TABLE auth_sessions ADD COLUMN new_account BOOLEAN DEFAULT 0",
+        ]
     import logging
 
     from sqlalchemy import text

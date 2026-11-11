@@ -130,6 +130,7 @@ def inspect(request: Request) -> None:
                                          "contact the workspace owner if you think it is a mistake.")
     now = time.time()
     ua = request.headers.get("user-agent", "")
+    is_write = request.method not in {"GET", "HEAD", "OPTIONS"}
     points, reasons = 0.0, []
 
     if PROBE_PATHS.search(path) or PROBE_PATHS.search(request.url.query or ""):
@@ -143,12 +144,18 @@ def inspect(request: Request) -> None:
     paths.append((now, path))
     window = [p for t, p in paths if now - t < 20]
     distinct = len(set(window))
-    if SOFT_UA.search(ua) and distinct >= 8:
-        points += 20; reasons.append("scripted_sweep")      # a script walking many routes
-    if len(window) >= 18 and distinct >= 15:
-        points += 30; reasons.append("endpoint_sweep")      # walking many different routes fast
-    if len(window) >= 30:
-        points += 12; reasons.append("burst")
+    # Reading is not abuse: an app screen legitimately fires a dozen GETs at once,
+    # and a headless browser rendering it looks identical to a user. Writes earn
+    # sweep and burst points; a scripted client only reading gets a light nudge.
+    if is_write:
+        if SOFT_UA.search(ua) and distinct >= 8:
+            points += 20; reasons.append("scripted_sweep")  # a script walking many routes
+        if len(window) >= 18 and distinct >= 15:
+            points += 30; reasons.append("endpoint_sweep")  # walking many routes fast
+        if len(window) >= 30:
+            points += 12; reasons.append("burst")
+    elif SOFT_UA.search(ua) and distinct >= 8:
+        points += 4; reasons.append("scripted_reads")
 
     if not points:
         return

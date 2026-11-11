@@ -25,3 +25,24 @@ def test_landing_names_real_endpoints_not_slogans(client):
 def test_landing_uses_the_console_icon_files(client):
     html = client.get("/").text
     assert "/static/brand/tony-mark.svg" in html
+
+
+def test_hero_uses_real_provider_icons(client):
+    import re
+    from pathlib import Path
+
+    html = client.get("/").text
+    slugs = set(re.findall(r"/static/brand/icons/([a-z]+)\.svg", html))
+    assert {"github", "gmail", "slack", "notion", "stripe"} <= slugs
+    assert len(slugs) >= 12
+    icons = Path(__file__).resolve().parents[1] / "tony" / "static" / "brand" / "icons"
+    for slug in slugs:
+        p = icons / f"{slug}.svg"
+        assert p.exists(), f"missing icon asset for {slug}"
+        assert "<path" in p.read_text(), f"{slug} is not a real vector icon"
+
+
+def test_every_icon_is_served(client):
+    for slug in ("github", "gmail", "notion", "figma"):
+        r = client.get(f"/static/brand/icons/{slug}.svg")
+        assert r.status_code == 200 and "svg" in r.headers.get("content-type", "")

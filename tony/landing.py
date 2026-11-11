@@ -768,6 +768,8 @@ def landing_html(demo_open: bool = True) -> str:
 <title>Tony &middot; execution layer for AI agents</title>
 <meta name="description" content="{app_count:,} apps and {action_count:,} typed actions behind one API, with encrypted credentials, approval-gated writes and full audit.">
 <meta name="theme-color" content="#000000">
+<meta property="og:image" content="/static/brand/hero-orbit.jpg">
+<meta property="og:title" content="Tony, the execution layer for AI agents">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="{fonts}">
@@ -1123,3 +1125,317 @@ body{overflow-x:clip}
 @keyframes slide{to{transform:translateX(-50%)}}
 @media(prefers-reduced-motion:reduce){.tape-track{animation:none}}
 """
+
+# ─── architecture pass: hero art, section rhythm, more energy ───────────────
+CSS += """
+:root{--ink:#000;--line:#171717;--line2:#232323;--dim:#8f8f8f;--hot:#E2542B}
+body{background:#000}
+.top .wrap{height:64px}
+.hero{padding:88px 0 0}
+.hero-grid{grid-template-columns:1.02fr .98fr;gap:44px;align-items:center}
+.hero-art{position:relative;isolation:isolate}
+.hero-art img{width:100%;height:auto;display:block;border-radius:20px;
+ filter:saturate(1.04) contrast(1.05);}
+.hero-art:before{content:'';position:absolute;inset:-12% -8%;z-index:-1;border-radius:50%;
+ background:radial-gradient(closest-side,rgba(226,84,43,.20),rgba(226,84,43,.05) 55%,transparent 78%);
+ animation:breathe 7s ease-in-out infinite}
+.hero-art:after{content:'';position:absolute;inset:0;border-radius:20px;pointer-events:none;
+ background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.55));}
+@keyframes breathe{0%,100%{opacity:.65;transform:scale(.99)}50%{opacity:1;transform:scale(1.02)}}
+.art-tag{position:absolute;left:16px;bottom:14px;z-index:2;display:flex;align-items:center;gap:8px;
+ padding:6px 11px;border-radius:999px;background:rgba(8,8,8,.72);border:1px solid #262626;
+ color:#c9c9c9;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+ backdrop-filter:blur(8px)}
+.art-tag i{width:5px;height:5px;border-radius:50%;background:#E2542B;animation:blip 2.4s ease-in-out infinite}
+@keyframes blip{0%,100%{opacity:.35}50%{opacity:1}}
+.eyebrow{border-color:#242424;background:linear-gradient(180deg,#0a0a0a,#050505)}
+.eyebrow svg{width:11px;height:11px;stroke:#E2542B;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+h1 em{color:#6f6f6f}
+.btn.solid{box-shadow:0 1px 0 rgba(255,255,255,.6) inset,0 10px 30px rgba(255,255,255,.08)}
+.btn.solid:hover{transform:translateY(-1px)}
+.btn.ghost:hover{transform:translateY(-1px)}
+.card,.step,.tier{transition:border-color .22s,transform .22s,background .22s}
+.step:hover,.tier:hover{border-color:#2e2e2e;transform:translateY(-2px)}
+.snum{display:flex;align-items:center;gap:12px;margin-bottom:34px}
+.snum b{font-family:'JetBrains Mono',monospace;font-size:11px;color:#E2542B;letter-spacing:.1em}
+.snum span{flex:1;height:1px;background:linear-gradient(90deg,#1e1e1e,transparent)}
+.sec{padding:92px 0}
+.sec-hd{margin-bottom:40px}
+.connect-grid{display:grid;grid-template-columns:1.02fr .98fr;gap:44px;align-items:start}
+.stack{display:grid;gap:12px}
+.stack .step{padding:20px 22px}
+.stack .step h4{margin-bottom:6px}
+.pulse-line{height:1px;background:linear-gradient(90deg,transparent,#E2542B,transparent);opacity:.5}
+.ticker-wrap{border-top:1px solid #141414;border-bottom:1px solid #141414}
+@media(max-width:900px){
+ .hero-grid,.connect-grid{grid-template-columns:1fr}
+ .hero-art{order:-1;margin-bottom:6px}
+ .hero{padding-top:40px}
+ .art-tag{font-size:10px}
+}
+"""
+
+BODY = """
+<header class="top"><div class="wrap">
+  <a class="mark" href="/">__MARK__Tony</a>
+  <nav>
+    <a href="#connect">Connect</a><a href="#security">Security</a>
+    <a href="#pricing">Pricing</a><a href="/docs">Docs</a>
+  </nav>
+  <span class="grow"></span>
+  <a class="btn ghost sm" href="/account">Sign in</a>
+  <a class="btn solid sm" href="/account">Open console</a>
+</div></header>
+
+<main>
+<section class="hero"><div class="wrap hero-grid">
+  <div>
+    <span class="eyebrow mono"><svg viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11L9.5 22 19 10.2h-6.4L13 2Z"/></svg>
+      Hosted OAuth &middot; __APPS__ apps &middot; __ACTIONS__ actions</span>
+    <h1>Users sign in once.<br><em>Their agent does the rest.</em></h1>
+    <p class="lede">Tony hands your user a link. They approve on the provider's own page, and Tony keeps the token
+      encrypted, refreshed and scoped. Your agent then works inside GitHub, Gmail, Slack or Notion on their behalf,
+      with <b>no API keys in your code</b> and every write on the record.</p>
+    <div class="cta">
+      <a class="btn solid" href="/account">Connect an app</a>
+      <a class="btn ghost" href="#connect">See the flow</a>
+    </div>
+    <div class="snip">
+      <div class="snip-hd mono"><span>mint a connection link</span><button data-copy="c1">copy</button></div>
+      <pre id="c1"><span class="f">curl</span> -X POST https://tony-7su0.onrender.com/v1/connect-links \\
+  -H <span class="s">"Authorization: Bearer $TONY_KEY"</span> \\
+  -d <span class="s">'{"app":"github","agent_name":"Mira","tiers":["read","write"]}'</span>
+<span class="k">→</span> { "url": "https://tony-7su0.onrender.com/connect/tcl_..." }</pre>
+    </div>
+  </div>
+
+  <div class="hero-art">
+    <img src="/static/brand/hero-orbit.jpg" width="1100" height="1100"
+         alt="Tony's mark standing at the centre of a ring of connected application icons"
+         loading="eager" decoding="async">
+    <span class="art-tag"><i></i>every tile is one granted scope</span>
+  </div>
+</div>
+
+<div class="wrap"><div class="stats">
+  <div><b>__APPS__</b><span>apps in the catalogue</span></div>
+  <div><b>__ACTIONS__</b><span>typed actions</span></div>
+  <div><b>__WRITES__</b><span>gated write actions</span></div>
+  <div><b>PKCE</b><span>where the provider supports it</span></div>
+</div></div>
+</section>
+
+<div class="ticker-wrap">__TICKER__</div>
+
+<section class="sec" id="connect"><div class="wrap">
+  <div class="snum"><b>01</b><span></span></div>
+  <div class="sec-hd rv"><span class="mono" style="color:#E2542B;display:block;margin-bottom:13px">The flow</span>
+    <h2>One link, then the provider does the asking.</h2>
+    <p>Not a one-off integration. The same three endpoints cover every provider, because scopes, token exchange
+       and refresh come from one declarative registry.</p></div>
+  <div class="connect-grid">
+    <div class="card consent rv">
+      <div class="consent-top">
+        <div class="plate">__MARK__</div><div class="pin"></div>
+        <div class="plate"><svg viewBox="0 0 24 24" fill="#F3F0E9"><path d="M12 1.8a10.2 10.2 0 0 0-3.23 19.88c.5.09.68-.22.68-.49v-1.9c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.1-1.47-1.1-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.59.69.49A10.2 10.2 0 0 0 12 1.8"/></svg></div>
+      </div>
+      <h3>Mira wants to connect to your GitHub</h3>
+      <p>You sign in on GitHub's own page. Tony never sees your password.</p>
+      <div class="scope"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 12.5 9.4 18 20 6.6"/></svg>
+        <div><b>View repositories and issues</b><span>read access to your account</span></div></div>
+      <div class="scope"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 12.5 9.4 18 20 6.6"/></svg>
+        <div><b>Open issues and comment</b><span>write access, on the record</span></div></div>
+      <div class="scope"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 12.5 9.4 18 20 6.6"/></svg>
+        <div><b>Read your profile</b><span>needed to attribute the actions</span></div></div>
+      <a class="btn solid wide" style="margin-top:14px" href="/account">Continue to GitHub</a>
+      <div class="foot-note">Secured by Tony &middot; single use &middot; expires in 30 minutes</div>
+    </div>
+    <div class="stack rv">
+      <div class="step"><span class="n">01 / issue</span><h4>Create the link</h4>
+        <p>Ask for an app and the tiers you need. Tony mints a signed, single-use URL bound to one workspace.</p>
+        <code>POST /v1/connect-links</code></div>
+      <div class="step"><span class="n">02 / approve</span><h4>The user consents</h4>
+        <p>Authorization code with PKCE where offered, callback verified on Tony, tokens encrypted before storage.</p>
+        <code>GET /connect/tcl_...</code></div>
+      <div class="step"><span class="n">03 / act</span><h4>Your agent executes</h4>
+        <p>Tokens refresh on the way in, reads run at once, writes can wait for a human, and you get a receipt.</p>
+        <code>POST /v1/execute</code></div>
+      <div class="step"><span class="n">04 / prove it</span><h4>Health, not hope</h4>
+        <p>A probe classifies every connection: healthy, expired, rate limited or gone, and reconnects the ones that died.</p>
+        <code>POST /v1/health/check</code></div>
+    </div>
+  </div>
+</div></section>
+
+<section class="sec" id="security" style="border-top:1px solid #101010"><div class="wrap">
+  <div class="snum"><b>02</b><span></span></div>
+  <div class="split">
+    <div class="sec-hd rv" style="margin-bottom:0">
+      <span class="mono" style="color:#E2542B;display:block;margin-bottom:13px">Security</span>
+      <h2>Built for a hostile internet.</h2>
+      <p>A gateway holds real credentials, so it assumes someone is probing it. Every request is scored, not just
+         counted: probe paths, scanner agents, endpoint sweeps and repeated rejected keys raise a decaying score,
+         and a persistent offender earns a timed block that doubles on repeat.</p>
+      <div class="cta" style="margin-top:24px"><a class="btn ghost sm" href="/docs">Security notes</a>
+        <span class="hint">blocks self-heal</span></div>
+    </div>
+    <div class="layers rv">
+      <div class="layer"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M12 2.8 5 6v6c0 4.6 3 8 7 9.2 4-1.2 7-4.6 7-9.2V6l-7-3.2Z"/></svg>
+        <div><b>Behavioural scoring</b><span>bursts, sweeps, scanner signatures, with decay</span></div></div>
+      <div class="layer"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="4" y="10" width="16" height="10" rx="2.4"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10"/></svg>
+        <div><b>Encrypted credentials</b><span>sealed at rest, never returned by the API</span></div></div>
+      <div class="layer"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 12h16M12 4v16"/></svg>
+        <div><b>Scoped agent tokens</b><span>limited to apps, tiers and an expiry you set</span></div></div>
+      <div class="layer"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M5 12.5 10 17l9-10"/></svg>
+        <div><b>Approval gate</b><span>writes and deletes can wait for a human</span></div></div>
+      <div class="layer"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="8.4"/><path d="M12 8v4.4l3 1.8"/></svg>
+        <div><b>Single-use links</b><span>short expiry, one workspace, one entity</span></div></div>
+      <div class="layer"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h7"/></svg>
+        <div><b>Full audit</b><span>every call, argument and veto recorded</span></div></div>
+    </div>
+  </div>
+</div></section>
+
+<section class="sec" style="border-top:1px solid #101010"><div class="wrap">
+  <div class="snum"><b>03</b><span></span></div>
+  <div class="split">
+    <div class="rv">
+      <h2 style="margin-bottom:14px">Plain HTTP in, a receipt out.</h2>
+      <p style="color:#979797;font-size:15px;margin:0">Any language, any model. One action name, validated
+        arguments, and a result the agent can read back into its plan.</p>
+    </div>
+    <div class="snip rv">
+      <div class="snip-hd mono"><span>execute an authorised action</span><button data-copy="c2">copy</button></div>
+      <pre id="c2"><span class="f">curl</span> -X POST https://tony-7su0.onrender.com/v1/execute \\
+  -H <span class="s">"Authorization: Bearer $TONY_KEY"</span> \\
+  -d <span class="s">'{"action":"github.create_issue",
+      "args":{"repo":"acme/app","title":"Login loop"}}'</span>
+
+<span class="k">→</span> { "ok": true, "status": 201,
+    "data": { "number": 412, "url": "..." },
+    "receipt": { "approval": "granted", "ms": 684 } }</pre>
+    </div>
+  </div>
+</div></section>
+
+<section class="sec" id="pricing" style="border-top:1px solid #101010"><div class="wrap">
+  <div class="snum"><b>04</b><span></span></div>
+  <div class="sec-hd rv"><h2>Priced per workspace, not per clever idea.</h2>
+    <p>Start free. Pay when an agent starts doing real work.</p></div>
+  <div class="tiers rv">__PRICING__</div>
+</div></section>
+
+<section class="close"><div class="wrap">
+  <div class="mark">__MARK__</div>
+  <h2>Connect your first app in about a minute.</h2>
+  <p>Open the console, mint a link, send it to yourself, and watch the token land encrypted.</p>
+  <div class="cta" style="justify-content:center">
+    <a class="btn solid" href="/account">Open the console</a>
+    <a class="btn ghost" href="/mcp">Install in your client</a>
+  </div>
+</div></section>
+</main>
+
+<footer><div class="wrap">
+  <a class="mark" href="/" style="font-size:14px">__MARK_SM__Tony</a>
+  <span class="grow"></span>
+  <a class="mono" href="/docs">Docs</a><a class="mono" href="/sdk">SDKs</a>
+  <a class="mono" href="/mcp">MCP</a><a class="mono" href="/account">Console</a>
+  <span class="mono" style="color:#4b4b4b">v1</span>
+</div></footer>
+"""
+BODY = BODY.replace("__MARK__", MARK).replace("__MARK_SM__", MARK)
+
+JS = """
+<script>
+(function(){
+  var io = new IntersectionObserver(function(l){
+    l.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('on'); io.unobserve(e.target) } });
+  },{threshold:.14});
+  document.querySelectorAll('.rv').forEach(function(e){ io.observe(e) });
+  document.querySelectorAll('[data-copy]').forEach(function(b){
+    b.onclick=function(){ var t=document.getElementById(b.dataset.copy); if(!t) return;
+      navigator.clipboard.writeText(t.textContent.trim()).then(function(){
+        var o=b.textContent; b.textContent='copied'; setTimeout(function(){ b.textContent=o },1300);
+      }).catch(function(){}); };
+  });
+})();
+</script>
+"""
+
+# ─── real brand icons orbiting the Tony mark ────────────────────────────────
+ORBIT_ICONS = [("github", "GitHub"), ("gmail", "Gmail"), ("slack", "Slack"), ("notion", "Notion"),
+               ("stripe", "Stripe"), ("discord", "Discord"), ("figma", "Figma"), ("linear", "Linear"),
+               ("googledrive", "Google Drive"), ("vercel", "Vercel"), ("spotify", "Spotify"),
+               ("whatsapp", "WhatsApp"), ("telegram", "Telegram"), ("dropbox", "Dropbox"),
+               ("shopify", "Shopify"), ("googlesheets", "Google Sheets"), ("trello", "Trello")]
+
+
+def _orbit_html() -> str:
+    """The mark at the centre, real provider icons on two rings around it."""
+    import math
+
+    nodes = []
+    rings = [(4, 30.0, 0.0), (6, 41.0, 15.0), (7, 47.5, 12.0)]
+    i = 0
+    for count, radius, offset in rings:
+        for k in range(count):
+            if i >= len(ORBIT_ICONS):
+                break
+            slug, label = ORBIT_ICONS[i]
+            ang = math.radians(offset + (360.0 / count) * k - 90)
+            x = 50 + radius * math.cos(ang)
+            y = 50 + radius * math.sin(ang)
+            nodes.append(
+                f'<span class="node r{count}" style="--x:{x:.2f}%;--y:{y:.2f}%;'
+                f'animation-delay:{-(i * 0.63):.2f}s">'
+                f'<img src="/static/brand/icons/{slug}.svg" alt="{label}" width="22" height="22" loading="lazy"></span>')
+            i += 1
+    return ('<div class="orbit" role="img" aria-label="Tony at the centre of the apps your agents can work in">'
+            '<span class="ring r1"></span><span class="ring r2"></span><span class="ring r3"></span>'
+            '<span class="orbit-glow"></span>'
+            f'<span class="core">{MARK}</span>'
+            + "".join(nodes) + "</div>")
+
+
+CSS += """
+.orbit-wrap{position:relative;display:grid;place-items:center}
+.orbit{position:relative;width:100%;max-width:560px;aspect-ratio:1}
+.ring{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;
+ border:1px solid #131313}
+.ring.r1{width:60%;height:60%}
+.ring.r2{width:82%;height:82%;border-color:#171717}
+.ring.r3{width:99%;height:99%;border-style:dashed;border-color:#141414}
+.orbit-glow{position:absolute;left:50%;top:50%;width:46%;height:46%;transform:translate(-50%,-50%);
+ border-radius:50%;background:radial-gradient(closest-side,rgba(226,84,43,.26),rgba(226,84,43,.06) 58%,transparent 76%);
+ animation:breathe 6.5s ease-in-out infinite}
+.core{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:104px;height:104px;
+ display:grid;place-items:center;border-radius:24px;background:#080807;border:1px solid #2a2a27;
+ box-shadow:0 0 0 1px rgba(0,0,0,.9),0 24px 60px rgba(226,84,43,.18)}
+.core svg{width:78px;height:78px;border-radius:18px;display:block}
+.node{position:absolute;left:var(--x);top:var(--y);transform:translate(-50%,-50%);width:44px;height:44px;
+ border-radius:12px;background:linear-gradient(180deg,#0d0d0d,#070707);border:1px solid #232323;
+ display:grid;place-items:center;box-shadow:0 14px 30px rgba(0,0,0,.75);animation:bob 7s ease-in-out infinite}
+.node img{width:21px;height:21px;display:block;opacity:.94}
+.node.r4{width:38px;height:38px;border-radius:11px}
+.node.r4 img{width:18px;height:18px}
+@keyframes bob{0%,100%{transform:translate(-50%,-50%) translateY(-3px)}50%{transform:translate(-50%,-50%) translateY(3px)}}
+@media(prefers-reduced-motion:reduce){.node,.orbit-glow{animation:none}}
+@media(max-width:900px){
+ .orbit{max-width:390px}
+ .core{width:84px;height:84px;border-radius:20px}.core svg{width:62px;height:62px;border-radius:14px}
+ .node{width:36px;height:36px;border-radius:10px}.node img{width:17px;height:17px}
+ .node.r4{width:31px;height:31px}.node.r4 img{width:14px;height:14px}
+}
+"""
+
+BODY = BODY.replace('''  <div class="hero-art">
+    <img src="/static/brand/hero-orbit.jpg" width="1100" height="1100"
+         alt="Tony's mark standing at the centre of a ring of connected application icons"
+         loading="eager" decoding="async">
+    <span class="art-tag"><i></i>every tile is one granted scope</span>
+  </div>''', '''  <div class="hero-art">
+    __ORBIT__
+    <span class="art-tag"><i></i>one granted scope per tile</span>
+  </div>''')
+BODY = BODY.replace("__ORBIT__", _orbit_html())

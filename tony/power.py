@@ -99,6 +99,26 @@ def _pick_apps(names: list[str], limit: int = 40) -> list[Any]:
     return out
 
 
+@router.get("/tools/connected")
+def connected_tools(request: Request, include_writes: bool = False, fmt: str = "",
+                    format: str = "openai", limit: int = 2000) -> dict[str, Any]:
+    """The tool belt an agent can actually use right now: live connections only."""
+    from sqlalchemy import select
+
+    from .db import session
+    from .models import ConnectedAccount
+
+    ws, _ = workspace_from_request(request)
+    with session() as sx:
+        live = sorted({r.app_slug for r in sx.scalars(select(ConnectedAccount).where(
+            ConnectedAccount.workspace_id == ws, ConnectedAccount.status == "active")).all()})
+    if not live:
+        return {"tools": [], "apps": [], "note": "No live connections yet. Mint a connect link first."}
+    out = tools(apps=",".join(live), include_writes=include_writes, fmt=fmt, format=format, limit=limit)
+    out["apps"] = live
+    return out
+
+
 @router.get("/tools")
 def tools(apps: str = "", app: str = "", q: str = "", include_writes: bool = False,
           fmt: str = "", format: str = "openai", limit: int = 2000) -> dict[str, Any]:
@@ -434,6 +454,11 @@ async def _direct_answer(goal: str, history: list[dict[str, str]] | None = None)
 async def agent(body: AgentIn, request: Request) -> dict[str, Any]:
     """Give Tony a goal. It plans, calls real apps, and answers with receipts."""
     ws, _ = workspace_from_request(request)
+    return await run_agent(ws, body)
+
+
+async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
+    """The same execution path, addressable without a signed request (used by resume)."""
     goal = (body.goal or "").strip()
     if not goal:
         raise HTTPException(400, detail="Tell me what to do, e.g. {'goal': 'latest hacker news'}")

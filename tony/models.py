@@ -391,3 +391,22 @@ class BlockedSubject(Base):
     reason: Mapped[str] = mapped_column(String(200), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ResumeTask(Base):
+    """The task an agent was in the middle of when it needed a connection.
+
+    Created with the connect link; fired the moment the user finishes approving, so the
+    agent picks the original job back up instead of asking them to repeat themselves.
+    """
+    __tablename__ = "resume_tasks"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    link_hash: Mapped[str] = mapped_column(String(64), index=True)
+    workspace_id: Mapped[str] = mapped_column(String(32), index=True)
+    entity_id: Mapped[str] = mapped_column(String(160), default="default")
+    app_slug: Mapped[str] = mapped_column(String(80), default="")
+    goal: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(16), default="queued")  # queued|running|done|failed
+    result: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

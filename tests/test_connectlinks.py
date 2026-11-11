@@ -62,3 +62,22 @@ def test_other_workspace_cannot_read_status(client):
     client.post("/v1/account/logout")
     _signup(client, "intruder@example.com")
     assert client.get(f"/v1/connect-links/{token}").status_code == 404
+
+
+def test_resume_is_queued_and_fires_after_approval(client):
+    _signup(client, "resume@example.com")
+    r = client.post("/v1/connect-links", json={"app": "hackernews", "resume_goal": "summarise today's top stories"})
+    body = r.json()
+    assert body["resumes_task"] is True
+    token = body["url"].rsplit("/", 1)[1]
+    assert client.get(f"/v1/resume/{token}").json()["status"] == "queued"
+    client.get(f"/connect/{token}/done")
+    done = client.get(f"/v1/resume/{token}").json()
+    assert done["status"] in {"running", "done", "failed"}
+    assert done["goal"] == "summarise today's top stories"
+
+
+def test_link_without_a_goal_queues_nothing(client):
+    _signup(client, "nogoal@example.com")
+    token = client.post("/v1/connect-links", json={"app": "github"}).json()["url"].rsplit("/", 1)[1]
+    assert client.get(f"/v1/resume/{token}").status_code == 404

@@ -25,7 +25,7 @@ from sqlalchemy import select
 from .auth import workspace_from_request
 from .catalog import catalog
 from .db import session
-from .models import ConnectLink
+from .models import ConnectLink, ResumeTask
 from .oauth import OAuthError, start_oauth
 
 router = APIRouter(tags=["connect-links"])
@@ -57,6 +57,8 @@ class LinkIn(BaseModel):
     tiers: list[str] = Field(default_factory=lambda: ["read"])
     redirect_url: str = ""
     ttl_minutes: int = Field(default=TTL_MINUTES, ge=1, le=1440)
+    resume_goal: str = Field(default="", max_length=600,
+                             description="What the agent was doing; it resumes this once the user approves.")
 
 
 @router.post("/v1/connect-links")
@@ -69,13 +71,17 @@ def create_link(body: LinkIn, request: Request) -> dict[str, Any]:
     tiers = [t for t in body.tiers if t in allowed] or ["read"]
     token = "tcl_" + secrets.token_urlsafe(30)
     exp = datetime.now(timezone.utc) + timedelta(minutes=body.ttl_minutes)
+    goal = (body.resume_goal or "").strip()
     with session() as s:
         s.add(ConnectLink(token_hash=_hash(token), workspace_id=ws, entity_id=body.entity_id[:160],
                           app_slug=spec.slug, agent_name=html.escape(body.agent_name.strip())[:120] or "An agent",
                           tiers=",".join(tiers), redirect_url=_safe_redirect(body.redirect_url),
                           expires_at=exp))
+        if goal:
+            s.add(ResumeTask(link_hash=_hash(token), workspace_id=ws, entity_id=body.entity_id[:160],
+                             app_slug=spec.slug, goal=goal))
     return {"url": f"{_base(request)}/connect/{token}", "app": spec.slug, "tiers": tiers,
-            "expires_at": exp.isoformat(timespec="seconds"),
+            "expires_at": exp.isoformat(timespec="seconds"), "resumes_task": bool(goal),
             "note": "Give this URL to your user. They sign in on the provider's own page; no keys are shared."}
 
 
@@ -179,8 +185,32 @@ def deny(token: str):
     return _page("Cancelled", '<h1>No access was granted</h1><p>You can close this page.</p>')
 
 
+async def _resume(task_id: str) -> None:
+    """Pick the agent's original job back up now that the app is connected."""
+    from .power import AgentIn, run_agent
+
+    with session() as s:
+        task = s.get(ResumeTask, task_id)
+        if task is None or task.status != "queued":
+            return
+        task.status = "running"
+        ws, entity, goal = task.workspace_id, task.entity_id, task.goal
+        s.commit()
+    try:
+        out = await run_agent(ws, AgentIn(goal=goal, entity_id=entity))
+        result, status = (out.get("answer") or ""), "done"
+    except Exception as exc:  # noqa: BLE001 - the user still gets their connection
+        result, status = f"Resume failed: {exc}"[:2000], "failed"
+    with session() as s:
+        task = s.get(ResumeTask, task_id)
+        if task is not None:
+            task.status, task.result = status, result
+            task.finished_at = datetime.now(timezone.utc)
+
+
 @router.get("/connect/{token}/done")
-def done(token: str):
+async def done(token: str):
+    queued = ""
     with session() as s:
         live = s.scalar(select(ConnectLink).where(ConnectLink.token_hash == _hash(token)))
         if live is None:
@@ -188,7 +218,27 @@ def done(token: str):
         live.status = "connected"
         live.connected_at = datetime.now(timezone.utc)
         target = live.redirect_url
+        task = s.scalar(select(ResumeTask).where(ResumeTask.link_hash == _hash(token),
+                                                 ResumeTask.status == "queued"))
+        if task is not None:
+            queued = task.id
+    if queued:
+        import asyncio
+
+        asyncio.create_task(_resume(queued))
     return RedirectResponse(target) if target else RedirectResponse(f"/connect/{token}")
+
+
+@router.get("/v1/resume/{token}")
+def resume_status(token: str, request: Request) -> dict[str, Any]:
+    ws, _ = workspace_from_request(request)
+    with session() as s:
+        task = s.scalar(select(ResumeTask).where(ResumeTask.link_hash == _hash(token),
+                                                 ResumeTask.workspace_id == ws))
+        if task is None:
+            raise HTTPException(404, detail="No task was queued for this link")
+        return {"status": task.status, "goal": task.goal, "result": task.result,
+                "app": task.app_slug}
 
 
 @router.get("/v1/connect-links/{token}")

@@ -65,3 +65,15 @@ def test_placeholder_credentials_are_ignored(client):
     assert is_configured(catalog.get("github")) is False
     save_provider("github", "real-client-id", "real-secret")
     assert is_configured(catalog.get("github")) is True
+
+
+def test_tools_can_be_narrowed_to_live_connections(client):
+    client.post("/v1/account/signup", json={"email": "live@example.com", "password": "Tony-tour-9271"})
+    empty = client.get("/v1/tools/connected?limit=50").json()
+    assert empty["tools"] == [] and empty["apps"] == []
+    client.post("/v1/connections/hackernews/start?entity_id=default")
+    after = client.get("/v1/tools/connected?limit=50").json()
+    assert after["tools"], "a live connection should expose its tools"
+    assert after["apps"] == ["hackernews"]
+    names = [t["function"]["name"] for t in after["tools"]]
+    assert names and all(n.startswith("hackernews") for n in names)

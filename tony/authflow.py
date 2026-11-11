@@ -270,16 +270,16 @@ function card(p){
     <div class="body">
       <div class="nm">${esc(p.name)}
         ${on?`<span class="pill on"><i></i>Connected${extra}</span>`
-            :(p.ready?`<span class="pill"><i></i>Not connected</span>`
+            :(p.ready||p.canGoogle?`<span class="pill"><i></i>Not connected</span>`
                      :`<span class="pill warn"><i></i>Setup needed</span>`)}
       </div>
-      <div class="who">${on?esc(who):(p.ready?'One click, no keys':'One-time provider setup by the owner')}</div>
+      <div class="who">${on?esc(who):(p.ready?'One click, no keys':(p.canGoogle?'Sign in with your Google account':'One-time provider setup by the owner'))}</div>
       <div class="act">
-        ${on?`<button class="btn ghost" data-reconnect="${esc(p.app)}" ${p.ready?'':'disabled'}>Reconnect</button>
-              <button class="btn ghost" data-add="${esc(p.app)}" ${p.ready?'':'disabled'}>Add account</button>
+        ${on?`<button class="btn ghost" data-reconnect="${esc(p.app)}" ${(p.ready||p.canGoogle)?'':'disabled'}>Reconnect</button>
+              <button class="btn ghost" data-add="${esc(p.app)}" ${(p.ready||p.canGoogle)?'':'disabled'}>Add account</button>
               <button class="btn ghost" data-off="${esc(mine[0].id)}">Disconnect</button>`
             :`<button class="btn hot" data-connect="${esc(p.app)}" ${(p.ready||p.canGoogle)?'':'disabled'}>Connect</button>
-              ${p.ready?'':`<a class="btn ghost" href="/providers">Set up</a>`}`}
+              ${(p.ready||p.canGoogle)?'':`<a class="btn ghost" href="/providers">Set up</a>`}`}
       </div>
       ${p.scopes&&p.scopes.length?`<div class="scopes">${p.scopes.slice(0,4).map(s=>`<span class="scope">${esc(s.split('/').pop())}</span>`).join('')}${p.scopes.length>4?`<span class="scope">+${p.scopes.length-4}</span>`:''}</div>`:''}
     </div></div>`;
@@ -342,6 +342,7 @@ async function start(slug,isNew){
   const g=current.mode==='google', st=current.mode==='setup';
   $('#moauth').textContent=g?'Continue with Google':'Continue to sign in';
   $('#moauth').disabled=st; $('#mor').style.display=(g||st)?'none':'';
+  $('#mfallback').style.display=(g||st)?'none':'';
   $('#mask').classList.add('on');
 }
 $('#moauth').onclick=async()=>{

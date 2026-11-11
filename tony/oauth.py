@@ -128,12 +128,16 @@ def _well_known(authorize_url: str) -> str:
     return f"{parts.scheme}://{parts.netloc}/.well-known/oauth-authorization-server"
 
 
-async def dynamic_client(spec: AppSpec) -> tuple[str, str]:
+async def dynamic_client(spec: AppSpec, scopes: list[str] | None = None) -> tuple[str, str]:
     """Register a client automatically with providers that support DCR (RFC 7591).
 
     This is the keyless path: no client id, no secret, no trip to a dashboard.
     Many MCP servers and modern OAuth providers advertise it.
     """
+    declared = (getattr(spec.auth, "registration_url", "") or "").strip()
+    if declared:
+        return await _register_client(spec, declared, scopes)
+
     url = _well_known(spec.auth.authorize_url or "")
     try:
         meta_resp = await _fetch_meta(url)
@@ -156,21 +160,36 @@ async def dynamic_client(spec: AppSpec) -> tuple[str, str]:
                 f"{spec.name} needs its OAuth app credentials added once"
                 + (f" ({envs})" if envs else "")
                 + ". After that every user just signs in. A personal API token works right now instead.")
-        reg = await _post_registration(reg_endpoint, {
-            "client_name": "Tony",
-            "redirect_uris": [redirect_uri(spec)],
-            "grant_types": ["authorization_code", "refresh_token"],
-            "response_types": ["code"],
-            "token_endpoint_auth_method": "client_secret_post",
-        })
-        if reg.status_code >= 400:
-            raise OAuthError(f"Automatic client registration failed ({reg.status_code}).")
+        return await _register_client(spec, reg_endpoint, scopes)
+
+
+async def _register_client(spec: AppSpec, reg_endpoint: str,
+                           scopes: list[str] | None = None) -> tuple[str, str]:
+    """RFC 7591 registration: ask the provider to register Tony as a client."""
+    payload: dict[str, Any] = {
+        "client_name": "Tony",
+        "client_uri": settings.base_url,
+        "redirect_uris": [redirect_uri(spec)],
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+        "token_endpoint_auth_method": "client_secret_post",
+    }
+    use_scopes = scopes or spec.auth.scopes
+    if use_scopes:
+        payload["scope"] = " ".join(use_scopes)
+    reg = await _post_registration(reg_endpoint, payload)
+    if reg.status_code >= 400:
+        raise OAuthError(f"Automatic client registration failed ({reg.status_code}).")
+    try:
         data = reg.json()
-        cid = data.get("client_id", "")
-        secret = data.get("client_secret", "")
-        if cid:
-            save_provider(spec.slug, cid, secret)
-        return cid, secret
+    except ValueError:
+        raise OAuthError("Automatic client registration returned a non-JSON response.")
+    cid = data.get("client_id", "")
+    secret = data.get("client_secret", "")
+    if not cid:
+        raise OAuthError("The provider accepted registration but returned no client id.")
+    save_provider(spec.slug, cid, secret)
+    return cid, secret
 
 
 def is_configured(spec: AppSpec) -> bool:

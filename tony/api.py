@@ -139,8 +139,20 @@ def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "",
     matched = catalog.search(search, category, tier=tier, source=source, dedupe=dedupe)
     total = len(matched)
     window = matched[offset: offset + limit] if limit else matched[offset:]
+    from . import appauth
+
+    items = []
+    for a in window:
+        row = a.to_public(include_actions=with_actions)
+        p = appauth.plan(a.slug) or {}
+        row["strategy"] = p.get("strategy", "key" if a.auth.type != "none" else "public")
+        row["strategy_label"] = appauth.STRATEGY_LABEL.get(row["strategy"], "")
+        row["connectable"] = row["strategy"] != "oauth_byo" or bool(p.get("keyless_via"))
+        row["keyless_via"] = p.get("keyless_via", "")
+        row["can_write"] = p.get("can_write", row.get("writes", 0) > 0)
+        items.append(row)
     return {
-        "apps": [a.to_public(include_actions=with_actions) for a in window],
+        "apps": items,
         "categories": catalog.categories(),
         "category_counts": catalog.category_counts(),
         "total": total,
@@ -168,6 +180,41 @@ def get_app(slug: str) -> dict[str, Any]:
     data["needs_base_url"] = needs_base_url(spec)
     data["needs_token"] = spec.auth.type != "none"
     return data
+
+
+@router.get("/coverage")
+def auth_coverage() -> dict[str, Any]:
+    """How every app in the catalogue actually gets connected, plus its read/write surface."""
+    from . import appauth
+
+    data = appauth.coverage()
+    data["managed_providers"] = len(__import__("tony.provider_registry", fromlist=["PROVIDERS"]).PROVIDERS)
+    return data
+
+
+@router.get("/apps/{slug}/auth")
+def app_auth(slug: str, access: str = "read") -> dict[str, Any]:
+    """The connect plan for one app: strategy, endpoints, and least-privilege scopes."""
+    from . import appauth
+
+    spec = catalog.get(slug)
+    if not spec:
+        raise HTTPException(404, detail=f"Unknown app '{slug}'")
+    p = appauth.plan_or_default(spec.slug, spec.auth.type)
+    p = {**p,
+         "app": spec.slug,
+         "name": spec.name,
+         "auth_type": spec.auth.type,
+         "label": appauth.STRATEGY_LABEL.get(p.get("strategy", ""), ""),
+         "scopes_requested": appauth.scope_list(spec.slug, access),
+         "needs_setup": p.get("strategy") == "oauth_byo",
+         "setup_endpoint": f"/v1/connections/{spec.slug}/key",
+         "docs": p.get("docs") or spec.docs}
+    if p.get("keyless_via"):
+        p["keyless_url"] = f"/v1/apps/{p['keyless_via']}/auth"
+        p["keyless_note"] = ("This vendor's MCP server registers Tony automatically, "
+                             f"so {p['keyless_via']} connects with one click and no setup.")
+    return p
 
 
 @router.get("/actions")

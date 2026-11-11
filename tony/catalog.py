@@ -58,6 +58,7 @@ class AuthSpec:
     scopes: list[str] = field(default_factory=list)
     client_id_env: str = ""
     client_secret_env: str = ""
+    registration_url: str = ""              # RFC 7591 dynamic client registration
     pkce: bool = False
     authorize_params: dict[str, str] = field(default_factory=dict)
     token_params: dict[str, str] = field(default_factory=dict)
@@ -424,6 +425,17 @@ class Catalog:
             managed.ensure_apps(self)
         except Exception:  # pragma: no cover
             pass
+        # Data-driven auth for the rest of the catalogue: real authorize/token
+        # endpoints, dynamic-registration URLs and scopes for all 7.8k apps.
+        try:
+            from . import appauth
+            applied = 0
+            for spec in self.apps.values():
+                if appauth.apply(spec):
+                    applied += 1
+            self.auth_plans_applied = applied
+        except Exception as exc:  # noqa: BLE001 - enrichment must never break the catalog
+            self.errors.append(f"app auth plans: {type(exc).__name__}")
 
 
     # ── lookups ──────────────────────────────────────────────────────────

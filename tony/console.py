@@ -352,7 +352,16 @@ function mountFirebaseGoogle(){
         firebase.initializeApp({apiKey:fb.api_key, authDomain:fb.auth_domain, projectId:fb.project_id});
       }
       const provider = new firebase.auth.GoogleAuthProvider();
-      const cred = await firebase.auth().signInWithPopup(provider);
+      provider.setCustomParameters({prompt:'select_account'});
+      const phone = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+      let cred;
+      if(phone){
+        // Phones block popups. Redirect through Firebase's own handler, which Google already trusts.
+        sessionStorage.setItem('tony_fb_pending','1');
+        await firebase.auth().signInWithRedirect(provider);
+        return;
+      }
+      cred = await firebase.auth().signInWithPopup(provider);
       const token = await cred.user.getIdToken();
       const d = await api('/v1/account/firebase', {method:'POST', body:{id_token:token}});
       S.user = d.user; location.hash = '#overview'; showApp(); toast('Signed in as ' + d.user.email);
@@ -363,7 +372,24 @@ function mountFirebaseGoogle(){
   };
   return true;
 }
+async function finishFirebaseRedirect(){
+  const fb = CFG.firebase || {};
+  if(!fb.api_key || !window.firebase || !firebase.auth) return false;
+  if(!firebase.apps.length){ firebase.initializeApp({apiKey:fb.api_key, authDomain:fb.auth_domain, projectId:fb.project_id}) }
+  try{
+    const res = await firebase.auth().getRedirectResult();
+    if(res && res.user){
+      sessionStorage.removeItem('tony_fb_pending');
+      const token = await res.user.getIdToken();
+      const d = await api('/v1/account/firebase', {method:'POST', body:{id_token:token}});
+      S.user = d.user; location.hash = '#overview'; showApp(); toast('Signed in as ' + d.user.email);
+      return true;
+    }
+  }catch(e){ authMsg(String((e && (e.code||e.message)) || 'Google sign-in failed').replace('auth/','')) }
+  return false;
+}
 function mountGoogle(){
+  if(CFG.firebase && CFG.firebase.api_key && sessionStorage.getItem('tony_fb_pending')){ finishFirebaseRedirect() }
   if(CFG.firebase && CFG.firebase.api_key && mountFirebaseGoogle()) return;
   if(!CFG.google_client_id){
     if(!mountFirebaseGoogle()) el('g-wrap').innerHTML='<span class="tiny muted" style="padding:10px">Google sign-in is not configured on this server</span>';
@@ -419,6 +445,7 @@ const NAV = [['overview','Overview','M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5'],
              ['keys','API keys','M14 7a4 4 0 10-3.5 4L4 17.5V21h3.5l6.5-6.5A4 4 0 0014 7z'],
              ['sessions','Sessions','M12 3a9 9 0 100 18 9 9 0 000-18zm0 4v5l3.5 2'],
              ['billing','Billing','M3 7h18M3 7l0 11a1 1 0 001 1h16a1 1 0 001-1V7M7 13h4'],
+             ['install','Install','M12 3v12m0 0-4-4m4 4 4-4M5 19h14'],
              ['ecosystem','Ecosystem','M4 17V7m5 10V4m5 13v-7m5 7V9'],
              ['profile','Profile','M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0']];
 const MOBILE = ['apps','runs','sessions','billing','profile'];
@@ -449,6 +476,7 @@ function go(page){
   if(page==='sessions'){ loadSessions() }
   if(page==='ecosystem'){ loadEcosystem() }
   if(page==='agent'){ mountAgent() }
+  if(page==='install'){ loadInstall() }
 }
 
 /* ── agent ──────────────────────────────────────────────── */
@@ -501,7 +529,7 @@ async function runAgent(){
 async function boot(){
   renderWho(); buildNav(); checkBillingReturn();
   const h = (location.hash||'#overview').slice(1);
-  go(['overview','agent','apps','connections','runs','keys','sessions','billing','ecosystem','profile'].includes(h) ? h : 'overview');
+  go(['overview','agent','apps','connections','runs','keys','sessions','billing','install','ecosystem','profile'].includes(h) ? h : 'overview');
 }
 function renderWho(){
   const u = S.user || {};
@@ -727,6 +755,37 @@ function wireCode(){
   });
 }
 
+
+/* install */
+async function loadInstall(){
+  const key = (el('in-key')||{}).value || '';
+  try{
+    const d = await api('/v1/install' + (key ? '?key=' + encodeURIComponent(key.trim()) : ''));
+    el('in-mcp').textContent = d.mcp_url;
+    el('in-mcp-copy').onclick = ()=>copyText(d.mcp_url, el('in-mcp-copy'));
+    const groups = {};
+    d.clients.forEach(c=>{ (groups[c.group] = groups[c.group] || []).push(c) });
+    el('in-clients').innerHTML = Object.entries(groups).map(([g, list])=>
+      '<div class="card pad" style="margin-bottom:12px"><b style="font-size:14px">'+esc(g)+'</b>'+
+      list.map(c=>
+        '<div style="margin-top:14px"><div class="row"><span style="font-weight:600">'+esc(c.name)+'</span><span class="sp"></span>'+
+        '<span class="tiny muted">'+esc(c.file||c.kind)+'</span>'+
+        '<button class="btn ghost sm" data-cp="'+esc(c.id)+'" style="margin-left:10px">Copy</button></div>'+
+        '<pre class="mono tiny" id="sn-'+esc(c.id)+'" style="margin:8px 0 4px;padding:12px;border:1px solid var(--line);'+
+        'border-radius:10px;background:var(--slate);overflow-x:auto;white-space:pre-wrap;word-break:break-all">'+esc(c.snippet)+'</pre>'+
+        '<span class="tiny muted">'+esc(c.note)+'</span></div>').join('')+'</div>').join('');
+    el('in-clients').querySelectorAll('[data-cp]').forEach(b=>b.onclick=()=>
+      copyText(el('sn-'+b.dataset.cp).textContent, b));
+    const inp = el('in-key');
+    if(inp && !inp._wired){ inp._wired = 1; inp.oninput = ()=>{ clearTimeout(inp._t); inp._t = setTimeout(loadInstall, 350) } }
+  }catch(e){ el('in-clients').innerHTML = '<div class="empty">'+esc(e.message)+'</div>' }
+}
+async function copyText(text, btn){
+  try{ await navigator.clipboard.writeText(text); const o = btn.textContent; btn.textContent = 'Copied';
+       setTimeout(()=>btn.textContent = o, 1400) }
+  catch(e){ toast('Select and copy manually') }
+}
+
 /* connect tab */
 function connectHTML(){
   const d = S.cur, conn = S.conns.find(x=>x.app===d.slug && x.status==='active');
@@ -741,18 +800,27 @@ function connectHTML(){
   }
   if(d.auth.type==='oauth2'){
     const ready = d.configured;
-    return notice+'<div class="card pad"><b>Sign in with '+esc(d.name)+'</b>'+
-      '<p class="tiny muted" style="margin:6px 0 14px">You never paste an API key. Tony opens '+esc(d.name)+
-      '\u2019s own sign-in page, you log in, and the account comes back connected. Tokens stay encrypted on this server.</p>'+
-      '<button class="btn sm" id="btn-oauth">Connect '+esc(d.name)+'</button>'+
-      (ready?'<p class="tiny" style="margin:12px 0 0;color:var(--ok)">OAuth app ready \u00b7 users just sign in</p>'
-        :'<details style="margin-top:14px"><summary class="tiny" style="cursor:pointer">One-time setup: register the OAuth app</summary>'+
-         '<p class="tiny muted" style="margin:10px 0">Do this once for this provider. After that, every user clicks Connect and signs in \u2014 no keys handed around. Callback URL: <span class="mono">'+
+    const setup = '<details'+(ready?'':' open')+' style="margin-top:14px"><summary class="tiny" style="cursor:pointer">'+
+         (ready?'Change the OAuth app':'Step 1 of 2: register the OAuth app once')+'</summary>'+
+         '<p class="tiny muted" style="margin:10px 0">Do this once for '+esc(d.name)+'. After that, every user clicks Connect and signs in, and no keys get passed around. Add this callback URL in the provider\u2019s developer console: <span class="mono" style="word-break:break-all">'+
          esc(CFG.public_url)+'/oauth/callback</span></p>'+
          '<div class="field"><label>Client id</label><input class="inp" id="prov-id" autocomplete="off" placeholder="from the provider\u2019s developer console"></div>'+
          '<div class="field"><label>Client secret</label><input class="inp" id="prov-secret" type="password" autocomplete="off" placeholder="stored encrypted"></div>'+
-         '<button class="btn ghost sm" id="btn-prov">Save OAuth app</button></details>')+
-      '</div>';
+         '<button class="btn ghost sm" id="btn-prov">Save OAuth app</button></details>';
+    const token = '<details style="margin-top:12px"><summary class="tiny" style="cursor:pointer">'+
+         (ready?'Or paste a personal token instead':'Step 2: or skip setup and paste a personal token now')+'</summary>'+
+         '<p class="tiny muted" style="margin:10px 0">Works immediately, no OAuth app needed. Stored encrypted and never shown again.</p>'+
+         '<div class="field"><label>Access token</label><input class="inp" id="c-key" type="password" autocomplete="off" placeholder="paste the token"></div>'+
+         '<button class="btn acc sm" id="btn-save">Save connection</button></details>';
+    return notice+'<div class="card pad"><b>Connect '+esc(d.name)+'</b>'+
+      (ready
+        ? '<p class="tiny muted" style="margin:6px 0 14px">You never paste an API key. Tony opens '+esc(d.name)+
+          '\u2019s own sign-in page, you log in, and the account comes back connected.</p>'+
+          '<button class="btn sm" id="btn-oauth">Connect '+esc(d.name)+'</button>'+
+          '<p class="tiny" style="margin:12px 0 0;color:var(--ok)">OAuth app ready \u00b7 users just sign in</p>'
+        : '<p class="tiny muted" style="margin:6px 0 4px">One-click sign-in is not switched on for '+esc(d.name)+
+          ' yet. That takes one minute from the workspace owner, or you can paste a token and be connected right now.</p>')+
+      setup+token+'</div>';
   }
   const base = !!d.needs_base_url, token = d.auth.type!=='none';
   return notice+'<div class="card pad"><b>'+(base?'Point Tony at ':'Add your ')+esc(d.name)+'</b>'+
@@ -1407,6 +1475,17 @@ def console_html(user: Any = None) -> str:
           <div class="row"><b style="font-size:14px">Steps</b><span class="sp"></span><span class="tiny muted">app.action · status · latency</span></div>
           <div id="ag-steps" style="margin-top:8px"><div class="empty">No calls yet.</div></div>
         </div>
+      </section>
+      <section class="pg" id="p-install">
+        <div class="hd"><div><h1>Install</h1><p>Pick where your agent lives. Tony gives you the exact line to paste, already pointing at this server.</p></div></div>
+        <div class="card pad" style="margin-bottom:12px">
+          <div class="row"><b style="font-size:14px">MCP endpoint</b><span class="sp"></span><span class="tiny muted">works in any MCP client</span></div>
+          <div class="pk" style="margin-top:10px"><code id="in-mcp" style="word-break:break-all">loading</code>
+            <span class="sp"></span><button class="btn ghost sm" id="in-mcp-copy">Copy</button></div>
+          <div class="field" style="margin-top:12px"><label>Your API key <span class="hint">pasted into every snippet below</span></label>
+            <input class="inp" id="in-key" placeholder="tk_live_... or tony_at_..." autocomplete="off"></div>
+        </div>
+        <div id="in-clients"><div class="empty">Loading…</div></div>
       </section>
       <section class="pg" id="p-ecosystem">
         <div class="hd"><div><h1>Ecosystem</h1><p>Ratings, changelogs, security verdicts, usage and builder revenue. The parts a gateway normally hides.</p></div></div>

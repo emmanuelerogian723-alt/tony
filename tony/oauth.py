@@ -174,6 +174,12 @@ def redirect_uri(spec: AppSpec) -> str:
 async def start_oauth(workspace_id: str, entity_id: str, spec: AppSpec, redirect_after: str = "/app") -> tuple[str, str]:
     """Create an auth session and return (session_id, authorization_url)."""
     cid, _secret = _client_creds(spec)
+    if cid and not _secret and not spec.auth.pkce:
+        # An id with no secret starts a sign-in that the provider then refuses at the token step,
+        # which looks like a dead button. Refuse early and honestly instead.
+        raise OAuthError(
+            f"{spec.name} has a client id but no client secret on this server, so sign-in cannot finish. "
+            "Add the secret once under One-time setup, or connect with a personal token.")
     if not cid:
         cid, _secret = await dynamic_client(spec)
     if not cid:

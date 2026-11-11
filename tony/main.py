@@ -203,6 +203,18 @@ async def oauth_callback(code: str = "", state: str = "", error: str = "", error
     return RedirectResponse(f"/app?connection=ok&{urlencode({'app': account.app_slug})}")
 
 
+@app.get("/providers", response_class=HTMLResponse)
+def provider_setup(request: Request):
+    from .accounts import require_user
+    from .providerui import provider_setup_html
+
+    try:
+        require_user(request)
+    except Exception:  # noqa: BLE001 - anonymous visitors go and sign in first
+        return RedirectResponse("/account", status_code=307)
+    return HTMLResponse(provider_setup_html())
+
+
 @app.get("/account", response_class=HTMLResponse, include_in_schema=False)
 def account_page(request: Request):
     from .accounts import current_user

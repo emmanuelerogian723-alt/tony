@@ -46,3 +46,12 @@ def test_every_icon_is_served(client):
     for slug in ("github", "gmail", "notion", "figma"):
         r = client.get(f"/static/brand/icons/{slug}.svg")
         assert r.status_code == 200 and "svg" in r.headers.get("content-type", "")
+
+
+def test_provider_setup_page_is_owner_only(client):
+    assert client.get("/providers", follow_redirects=False).status_code in (307, 303)
+    client.post("/v1/account/signup", json={"email": "prov@example.com", "password": "Tony-tour-9271"})
+    html = client.get("/providers").text
+    assert "Hosted OAuth providers" in html
+    assert "/v1/account/providers" in html
+    assert "/oauth/callback" in html

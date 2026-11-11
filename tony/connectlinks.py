@@ -142,10 +142,10 @@ def _mode(spec) -> str:
     if spec.auth.type == "none":
         return "none"
     prov = pr.provider_for(spec.slug)
-    if prov and prov.slug in {"gmail", "google_drive", "google_calendar", "google_sheets"} and _firebase_ready():
-        return "google"
     if spec.auth.type == "oauth2":
         from .oauth import provider_ready
+        # Tony's own OAuth client always wins: the user then lands on
+        # tony's own domain, never on the firebaseapp helper domain.
         if provider_ready(spec.slug) or (prov and pr.ready(spec.slug)):
             return "oauth"
         if _firebase_ready() and prov and prov.authorize_url.startswith("https://accounts.google.com"):

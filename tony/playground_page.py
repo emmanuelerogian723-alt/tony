@@ -367,7 +367,7 @@ async function loadProviders(){
 function canGoogle(app){
   const prov=PROVIDERS[app.slug]||PROVIDERS[(app.slug||'').replace(/-/g,'_')]||{};
   const isGoogle=prov.google===true||/^google|^gmail|^youtube|^googleapis/.test(app.slug||'');
-  return !!(window.TonyConnect&&TonyConnect.config&&TonyConnect.config.api_key&&isGoogle);
+  return !!(window.TonyConnect&&TonyConnect.config&&TonyConnect.config.api_key&&!TonyConnect.config.google_oauth&&isGoogle);
 }
 function openGoogleModal(app,name){
   pendingConn.mode='google';

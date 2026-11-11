@@ -20,13 +20,22 @@ def project_id() -> str:
     return (os.getenv("FIREBASE_PROJECT_FALLBACK") or "ominiassist-ai").strip()
 
 
-def web_config() -> dict[str, str]:
+def google_oauth_ready() -> bool:
+    """True when Tony has its own Google OAuth client, so app connections never need Firebase."""
+    return bool((os.getenv("GOOGLE_CLIENT_ID") or "").strip()
+                and (os.getenv("GOOGLE_CLIENT_SECRET") or "").strip())
+
+
+def web_config() -> dict[str, Any]:
     """Public Firebase web settings. The API key is a public identifier, not a secret."""
     project = project_id()
     return {
         "api_key": (os.getenv("FIREBASE_API_KEY") or "").strip(),
         "auth_domain": (os.getenv("FIREBASE_AUTH_DOMAIN") or f"{project}.firebaseapp.com").strip(),
         "project_id": project,
+        # When Tony owns a Google client, Google apps sign in on Tony's own domain
+        # instead of the Firebase helper domain.
+        "google_oauth": google_oauth_ready(),
     }
 
 

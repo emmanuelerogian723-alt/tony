@@ -88,7 +88,11 @@ def setup_page(spec: Any, reason: str) -> str:
     except Exception:  # noqa: BLE001
         pass
     env = " ".join(getattr(p, "env", ()) or ())
+    docs = getattr(p, "docs", "") or "https://tony.dev/providers"
     name = html.escape(spec.name)
+    from .config import settings as _settings
+    redirect = html.escape(f"{_settings.base_url}/oauth/callback")
+    console_link = f'<a class="btn" href="{html.escape(docs)}" target="_blank" rel="noopener">Get {name} credentials</a>' 
     return f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Connect {name} · Tony</title>
@@ -104,13 +108,18 @@ font:12.5px ui-monospace,Menlo,monospace}}
 .btn{{display:inline-block;margin-top:8px;background:#14140f;color:#fff;text-decoration:none;
 border-radius:10px;padding:10px 18px;font-weight:600;font-size:14px}}
 .mut{{font-size:13px;color:#8a887f}}
+.lnk{{color:#14140f;font-weight:600;text-decoration:underline}}
 </style></head><body><div class="card">
 <h1>{name} needs a one-time setup</h1>
 <p>{html.escape(reason)}</p>
 <p>Tony signs every user in through one OAuth app owned by this deployment. That app is
 registered once, by the workspace owner, in Tony's provider console. After that, every
 user just clicks Connect.</p>
-<p class="mut">Credentials are read from {('<code>'+html.escape(env)+'</code>') if env else 'the provider console'} and are never exposed to users or to the model.</p>
+<p style="margin-top:16px"><b>Three steps, once.</b></p>
+<p>1. {console_link.replace('class="btn"', 'class="lnk"')} and create an OAuth app.</p>
+<p>2. Add this as the redirect URI: <code>{redirect}</code></p>
+<p>3. Paste the client id and secret under <code>{html.escape(env) or "provider setup"}</code> on the provider page.</p>
+<p class="mut">Credentials are read from the server environment and are never exposed to users or to the model.</p>
 <a class="btn" href="/providers">Open provider setup</a>
 <a class="btn" style="background:#ece9e2;color:#14140f;margin-left:8px" href="/connections">Back to accounts</a>
 </div></body></html>"""
@@ -426,7 +435,7 @@ $('#catMore').onclick=()=>loadCat(false);
 
 async function load(){
   const [p,c]=await Promise.all([api('/v1/providers'),api('/v1/connections?entity_id='+ENTITY)]);
-  providers=(p.providers||[]).map(x=>{x.canGoogle=!!(window.TONY_FB&&window.TONY_FB.api_key)&&/^google|gmail/.test(x.app);return x});
+  providers=(p.providers||[]).map(x=>{x.canGoogle=!!(window.TONY_FB&&window.TONY_FB.api_key&&!window.TONY_FB.google_oauth)&&/^google|gmail/.test(x.app);return x});
   conns=c.connections||[];
   (async()=>{try{
     if(!window.TonyConnect)return;

@@ -354,14 +354,18 @@ def list_providers(request: Request) -> dict[str, Any]:
     require_user(request)
     from .catalog import catalog
     from .oauth import provider_ready
+    from . import provider_registry as _pr
 
     rows = []
     for spec in catalog.apps.values():
         if spec.auth.type != "oauth2":
             continue
+        prov = _pr.provider_for(spec.slug)
         rows.append({"slug": spec.slug, "name": spec.name, "category": spec.category,
                      "ready": provider_ready(spec.slug),
                      "scopes": spec.auth.scopes,
+                     "docs": getattr(prov, "docs", "") or "",
+                     "env": list(getattr(prov, "env", ()) or ()),
                      "callback": f"/oauth/callback"})
     rows.sort(key=lambda r: (not r["ready"], r["name"].lower()))
     return {"providers": rows, "ready": sum(1 for r in rows if r["ready"]), "total": len(rows)}

@@ -461,3 +461,47 @@ def ensure_apps(cat: Any) -> list[str]:
     cat.apps["onedrive"] = apply(spec)
     added.append("onedrive")
     return added
+
+
+# Where the owner creates each provider's OAuth app. Every entry shows a direct
+# link on the one-time setup page, so nobody has to hunt through vendor docs.
+CONSOLE_URLS: dict[str, str] = {
+    "spotify": "https://developer.spotify.com/dashboard",
+    "airtable": "https://airtable.com/create/oauth",
+    "asana": "https://app.asana.com/0/my-apps",
+    "jira": "https://developer.atlassian.com/console/myapps/",
+    "zoom": "https://marketplace.zoom.us/develop/create",
+    "mailchimp": "https://admin.mailchimp.com/account/oauth2/",
+    "box": "https://app.box.com/developers/console",
+    "figma": "https://www.figma.com/developers/apps",
+    "pipedrive": "https://developers.pipedrive.com/",
+    "todoist": "https://developer.todoist.com/appconsole.html",
+    "clickup": "https://app.clickup.com/settings/apps",
+    "miro": "https://miro.com/app/settings/user-profile/apps",
+    "linear": "https://linear.app/settings/api/applications",
+    "sentry": "https://sentry.io/settings/account/api/applications/",
+    "vercel": "https://vercel.com/dashboard/integrations/console",
+    "twitter": "https://developer.x.com/en/portal/dashboard",
+    "intercom": "https://developers.intercom.com/",
+    "calendly": "https://calendly.com/integrations/api_webhooks",
+    "typeform": "https://developer.typeform.com/",
+    "stripe": "https://dashboard.stripe.com/settings/developers",
+    "tiktok": "https://developers.tiktok.com/apps",
+    "reddit": "https://www.reddit.com/prefs/apps",
+    "youtube": "https://console.cloud.google.com/apis/credentials",
+}
+
+
+def _with_consoles() -> None:
+    from dataclasses import replace as _replace
+    filled = 0
+    for slug, url in CONSOLE_URLS.items():
+        row = PROVIDERS.get(slug)
+        if row is None or row.docs:
+            continue
+        PROVIDERS[slug] = _replace(row, docs=url)
+        filled += 1
+    return None
+
+
+_with_consoles()

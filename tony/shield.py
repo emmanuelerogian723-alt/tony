@@ -34,7 +34,9 @@ SOFT_UA = re.compile(
     r"headlesschrome|phantomjs|node-fetch|axios|okhttp)", re.I)
 
 # Page views are always readable: only the API can be blocked for behaviour.
-_PUBLIC_PREFIXES = ("/v1", "/oauth", "/connect", "/mcp", "/api")
+# Every other path is a screen a person loads in a browser, including the connect
+# pages and /oauth/callback that a sign-in returns to, so they must never be blocked.
+_API_PREFIXES = ("/v1", "/mcp", "/api")
 PROBE_PATHS = re.compile(
     r"(/\.env|/\.git|/wp-admin|/wp-login|/phpmyadmin|/admin\.php|/xmlrpc|/etc/passwd|"
     r"/cgi-bin|/vendor/phpunit|\.\./|%2e%2e|/actuator|/server-status|/\.aws|/id_rsa)", re.I)
@@ -117,7 +119,7 @@ def inspect(request: Request) -> None:
     path = request.url.path
     if path in {"/health", "/favicon.ico"} or path.startswith("/static"):
         return
-    page_view = request.method in {"GET", "HEAD"} and not path.startswith(_PUBLIC_PREFIXES)
+    page_view = request.method in {"GET", "HEAD"} and not path.startswith(_API_PREFIXES)
     probed = bool(PROBE_PATHS.search(path) or PROBE_PATHS.search(request.url.query or ""))
     # A visitor reading pages is never scored or blocked. Probing for /.env still is.
     if page_view and not probed:

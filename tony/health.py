@@ -56,14 +56,15 @@ def classify(status: int | None, error: str) -> tuple[str, str]:
     return "healthy", ""
 
 
-async def check_one(row: ConnectedAccount, timeout: float = 20.0) -> dict[str, Any]:
-    spec = catalog.get(row.app_slug)
+async def check_one(row: Any, timeout: float = 20.0) -> dict[str, Any]:
+    """Probe one connection. Accepts a plain row dict so nothing is detached from its session."""
+    spec = catalog.get(row["app_slug"])
     if spec is None:
-        return {"slug": row.app_slug, "state": "unknown", "detail": "App is no longer in the catalogue"}
+        return {"slug": row["app_slug"], "state": "unknown", "detail": "App is no longer in the catalogue"}
     action = _probe_action(spec)
     if action is None:
-        return {"slug": row.app_slug, "state": "unknown", "detail": "No safe read action to probe"}
-    creds = decrypt_json(row.credentials_enc) if row.credentials_enc else None
+        return {"slug": row["app_slug"], "state": "unknown", "detail": "No safe read action to probe"}
+    creds = decrypt_json(row["credentials_enc"]) if row.get("credentials_enc") else None
     started = time.perf_counter()
     state, detail, status = "healthy", "", None
     try:
@@ -73,37 +74,47 @@ async def check_one(row: ConnectedAccount, timeout: float = 20.0) -> dict[str, A
         state, detail = classify(res.status, "" if res.ok else str(res.error or ""))
     except Exception as exc:  # noqa: BLE001
         state, detail = classify(None, str(exc))
-    return {"slug": row.app_slug, "state": state, "detail": detail, "status": status,
-            "action": f"{row.app_slug}.{action.name}",
+    return {"slug": row["app_slug"], "state": state, "detail": detail, "status": status,
+            "action": f"{row['app_slug']}.{action.name}",
             "latency_ms": int((time.perf_counter() - started) * 1000)}
 
 
 async def run_checks(ws: str, entity_id: str = "") -> dict[str, Any]:
+    # Read what the probe needs while the session is open, so nothing is detached later.
     with session() as s:
         q = select(ConnectedAccount).where(ConnectedAccount.workspace_id == ws)
         if entity_id:
             q = q.where(ConnectedAccount.entity_id == entity_id)
-        rows = s.scalars(q).all()
-        results = []
-        for row in rows:
-            r = await check_one(row)
-            results.append(r)
-            meta = {}
+        rows = [{"id": r.id, "app_slug": r.app_slug, "credentials_enc": r.credentials_enc,
+                 "meta_json": r.meta_json or "{}", "status": r.status}
+                for r in s.scalars(q).all()]
+
+    results = []
+    for row in rows:
+        r = await check_one(row)
+        results.append(r)
+
+    with session() as s:
+        for row, r in zip(rows, results):
+            live = s.get(ConnectedAccount, row["id"])
+            if live is None:
+                continue
             try:
-                meta = json.loads(row.meta_json or "{}")
+                meta = json.loads(live.meta_json or "{}")
             except Exception:  # noqa: BLE001
                 meta = {}
             meta["health"] = {"state": r["state"], "detail": r["detail"],
                               "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                               "latency_ms": r.get("latency_ms", 0)}
-            row.meta_json = json.dumps(meta)
+            live.meta_json = json.dumps(meta)
             if r["state"] == "auth_expired":
-                row.status = "expired"
-            elif r["state"] in {"unreachable", "unhealthy", "error", "schema_changed"} and row.status == "expired":
-                row.status = "error"
+                live.status = "expired"
+            elif r["state"] in {"unreachable", "unhealthy", "error", "schema_changed"}:
+                live.status = "error" if live.status != "expired" else live.status
             elif r["state"] == "healthy":
-                row.status = "active"
+                live.status = "active"
         s.commit()
+
     counts: dict[str, int] = {}
     for r in results:
         counts[r["state"]] = counts.get(r["state"], 0) + 1

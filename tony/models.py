@@ -348,3 +348,46 @@ class UserTotp(Base):
     secret_enc: Mapped[str] = mapped_column(Text, default="")
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class ConnectLink(Base):
+    """A hosted, single-use link an agent gives its end user so they can grant access themselves.
+
+    The user signs in on the provider's own page; Tony never sees a password, an API key
+    or a client secret from them. The link carries which tools the agent is asking for.
+    """
+    __tablename__ = "connect_links"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    workspace_id: Mapped[str] = mapped_column(String(32), index=True)
+    entity_id: Mapped[str] = mapped_column(String(160), default="default")
+    app_slug: Mapped[str] = mapped_column(String(80), index=True)
+    agent_name: Mapped[str] = mapped_column(String(120), default="An agent")
+    tiers: Mapped[str] = mapped_column(String(60), default="read")
+    redirect_url: Mapped[str] = mapped_column(String(500), default="")
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending|opened|connected|expired|denied
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SecurityEvent(Base):
+    """One row per suspicious or blocked request, so abuse leaves a trail you can read."""
+    __tablename__ = "security_events"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    subject: Mapped[str] = mapped_column(String(120), index=True)   # ip, key prefix or workspace
+    kind: Mapped[str] = mapped_column(String(40), index=True)
+    detail: Mapped[str] = mapped_column(String(300), default="")
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    blocked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class BlockedSubject(Base):
+    """An ip, key or workspace that is shut out until the block expires."""
+    __tablename__ = "blocked_subjects"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    subject: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    reason: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -283,6 +283,7 @@ async def complete_oauth(state: str, code: str) -> ConnectedAccount:
         account.expires_at = expires_at
         account.label = str(creds.get("scope") or "")[:120]
         pending.consumed = True
+        account._redirect_after = pending.redirect_after or "/app"
         s.flush()
         return account
 

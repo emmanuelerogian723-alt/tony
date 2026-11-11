@@ -31,7 +31,7 @@ AUTH_BAD = {401, 403}
 def _probe_action(spec) -> Any | None:
     """The cheapest action that proves the credential still works."""
     reads = [a for a in spec.actions if a.tier == "read" and a.method.upper() == "GET"]
-    reads.sort(key=lambda a: (len(a.required or []), len(a.path)))
+    reads.sort(key=lambda a: (len(a.required or []), len(a.url or "")))
     return reads[0] if reads else None
 
 
@@ -75,7 +75,7 @@ async def check_one(row: Any, timeout: float = 20.0) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         state, detail = classify(None, str(exc))
     return {"slug": row["app_slug"], "state": state, "detail": detail, "status": status,
-            "action": f"{row['app_slug']}.{action.name}",
+            "action": f"{row['app_slug']}.{action.slug}",
             "latency_ms": int((time.perf_counter() - started) * 1000)}
 
 

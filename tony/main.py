@@ -20,6 +20,8 @@ from .assistant import router as assistant_router
 from .power import router as power_router
 from .ecosystem import router as ecosystem_router
 from .mcp import router as mcp_router
+from .connectlinks import router as connect_router
+from .security import router as security_router
 from .health import router as health_router
 from .install import router as install_router
 from .sessions import router as sessions_router
@@ -100,8 +102,31 @@ app.add_middleware(
 app.include_router(account_router)
 app.include_router(api_router)
 app.include_router(mcp_router)
+@app.middleware("http")
+async def shield_mw(request, call_next):
+    from fastapi.responses import JSONResponse
+    from . import shield
+    try:
+        shield.inspect(request)
+    except HTTPException as exc:
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    response = await call_next(request)
+    if response.status_code in (401, 403) and request.url.path.startswith("/v1/") and \
+            request.headers.get("authorization", "").lower().startswith("bearer "):
+        try:
+            shield.note_auth_failure(request)
+        except HTTPException:
+            pass
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    return response
+
+
 app.include_router(install_router)
 app.include_router(health_router)
+app.include_router(connect_router)
+app.include_router(security_router)
 app.include_router(billing_router)
 app.include_router(sessions_router)
 app.include_router(customtools_router)
@@ -171,6 +196,10 @@ async def oauth_callback(code: str = "", state: str = "", error: str = "", error
         account = await complete_oauth(state, code)
     except OAuthError as exc:
         return RedirectResponse(f"/app?connection=error&{urlencode({'reason': str(exc)})}")
+    after = getattr(account, "_redirect_after", "") or ""
+    # same-site paths only, so an authorization link can never become an open redirect
+    if after.startswith("/connect/") and "//" not in after and "\\" not in after:
+        return RedirectResponse(after)
     return RedirectResponse(f"/app?connection=ok&{urlencode({'app': account.app_slug})}")
 
 

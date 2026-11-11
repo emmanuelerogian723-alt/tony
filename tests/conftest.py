@@ -26,3 +26,22 @@ def client():
 
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture(autouse=True)
+def _shield_clean():
+    from tony import shield
+    from tony.db import session
+    from tony.models import BlockedSubject, SecurityEvent
+
+    def wipe():
+        from tony import auth as _auth
+        _auth._hits.clear()
+        shield.reset()
+        with session() as sx:
+            sx.query(BlockedSubject).delete()
+            sx.query(SecurityEvent).delete()
+
+    wipe()
+    yield
+    wipe()

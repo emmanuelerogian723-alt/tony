@@ -598,7 +598,10 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
                     "assistant. Useful beats cautious: answer the goal, or do the work with tools, or both. "
                     "Rules: never invent data, ids or results - anything factual about an app comes from a tool "
                     "return. If a goal is a question you can answer from knowledge or from what tools already "
-                    "returned, answer it directly instead of searching for a tool. If a tool errors, read the "
+                    "returned, answer it directly instead of searching for a tool. But never report data as "
+                    "missing or unavailable when a tool in your belt can fetch it - call that tool instead, "
+                    "and keep going until the goal is actually satisfied. Bare ids, urls or keys are a step, "
+                    "not an answer. If a tool errors, read the "
                     "error, adjust, and retry at most twice before explaining the blocker. Prefer the fewest calls "
                     "that satisfy the goal. If the goal needs a write and writes are not approved, name the exact "
                     "app.action and the arguments you would send, then stop. You may also draft, rewrite, plan or "
@@ -639,20 +642,6 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
             if answer:
                 break
 
-    # 3b. the model ran out of steps mid-plan: make it answer from what it has
-    if not answer and engine == "llm" and steps:
-        synthesis = messages + [{
-            "role": "user",
-            "content": ("Stop calling tools. Using only the tool results above, answer the original goal in "
-                        "under 120 words. Lead with the answer, then the specific evidence (titles, numbers, "
-                        "ids) that supports it. If something failed, say which part and what it means."),
-        }]
-        final = await _chat(synthesis, None, temperature=0.3, fast=True)
-        if not (final and (final.get("content") or "").strip()):
-            final = await _chat(synthesis, None, temperature=0.3, fast=False)
-        if final and (final.get("content") or "").strip():
-            answer = final["content"].strip()
-
     # 4. never fail: if the model was unavailable, execute the best guess
     if not steps:
         spec = specs[0]
@@ -664,7 +653,13 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
             else:
                 steps.append(await _run_one(ws, entity, spec.slug, action.slug, {}, body.dry_run))
 
-    if engine == "heuristic" and steps and steps[0].get("ok") and body.max_steps > 1:
+    # 3b. a plan that stalled on a bare id/url list is unfinished: fetch the detail
+    stalled = bool(steps) and bool(steps[-1].get("ok")) and not _items_of(steps[-1]) \
+        and bool(_raw_items(steps[-1]))
+    if engine == "llm" and stalled and body.max_steps > 1 and answer:
+        answer = ""
+
+    if (engine == "heuristic" or engine == "llm") and steps and steps[0].get("ok") and body.max_steps > 1:
         first = steps[0]
         spec = next((x for x in specs if x.slug == first["app"]), specs[0])
         items = _items_of(first)
@@ -683,6 +678,20 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
             if follow is not None:
                 steps.append(await _run_one(ws, entity, spec.slug, follow.slug,
                                             {follow.required[0]: value}, body.dry_run))
+
+    # 3c. answer from the full evidence trail, not from a half-finished plan
+    if not answer and engine == "llm" and steps:
+        synthesis = messages + [{
+            "role": "user",
+            "content": ("Stop calling tools. Using only the tool results above, answer the original goal in "
+                        "under 120 words. Lead with the answer, then the specific evidence (titles, numbers, "
+                        "ids) that supports it. If something failed, say which part and what it means."),
+        }]
+        final = await _chat(synthesis, None, temperature=0.3, fast=True)
+        if not (final and (final.get("content") or "").strip()):
+            final = await _chat(synthesis, None, temperature=0.3, fast=False)
+        if final and (final.get("content") or "").strip():
+            answer = final["content"].strip()
 
     if not answer:
         answer = _summarise(goal, steps)

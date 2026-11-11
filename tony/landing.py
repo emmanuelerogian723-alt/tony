@@ -1111,3 +1111,15 @@ JS = """
 })();
 </script>
 """
+
+# appended last so it wins over both stylesheets above
+CSS += """
+body{overflow-x:clip}
+.tape{overflow:hidden;border-bottom:1px solid #111;padding:17px 0}
+.tape-track{display:flex;width:max-content;animation:slide 42s linear infinite;
+ font-family:'JetBrains Mono',monospace;font-size:11.6px;letter-spacing:.06em;text-transform:uppercase;color:#5a5a5a}
+.tape-track span{display:inline-flex;align-items:center;gap:34px;padding-right:34px;white-space:nowrap}
+.tape-track i{width:3px;height:3px;border-radius:50%;background:#393939;display:block}
+@keyframes slide{to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.tape-track{animation:none}}
+"""

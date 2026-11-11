@@ -86,6 +86,7 @@ class AppSpec:
     source: str = "curated"
     tier: str = "actions"
     haystack: str = ""
+    popular: bool = False
 
     def action(self, slug: str) -> ActionSpec | None:
         return next((a for a in self.actions if a.slug == slug), None)
@@ -108,6 +109,9 @@ class AppSpec:
             "notes": self.notes,
             "source": self.source,
             "tier": self.tier,
+            "popular": self.popular,
+            "reads": sum(1 for a in self.actions if a.tier == "read"),
+            "writes": sum(1 for a in self.actions if a.tier != "read"),
         }
         if include_actions:
             data["actions"] = [a.to_public() for a in self.actions]
@@ -209,6 +213,7 @@ def parse_manifest(path: Path) -> AppSpec:
         verified=bool(raw.get("verified", True)),
         notes=str(raw.get("notes") or ""),
         path=where,
+        popular=bool(raw.get("popular", True)),
     )
 
 
@@ -256,7 +261,19 @@ def parse_registry_line(line: str, where: str) -> AppSpec:
         path=where,
         source=str(raw.get("source") or "registry"),
         tier=str(raw.get("tier") or ("actions" if actions else "directory")),
+        popular=bool(raw.get("popular", False)),
     )
+
+
+# Hand-ordered so the catalogue opens with what builders actually reach for.
+FEATURED = [
+    "gmail", "googlecalendar", "googledrive", "googlesheets", "slack", "github", "notion", "linear",
+    "jira", "hubspot", "salesforce", "stripe", "openai", "anthropic", "youtube", "linkedin",
+    "facebook", "instagram", "discord", "telegram", "whatsapp", "twilio", "sendgrid", "mailchimp",
+    "airtable", "asana", "trello", "zoom", "outlook", "dropbox", "shopify", "figma", "zendesk",
+    "intercom", "quickbooks", "xero", "paypal", "gitlab", "confluence", "monday", "clickup",
+]
+_FEATURED_RANK = {s: i for i, s in enumerate(FEATURED)}
 
 
 class Catalog:
@@ -301,17 +318,51 @@ class Catalog:
                     self.apps[spec.slug] = spec
 
     # ── lookups ──────────────────────────────────────────────────────────
+        self._mark_shadowed()
+
+    def _mark_shadowed(self) -> None:
+        """Same product imported from several catalogs: keep the best, hide the rest.
+
+        Nothing is deleted. A shadowed app still resolves by slug (so existing
+        connections and code keep working); it just stops cluttering the browse
+        view. Best = most real actions, then curated > registry, then has a logo.
+        """
+        src_rank = {"curated": 0, "openapi": 1, "nango": 2, "activepieces": 3, "n8n": 4, "pipedream": 5}
+        groups: dict[str, list[AppSpec]] = {}
+        for a in self.apps.values():
+            key = re.sub(r"[^a-z0-9]+", "", a.name.lower())
+            # tiny, generic names ("api", "client") are not safe to merge
+            if len(key) >= 4:
+                groups.setdefault(key, []).append(a)
+        self.shadowed: set[str] = set()
+        for members in groups.values():
+            if len(members) < 2:
+                continue
+            # Only merge when the twins share a vendor-ish identity (same name AND same category family)
+            members.sort(key=lambda a: (-len(a.actions), src_rank.get(a.source, 9), 0 if a.logo else 1, a.slug))
+            keeper = members[0]
+            for dup in members[1:]:
+                # never hide a different product that merely shares a name (e.g. two unrelated "Client" APIs)
+                if dup.base_url and keeper.base_url and dup.base_url.split("/")[2:3] != keeper.base_url.split("/")[2:3]:
+                    if dup.source == keeper.source:
+                        continue
+                self.shadowed.add(dup.slug)
+
     def get(self, slug: str) -> AppSpec | None:
         return self.apps.get(slug)
 
     def search(self, query: str = "", category: str = "", tier: str = "",
-               source: str = "", limit: int = 0, offset: int = 0) -> list[AppSpec]:
+               source: str = "", limit: int = 0, offset: int = 0,
+               dedupe: bool = False) -> list[AppSpec]:
         q = (query or "").strip().lower()
         cat = (category or "").strip().lower()
         tier = (tier or "").strip().lower()
         src = (source or "").strip().lower()
         out = []
+        hide = getattr(self, "shadowed", set())
         for app in self.apps.values():
+            if dedupe and app.slug in hide and not q:
+                continue
             if cat and app.category.lower() != cat:
                 continue
             if tier and app.tier != tier:
@@ -339,7 +390,11 @@ class Catalog:
             else:
                 rel = 4
             tier_rank = 0 if a.tier == "actions" else 1 if a.tier == "proxy" else 2
-            return (rel, tier_rank, len(a.name), a.name.lower())
+            # Relevance first when searching; otherwise popular -> has a real logo -> built-in.
+            feat = _FEATURED_RANK.get(a.slug.replace("_", "").replace("-", ""),
+                                      _FEATURED_RANK.get(a.slug, 999))
+            return (rel, feat, 0 if a.popular else 1, 0 if a.logo else 1, tier_rank,
+                    len(a.name), a.name.lower())
 
         out.sort(key=rank)
         if offset:
@@ -400,12 +455,22 @@ class Catalog:
             "apps": len(self.apps),
             "actions": actions,
             "categories": len({a.category for a in self.apps.values()}),
+            "duplicates_hidden_in_browse": len(getattr(self, "shadowed", ())),
             "by_tier": by_tier,
             "by_source": by_source,
         }
 
     def categories(self) -> list[str]:
         return sorted({a.category for a in self.apps.values()})
+
+    def category_counts(self) -> list[dict[str, Any]]:
+        """[{name, count}] biggest first, 'Other' always last - for the catalogue sidebar."""
+        counts: dict[str, int] = {}
+        for a in self.apps.values():
+            counts[a.category] = counts.get(a.category, 0) + 1
+        rows = [{"name": k, "count": v} for k, v in counts.items()]
+        rows.sort(key=lambda r: (r["name"] == "Other", -r["count"], r["name"]))
+        return rows
 
 
 catalog = Catalog()

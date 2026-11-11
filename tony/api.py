@@ -132,15 +132,17 @@ def meta() -> dict[str, Any]:
 
 @router.get("/apps")
 def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "", source: str = "",
-              with_actions: bool = False, limit: int = 60, offset: int = 0) -> dict[str, Any]:
+              with_actions: bool = False, limit: int = 60, offset: int = 0,
+              dedupe: bool = False) -> dict[str, Any]:
     """Paginated catalogue search. `limit=0` returns everything (use with care)."""
     search = (search or q).strip()
-    matched = catalog.search(search, category, tier=tier, source=source)
+    matched = catalog.search(search, category, tier=tier, source=source, dedupe=dedupe)
     total = len(matched)
     window = matched[offset: offset + limit] if limit else matched[offset:]
     return {
         "apps": [a.to_public(include_actions=with_actions) for a in window],
         "categories": catalog.categories(),
+        "category_counts": catalog.category_counts(),
         "total": total,
         "offset": offset,
         "limit": limit,
@@ -206,6 +208,24 @@ def list_actions(search: str = "", app: str = "", tier: str = "", limit: int = 5
     matched = out[offset: offset + limit] if limit else out[offset:]
     return {"actions": matched, "total": len(out), "offset": offset,
             "has_more": bool(limit) and offset + limit < len(out)}
+
+
+@router.get("/connections/health")
+def connections_health(request: Request) -> dict[str, Any]:
+    """Per-app connection health so a broken integration is visible early."""
+    ws, _ = workspace_from_request(request)
+    from . import connhealth
+    return connhealth.summary(ws)
+
+
+@router.post("/connections/refresh")
+async def refresh_connections(request: Request) -> dict[str, Any]:
+    """Sweep now: refresh anything expiring, mark what needs re-auth."""
+    ws, _ = workspace_from_request(request)
+    from . import connhealth
+    result = await connhealth.sweep()
+    result["workspace"] = ws
+    return result
 
 
 @router.get("/connections")

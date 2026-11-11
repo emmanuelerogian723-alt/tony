@@ -61,10 +61,16 @@ def test_absolute_url_param_is_not_encoded():
     assert url == "https://example.com/a?b=1"
 
 
-def test_unknown_argument_rejected():
+def test_unknown_argument_rejected_when_strict():
     act = make_action(params={"a": {"type": "string"}})
     with pytest.raises(ExecutionError, match="Unknown argument"):
-        validate_args(act, {"b": "x"})
+        validate_args(act, {"b": "x"}, strict=True)
+
+
+def test_unknown_argument_is_dropped_by_default():
+    # Models add plausible extras; that must not fail a real call.
+    act = make_action(params={"a": {"type": "string", "required": True}}, required=["a"])
+    assert validate_args(act, {"a": "hello", "limit": 5, "": "junk"}) == {"a": "hello"}
 
 
 def test_required_argument_enforced():

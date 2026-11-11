@@ -96,10 +96,17 @@ def coerce_value(spec: dict[str, Any], value: Any) -> Any:
     return value
 
 
-def validate_args(action: ActionSpec, args: dict[str, Any] | None) -> dict[str, Any]:
-    args = dict(args or {})
+def validate_args(action: ActionSpec, args: dict[str, Any] | None,
+                  strict: bool = False) -> dict[str, Any]:
+    """Keep the declared arguments and drop the rest.
+
+    Models routinely add a plausible extra (a `limit` on an endpoint that takes no
+    parameters). Dropping it is almost always what the caller meant, so tolerance is
+    the default and a whole call only fails when a required argument is missing.
+    """
+    args = {k: v for k, v in dict(args or {}).items() if isinstance(k, str) and k.strip()}
     unknown = [k for k in args if k not in action.params]
-    if unknown:
+    if unknown and strict:
         raise ExecutionError(f"Unknown argument(s): {', '.join(sorted(unknown))}. Allowed: {', '.join(sorted(action.params)) or 'none'}")
     cleaned: dict[str, Any] = {}
     for name, spec in action.params.items():

@@ -11,6 +11,8 @@ auth:
   token_url: https://oauth2.googleapis.com/token
   scopes:
   - https://www.googleapis.com/auth/drive.readonly
+  - https://www.googleapis.com/auth/drive.file
+  - https://www.googleapis.com/auth/drive
   client_id_env: GOOGLE_CLIENT_ID
   client_secret_env: GOOGLE_CLIENT_SECRET
   authorize_params:
@@ -55,3 +57,28 @@ actions:
       default: id,name,mimeType,size,modifiedTime,webViewLink
   required:
   - file_id
+- slug: create_folder
+  name: Create folder
+  description: Create a folder in Google Drive.
+  method: POST
+  url: https://www.googleapis.com/drive/v3/files
+  tier: write
+  params:
+    name: {type: string, required: true}
+    mimeType: {type: string, default: application/vnd.google-apps.folder}
+    parents: {type: array, description: List with one parent folder id; omit for My Drive root}
+  required: [name]
+- slug: share_file
+  name: Share file
+  description: Grant another person access to a file or folder.
+  method: POST
+  url: https://www.googleapis.com/drive/v3/files/{file_id}/permissions
+  tier: write
+  params:
+    file_id: {type: string, required: true, in: path}
+    role: {type: string, required: true, enum: [reader, commenter, writer, owner]}
+    type: {type: string, required: true, enum: [user, group, domain, anyone]}
+    emailAddress: {type: string, description: Required for user or group}
+    sendNotificationEmail: {type: boolean, default: true}
+  required: [file_id, role, type]
+  danger_note: Changes who can open the file.

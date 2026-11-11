@@ -43,3 +43,25 @@ actions:
   - guild_id
   response:
     max_items: 40
+- slug: send_message
+  name: Send message
+  description: Post a message into a channel the bot can see.
+  method: POST
+  url: https://discord.com/api/v10/channels/{channel_id}/messages
+  tier: write
+  params:
+    channel_id: {type: string, required: true, in: path}
+    content: {type: string, required: true, description: Message text, max 2000 characters}
+  required: [channel_id, content]
+  danger_note: Posts publicly in the server.
+- slug: create_channel
+  name: Create channel
+  description: Create a text channel in a server.
+  method: POST
+  url: https://discord.com/api/v10/guilds/{guild_id}/channels
+  tier: write
+  params:
+    guild_id: {type: string, required: true, in: path}
+    name: {type: string, required: true}
+    type: {type: integer, default: 0, description: 0 text, 2 voice}
+  required: [guild_id, name]

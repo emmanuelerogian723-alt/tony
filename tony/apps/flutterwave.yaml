@@ -28,3 +28,26 @@ actions:
   description: Wallet balances by currency.
   method: GET
   url: https://api.flutterwave.com/v3/balances
+- slug: initiate_payment
+  name: Initiate payment
+  description: Create a payment link and get the checkout URL to redirect the customer to.
+  method: POST
+  url: https://api.flutterwave.com/v3/payments
+  tier: write
+  params:
+    tx_ref: {type: string, required: true, description: Your unique reference}
+    amount: {type: string, required: true}
+    currency: {type: string, default: NGN}
+    redirect_url: {type: string, required: true}
+    customer: {type: object, required: true, description: '{"email":"...","name":"..."}'}
+    customizations: {type: object, description: '{"title":"Order 123"}'}
+  required: [tx_ref, amount, redirect_url, customer]
+  danger_note: Creates a live payment request.
+- slug: verify_transaction
+  name: Verify transaction
+  description: Confirm a payment by its transaction id.
+  method: GET
+  url: https://api.flutterwave.com/v3/transactions/{transaction_id}/verify
+  params:
+    transaction_id: {type: string, required: true, in: path}
+  required: [transaction_id]

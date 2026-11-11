@@ -411,6 +411,18 @@ def _log_run(ws: str, entity: str, spec, action, status: str, result=None, reque
         return run.id
 
 
+def _effective_verb(action: Any, args: dict[str, Any] | None) -> str:
+    """The verb the request will actually use.
+
+    The universal passthrough is a write action by design, but a plain GET through
+    it reads data. Approval is for changes, so a read must not queue for one.
+    """
+    verb = str((args or {}).get("method") or "").upper()
+    if verb in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+        return verb
+    return (getattr(action, "method", "") or "GET").upper()
+
+
 @router.post("/execute")
 async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
     ws, _ = workspace_from_request(request)
@@ -454,7 +466,8 @@ async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
     check_run(ws)
     entity = _entity(ws, sess.entity_id if sess else body.entity_id)
 
-    if action.tier != "read" and settings.require_approval and not body.approved and not body.dry_run:
+    if (action.tier != "read" and settings.require_approval and not body.approved
+            and not body.dry_run and _effective_verb(action, body.args) != "GET"):
         run_id = _log_run(ws, entity, spec, action, "pending_approval",
                           request_payload={"args": body.args, "action": body.action})
         touch_session(sess)

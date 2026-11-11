@@ -33,3 +33,13 @@ actions:
   response:
     path: entries
     max_items: 40
+- slug: create_folder
+  name: Create folder
+  description: Create a folder at a Dropbox path.
+  method: POST
+  url: https://api.dropboxapi.com/2/files/create_folder_v2
+  tier: write
+  params:
+    path: {type: string, required: true, description: "e.g. /Clients/Acme"}
+    autorename: {type: boolean, default: false}
+  required: [path]

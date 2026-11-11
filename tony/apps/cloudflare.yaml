@@ -44,3 +44,18 @@ actions:
   response:
     path: result
     max_items: 40
+- slug: create_dns_record
+  name: Create DNS record
+  description: Add a DNS record to a zone.
+  method: POST
+  url: https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records
+  tier: write
+  params:
+    zone_id: {type: string, required: true, in: path}
+    type: {type: string, required: true, description: A, AAAA, CNAME, TXT, MX}
+    name: {type: string, required: true, description: "e.g. www or @ for the apex"}
+    content: {type: string, required: true}
+    ttl: {type: integer, default: 1, description: 1 means automatic}
+    proxied: {type: boolean, default: false}
+  required: [zone_id, type, name, content]
+  danger_note: Changes live DNS.

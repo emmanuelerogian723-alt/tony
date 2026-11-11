@@ -55,3 +55,24 @@ actions:
   response:
     path: products
     max_items: 25
+- slug: create_product
+  name: Create product
+  description: 'Create a product. Body shape: {"product":{"title":"Tee","body_html":"<p>...</p>","vendor":"Brand","product_type":"Shirt","variants":[{"price":"5000","sku":"TEE-1"}]}}'
+  method: POST
+  url: https://{shop}/admin/api/2024-10/products.json
+  tier: write
+  params:
+    body: {type: object, required: true, description: "Shopify product JSON, see the description"}
+  required: [body]
+  danger_note: Publishes a product to the live store.
+- slug: update_inventory
+  name: Set inventory level
+  description: Set the available quantity for an inventory item at a location.
+  method: POST
+  url: https://{shop}/admin/api/2024-10/inventory_levels/set.json
+  tier: write
+  params:
+    inventory_item_id: {type: string, required: true}
+    location_id: {type: string, required: true}
+    available: {type: integer, required: true}
+  required: [inventory_item_id, location_id, available]

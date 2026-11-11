@@ -772,10 +772,24 @@ async function loadInstall(){
     el('in-mcp-copy').onclick = ()=>copyText(d.mcp_url, el('in-mcp-copy'));
     const groups = {};
     d.clients.forEach(c=>{ (groups[c.group] = groups[c.group] || []).push(c) });
+    const gIcon = {};
+    (d.groups||[]).forEach(g=>{ gIcon[g.name] = g.icon });
+    const logo = (url, name, size)=>
+      '<span class="ico" style="width:'+size+'px;height:'+size+'px;flex:0 0 auto;display:inline-flex;'+
+      'align-items:center;justify-content:center;border-radius:8px;overflow:hidden;background:var(--card-2);'+
+      'border:1px solid var(--line)">'+
+      (url?'<img src="'+esc(url)+'" alt="'+esc(name)+'" loading="lazy" decoding="async" '+
+        'style="width:'+size+'px;height:'+size+'px;object-fit:contain;background:transparent" '+
+        'onerror="this.style.display=\'none\'">':'')+'</span>';
     el('in-clients').innerHTML = Object.entries(groups).map(([g, list])=>
-      '<div class="card pad" style="margin-bottom:12px"><b style="font-size:14px">'+esc(g)+'</b>'+
+      '<div class="card pad" style="margin-bottom:12px">'+
+      '<div class="row" style="gap:9px;align-items:center">'+logo(gIcon[g], g, 22)+
+      '<b style="font-size:14px">'+esc(g)+'</b><span class="sp"></span>'+
+      '<span class="tiny muted">'+list.length+' client'+(list.length===1?'':'s')+'</span></div>'+
       list.map(c=>
-        '<div style="margin-top:14px"><div class="row"><span style="font-weight:600">'+esc(c.name)+'</span><span class="sp"></span>'+
+        '<div style="margin-top:14px"><div class="row" style="gap:9px;align-items:center">'+
+        logo(c.icon, c.name, 26)+
+        '<span style="font-weight:600">'+esc(c.name)+'</span><span class="sp"></span>'+
         '<span class="tiny muted">'+esc(c.file||c.kind)+'</span>'+
         '<button class="btn ghost sm" data-cp="'+esc(c.id)+'" style="margin-left:10px">Copy</button></div>'+
         '<pre class="mono tiny" id="sn-'+esc(c.id)+'" style="margin:8px 0 4px;padding:12px;border:1px solid var(--line);'+

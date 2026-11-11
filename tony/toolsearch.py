@@ -154,6 +154,8 @@ class ToolIndex:
             app_tokens = _tokens(f"{app.slug} {app.name} {getattr(app, 'category', '')} "
                                  f"{getattr(app, 'description', '')}")
             for action in app.actions:
+                if getattr(action, "universal", False):
+                    continue   # same passthrough on every app: never let it crowd real actions
                 text = (f"{app.slug} {app.name} {action.slug} {action.name} "
                         f"{getattr(action, 'description', '')} {getattr(action, 'tier', '')}")
                 toks = _tokens(text)

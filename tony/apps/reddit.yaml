@@ -66,3 +66,17 @@ actions:
   response:
     path: data.children
     max_items: 25
+- slug: submit_post
+  name: Submit post
+  description: Submit a self or link post to a subreddit.
+  method: POST
+  url: https://oauth.reddit.com/api/submit
+  tier: write
+  params:
+    sr: {type: string, required: true, description: Subreddit name without r/}
+    title: {type: string, required: true}
+    kind: {type: string, default: self, enum: [self, link]}
+    text: {type: string, description: Body for a self post}
+    url: {type: string, description: Link for a link post}
+  required: [sr, title]
+  danger_note: Posts publicly under the signed-in account.

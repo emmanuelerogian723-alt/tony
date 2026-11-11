@@ -30,3 +30,13 @@ actions:
       description: ''
   required:
   - start_date
+- slug: send_email
+  name: Send email
+  description: 'Send transactional email. Body shape: {"personalizations":[{"to":[{"email":"a@b.com"}]}],"from":{"email":"you@brand.com"},"subject":"Hi","content":[{"type":"text/plain","value":"Hello"}]}'
+  method: POST
+  url: https://api.sendgrid.com/v3/mail/send
+  tier: write
+  params:
+    body: {type: object, required: true, description: "Full SendGrid mail JSON, see the description"}
+  required: [body]
+  danger_note: Sends real email from the verified sender.

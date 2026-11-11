@@ -56,3 +56,13 @@ actions:
   response:
     path: value
     max_items: 20
+- slug: send_mail
+  name: Send mail
+  description: 'Send email as the signed-in user. Body shape: {"message":{"subject":"Hi","body":{"contentType":"Text","content":"Hello"},"toRecipients":[{"emailAddress":{"address":"a@b.com"}}]}}'
+  method: POST
+  url: https://graph.microsoft.com/v1.0/me/sendMail
+  tier: write
+  params:
+    body: {type: object, required: true, description: "Graph sendMail JSON, see the description"}
+  required: [body]
+  danger_note: Sends real email from the user's mailbox.

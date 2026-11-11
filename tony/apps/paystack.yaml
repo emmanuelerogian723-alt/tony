@@ -54,3 +54,40 @@ actions:
       in: path
   required:
   - reference
+- slug: initialize_transaction
+  name: Initialize transaction
+  description: Start a checkout; returns an authorization_url and access_code to send the customer.
+  method: POST
+  url: https://api.paystack.co/transaction/initialize
+  tier: write
+  params:
+    email: {type: string, required: true, description: Customer email}
+    amount: {type: integer, required: true, description: "Amount in the smallest unit, kobo for NGN"}
+    reference: {type: string, description: Unique reference; generated if omitted}
+    callback_url: {type: string}
+    currency: {type: string, default: NGN}
+  required: [email, amount]
+  danger_note: Creates a live payment request on the merchant account.
+- slug: create_customer
+  name: Create customer
+  description: Add a customer to the Paystack account.
+  method: POST
+  url: https://api.paystack.co/customer
+  tier: write
+  params:
+    email: {type: string, required: true}
+    first_name: {type: string}
+    last_name: {type: string}
+    phone: {type: string}
+  required: [email]
+- slug: refund_transaction
+  name: Refund transaction
+  description: Refund all or part of a transaction.
+  method: POST
+  url: https://api.paystack.co/refund
+  tier: destructive
+  params:
+    transaction: {type: string, description: Transaction id or reference, required: true}
+    amount: {type: integer, description: "Amount in kobo; omit for a full refund"}
+  required: [transaction]
+  danger_note: Moves real money back to the customer.

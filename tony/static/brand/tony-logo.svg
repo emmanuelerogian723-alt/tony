@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Tony">
+  <title>Tony</title>
+  <defs>
+    <linearGradient id="tb" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1A1A18"/><stop offset="1" stop-color="#0A0A09"/>
+    </linearGradient>
+    <linearGradient id="tr" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#CFCBC0"/>
+    </linearGradient>
+    <radialGradient id="td" cx=".35" cy=".3" r=".9">
+      <stop offset="0" stop-color="#FF8A5C"/><stop offset=".6" stop-color="#E2542B"/><stop offset="1" stop-color="#B53A17"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#tb)"/>
+  <rect x=".75" y=".75" width="62.5" height="62.5" rx="15.3" fill="none" stroke="#fff" stroke-opacity=".10" stroke-width="1.5"/>
+  <!-- T stem + bar: a plug (the connection) whose left prong feeds a ring (the app) -->
+  <path d="M15 20.5h22" stroke="url(#tr)" stroke-width="6" stroke-linecap="round"/>
+  <path d="M26 20.5V43" stroke="url(#tr)" stroke-width="6" stroke-linecap="round"/>
+  <!-- the app ring -->
+  <circle cx="43.5" cy="38.5" r="9.5" fill="none" stroke="url(#tr)" stroke-width="5.2"
+          stroke-dasharray="44 16" stroke-linecap="round" transform="rotate(-30 43.5 38.5)"/>
+  <!-- live node -->
+  <circle cx="46" cy="36" r="3.6" fill="url(#td)"/>
+</svg>

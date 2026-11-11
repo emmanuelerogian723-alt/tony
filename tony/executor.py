@@ -240,8 +240,15 @@ def rss_items(raw: str, limit: int = 20) -> list:
 def needs_base_url(spec: AppSpec) -> bool:
     """True when an app's URL template still expects the user to supply a host."""
     for act in spec.actions:
+        if getattr(act, "universal", False):
+            continue
         if "{base_url}" in (act.url or ""):
             return True
+    # Every app now carries the "call any endpoint" passthrough. If the app has no
+    # published host, that passthrough cannot work until the user supplies one, so
+    # the connect form must ask for it up front instead of failing on first call.
+    if not (spec.base_url or "").strip():
+        return any(getattr(act, "universal", False) for act in spec.actions)
     return False
 
 
@@ -357,9 +364,13 @@ def build_request(
             else:
                 url = url.replace(token, quote(_raw, safe="/" if keep_slash else ""))
     if "{base_url}" in url:
-        raise ExecutionError(
-            f"{spec.name} has no API host yet. Open the console, pick {spec.name} → Connect, "
-            f"and paste its API base URL (docs: {spec.docs or 'see the vendor docs'}).")
+        root = (spec.base_url or "").rstrip("/")
+        if root:
+            url = url.replace("{base_url}", root)
+        else:
+            raise ExecutionError(
+                f"{spec.name} has no API host yet. Open the console, pick {spec.name} → Connect, "
+                f"and paste its API base URL (docs: {spec.docs or 'see the vendor docs'}).")
     if "{" in url and "}" in url:
         raise ExecutionError(f"Unresolved path parameter in URL: {url}")
 

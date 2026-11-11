@@ -60,3 +60,15 @@ actions:
       default: 10
   response:
     max_items: 15
+- slug: create_repo
+  name: Create repo
+  description: Create a model, dataset or space repository.
+  method: POST
+  url: https://huggingface.co/api/repos/create
+  tier: write
+  params:
+    name: {type: string, required: true}
+    type: {type: string, default: model, enum: [model, dataset, space]}
+    private: {type: boolean, default: false}
+    organization: {type: string}
+  required: [name]

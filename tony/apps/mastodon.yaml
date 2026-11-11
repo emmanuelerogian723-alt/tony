@@ -33,3 +33,14 @@ actions:
       default: 20
   response:
     max_items: 25
+- slug: post_status
+  name: Post status
+  description: Publish a status on the connected Mastodon account.
+  method: POST
+  url: https://mastodon.social/api/v1/statuses
+  tier: write
+  params:
+    status: {type: string, required: true, description: Text, max 500 characters}
+    visibility: {type: string, default: public, enum: [public, unlisted, private, direct]}
+  required: [status]
+  danger_note: Posts publicly.

@@ -150,13 +150,14 @@ def save_survey(body: SurveyIn, request: Request) -> dict[str, Any]:
 
 # ── pages ─────────────────────────────────────────────────────────────────────
 
-_ICON = """<svg viewBox="0 0 32 32" width="{s}" height="{s}" aria-hidden="true">
-<defs><linearGradient id="tg" x1="0" y1="0" x2="1" y2="1">
-<stop offset="0" stop-color="#F2D06B"/><stop offset=".55" stop-color="#D4AF37"/>
-<stop offset="1" stop-color="#A67C12"/></linearGradient></defs>
-<rect width="32" height="32" rx="9" fill="#0A0A0C"/>
-<path d="M8 22V10l8 8 8-8v12" fill="none" stroke="url(#tg)" stroke-width="2.4"
-stroke-linecap="round" stroke-linejoin="round"/></svg>"""
+_ICON = """<svg viewBox="0 0 64 64" width="{s}" height="{s}" aria-hidden="true">
+<defs><linearGradient id="tb" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1A1A18"/><stop offset="1" stop-color="#0A0A09"/></linearGradient>
+<linearGradient id="tr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#CFCBC0"/></linearGradient>
+<radialGradient id="td" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#FF8A5C"/><stop offset=".6" stop-color="#E2542B"/><stop offset="1" stop-color="#B53A17"/></radialGradient></defs>
+<rect width="64" height="64" rx="16" fill="url(#tb)"/>
+<path d="M15 20.5h22M26 20.5V43" stroke="url(#tr)" stroke-width="6" stroke-linecap="round" fill="none"/>
+<circle cx="43.5" cy="38.5" r="9.5" fill="none" stroke="url(#tr)" stroke-width="5.2" stroke-dasharray="44 16" stroke-linecap="round" transform="rotate(-30 43.5 38.5)"/>
+<circle cx="46" cy="36" r="3.6" fill="url(#td)"/></svg>"""
 
 _SHELL = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -173,23 +174,23 @@ p.sub{{color:#a29c8c;margin:0 0 22px}}
 textarea,input{{width:100%;background:#0f0f13;border:1px solid #2a2a31;border-radius:11px;color:#F6F3EA;
 padding:12px 13px;font:inherit;outline:none}}
 textarea{{min-height:96px;resize:vertical}}
-textarea:focus,input:focus{{border-color:#D4AF37}}
-.btn{{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(180deg,#E8C765,#D4AF37);
-color:#141008;border:0;border-radius:11px;padding:11px 18px;font-weight:650;cursor:pointer;font:inherit}}
+textarea:focus,input:focus{{border-color:#E2542B}}
+.btn{{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(180deg,#FF8A5C,#E2542B);
+color:#fff;border:0;border-radius:11px;padding:11px 18px;font-weight:650;cursor:pointer;font:inherit}}
 .btn[disabled]{{opacity:.55;cursor:default}}
 .btn.ghost{{background:#17171c;color:#F6F3EA;border:1px solid #2a2a31}}
 .row{{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}}
 .chip{{display:inline-flex;align-items:center;gap:7px;background:#17171c;border:1px solid #2a2a31;
 border-radius:999px;padding:6px 12px;font-size:13px;color:#cdc7b8;cursor:pointer}}
-.chip.on{{border-color:#D4AF37;color:#F2D06B}}
+.chip.on{{border-color:#E2542B;color:#FF8A5C}}
 .muted{{color:#8b8778;font-size:13px}}
 .out{{margin-top:16px;display:grid;gap:10px}}
 .step{{display:flex;gap:11px;align-items:flex-start;background:#101015;border:1px solid #232329;
 border-radius:12px;padding:12px}}
-.step b{{color:#F2D06B;font-weight:600}}
+.step b{{color:#FF8A5C;font-weight:600}}
 pre{{background:#0d0d11;border:1px solid #232329;border-radius:11px;padding:12px;overflow:auto;
 max-height:340px;font-size:12.5px;color:#cfc9ba}}
-a{{color:#F2D06B}}
+a{{color:#FF8A5C}}
 </style></head><body><div class="wrap">{body}</div>{script}</body></html>"""
 
 
@@ -314,7 +315,8 @@ def query_page(request: Request) -> Any:
 
 @router.get("/playground", response_class=HTMLResponse)
 def playground_page() -> Any:
-    return HTMLResponse(playground_html())
+    from .playground_page import playground_page as _page
+    return HTMLResponse(_page())
 
 
 @router.get("/welcome", response_class=HTMLResponse)

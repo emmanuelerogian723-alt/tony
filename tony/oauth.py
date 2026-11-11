@@ -137,7 +137,11 @@ async def dynamic_client(spec: AppSpec) -> tuple[str, str]:
         meta = meta_resp.json()
         reg_endpoint = meta.get("registration_endpoint")
         if not reg_endpoint:
-            raise OAuthError(f"{spec.name} does not support automatic client registration.")
+            envs = " and ".join(e for e in (spec.auth.client_id_env, spec.auth.client_secret_env) if e)
+            raise OAuthError(
+                f"{spec.name} needs its OAuth app credentials added once"
+                + (f" ({envs})" if envs else "")
+                + ". After that every user just signs in. A personal API token works right now instead.")
         reg = await _post_registration(reg_endpoint, {
             "client_name": "Tony",
             "redirect_uris": [redirect_uri(spec)],

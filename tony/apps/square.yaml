@@ -26,3 +26,13 @@ actions:
   response:
     path: payments
     max_items: 25
+- slug: create_payment
+  name: Create payment
+  description: 'Charge a card token or payment source. Body shape: {"source_id":"cnon:...","amount_money":{"amount":1000,"currency":"USD"},"idempotency_key":"uuid"}'
+  method: POST
+  url: https://connect.squareup.com/v2/payments
+  tier: write
+  params:
+    body: {type: object, required: true, description: "Square CreatePayment JSON, see the description"}
+  required: [body]
+  danger_note: Moves real money.

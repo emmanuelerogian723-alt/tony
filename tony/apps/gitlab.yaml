@@ -78,3 +78,26 @@ actions:
   - project_id
   response:
     max_items: 20
+- slug: create_issue
+  name: Create issue
+  description: Open an issue in a project.
+  method: POST
+  url: https://gitlab.com/api/v4/projects/{project_id}/issues
+  tier: write
+  params:
+    project_id: {type: string, required: true, in: path, description: Numeric id or URL-encoded path}
+    title: {type: string, required: true}
+    description: {type: string}
+    labels: {type: string, description: Comma-separated labels}
+  required: [project_id, title]
+- slug: comment_issue
+  name: Comment on issue
+  description: Add a note to an existing issue.
+  method: POST
+  url: https://gitlab.com/api/v4/projects/{project_id}/issues/{issue_iid}/notes
+  tier: write
+  params:
+    project_id: {type: string, required: true, in: path}
+    issue_iid: {type: string, required: true, in: path}
+    body: {type: string, required: true}
+  required: [project_id, issue_iid, body]

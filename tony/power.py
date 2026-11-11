@@ -241,6 +241,33 @@ STOPWORDS = {"the", "and", "for", "with", "from", "this", "that", "into", "then"
              "top", "best", "summary", "summarize", "summarise", "list"}
 
 
+# Plain-language words people use that never appear in an app's name. Without this,
+# "price of bitcoin" matched a VTEX pricing API instead of CoinGecko.
+INTENT_ALIASES: dict[str, tuple[str, ...]] = {
+    "bitcoin": ("coingecko",), "btc": ("coingecko",), "ethereum": ("coingecko",), "crypto": ("coingecko",),
+    "cryptocurrency": ("coingecko",), "coin": ("coingecko",),
+    "email": ("gmail",), "emails": ("gmail",), "inbox": ("gmail",), "mail": ("gmail",),
+    "calendar": ("google_calendar",), "meeting": ("google_calendar",), "meetings": ("google_calendar",),
+    "schedule": ("google_calendar",), "events": ("google_calendar",),
+    "repo": ("github",), "repos": ("github",), "repository": ("github",), "commits": ("github",),
+    "pull": ("github",), "issues": ("github", "linear"),
+    "slack": ("slack",), "channel": ("slack",),
+    "news": ("hackernews", "gnews"), "headlines": ("gnews",), "stories": ("hackernews",),
+    "spreadsheet": ("google_sheets",), "sheet": ("google_sheets",), "sheets": ("google_sheets",),
+    "drive": ("google_drive",), "files": ("google_drive", "dropbox"),
+    "stock": ("alpha_vantage", "finnhub"), "stocks": ("alpha_vantage", "finnhub"),
+    "weather": ("openweathermap",), "paper": ("arxiv",), "papers": ("arxiv",),
+    "tweet": ("x",), "tweets": ("x",), "notion": ("notion",), "page": ("notion",),
+    "payment": ("stripe", "flutterwave"), "payments": ("stripe", "flutterwave"),
+    "invoice": ("stripe",), "customers": ("stripe",), "ticket": ("linear",),
+}
+
+
+def _alias_bonus(goal: str, slug: str) -> float:
+    toks = set(re.findall(r"[a-z0-9]{2,}", goal.lower()))
+    return 14.0 if any(slug in INTENT_ALIASES.get(t, ()) for t in toks) else 0.0
+
+
 def _score_app(goal: str, spec: Any) -> float:
     """How well an app fits the goal.
 
@@ -276,6 +303,7 @@ def _score_app(goal: str, spec: Any) -> float:
     score += hits * 0.6
     if getattr(spec, "source", "") == "curated":
         score += 4
+    score += _alias_bonus(goal, spec.slug)
     score -= min(len(slug) * 0.05, 3)   # long generated slugs lose ties to real names
     return score
 
@@ -311,7 +339,18 @@ async def _run_one(ws: str, entity: str, app_slug: str, action_slug: str | None,
     started = time.perf_counter()
     status, code, error, body = "error", 0, "", None
     try:
-        result = await asyncio.wait_for(execute(spec, action, args or {}, creds, dry_run=dry_run), timeout=30)
+        try:
+            result = await asyncio.wait_for(execute(spec, action, args or {}, creds, dry_run=dry_run), timeout=30)
+        except Exception as first:  # noqa: BLE001
+            # Self-heal: an LLM often invents an argument the action does not take.
+            # Drop exactly the rejected keys and try once more before giving up.
+            bad = re.search(r"Unknown argument\(s\): ([^.]+)\.", str(first))
+            if not (bad and args):
+                raise
+            drop = {k.strip() for k in bad.group(1).split(",")}
+            cleaned = {k: v for k, v in args.items() if k not in drop}
+            result = await asyncio.wait_for(execute(spec, action, cleaned, creds, dry_run=dry_run), timeout=30)
+            args = cleaned
         ms = int((time.perf_counter() - started) * 1000)
         data = result.as_dict() if hasattr(result, "as_dict") else result
         status = "success"
@@ -338,11 +377,14 @@ async def _run_one(ws: str, entity: str, app_slug: str, action_slug: str | None,
 
 
 def _compact(data: Any) -> Any:
-    blob = json.dumps(data, default=str)
+    """Shrink a tool result so it fits a context window. Never raises."""
+    try:
+        blob = json.dumps(data, default=str)
+    except Exception:
+        blob = str(data)
     if len(blob) <= MAX_TOOL_RESULT_CHARS:
         return data
-    return {"truncated": True, "chars": len(blob), "preview": json.loads(json.dumps(data, default=str))[:0] or
-            blob[:MAX_TOOL_RESULT_CHARS]}
+    return {"truncated": True, "chars": len(blob), "preview": blob[:MAX_TOOL_RESULT_CHARS]}
 
 
 def _raw_items(step: dict[str, Any]) -> list[Any]:
@@ -367,36 +409,53 @@ def _headline(item: dict[str, Any]) -> str:
     return ""
 
 
+def _flat(d: Any, prefix: str = "", out: list[str] | None = None, depth: int = 0) -> list[str]:
+    """Render nested data as short 'key: value' lines a person can read."""
+    out = [] if out is None else out
+    if len(out) >= 10 or depth > 3:
+        return out
+    if isinstance(d, dict):
+        for k, v in d.items():
+            if isinstance(v, (dict, list)) and depth < 3:
+                if isinstance(v, list) and v and not isinstance(v[0], (dict, list)):
+                    out.append(f"{prefix}{k}: " + ", ".join(str(x) for x in v[:5]))
+                else:
+                    _flat(v, f"{prefix}{k} / ", out, depth + 1)
+            elif v not in (None, "", [], {}):
+                out.append(f"{prefix}{k}: {str(v)[:100]}")
+            if len(out) >= 10:
+                break
+    return out
+
+
 def _summarise(goal: str, steps: list[dict[str, Any]]) -> str:
     good = [s for s in steps if s.get("ok")]
     if not good:
         err = steps[-1].get("error") if steps else "nothing ran"
         return (f"I could not finish that: {err}. The plan is still on record, so you can retry with a "
                 f"connected app or a narrower goal.")
-    last = good[-1]
-    lines = [f"{last['app']}.{last['action']} answered in {last.get('latency_ms', 0)} ms."]
+    # prefer the step that returned the most useful data
+    last = max(good, key=lambda s: (len(_items_of(s)), len(json.dumps(s.get("data"), default=str))))
+    lines: list[str] = []
     items = _items_of(last)
     raw = _raw_items(last)
-    if not items and raw and isinstance(raw[0], (int, str, float)):
-        lines.append(f"{len(raw)} id(s) returned, first is {raw[0]}. The detail call follows.")
     if items:
-        lines.append(f"{len(items)} result(s).")
+        lines.append(f"Here are {min(len(items), 5)} result(s) from {last['app']}:")
         for item in items[:5]:
             head = _headline(item)
             if head:
                 lines.append(f"• {head}")
+    elif raw and isinstance(raw[0], (int, str, float)):
+        lines.append(f"{last['app']} returned {len(raw)} ids; first is {raw[0]}.")
     else:
         inner = (last.get("data") or {}).get("data", last.get("data"))
         if isinstance(inner, dict):
             head = _headline(inner)
             if head:
                 lines.append(f"• {head}")
-                extra = inner.get("score") or inner.get("url") or inner.get("html_url")
-                if extra:
-                    lines.append(f"  {str(extra)[:120]}")
-            lines.append("Fields: " + ", ".join(list(inner)[:8]) + ".")
-    if len(good) > 1:
-        lines.append(f"{len(good) - 1} extra step(s) ran before that.")
+            lines.extend(_flat({k: v for k, v in inner.items() if k not in ("title", "name")}))
+    if not lines:
+        lines.append(f"{last['app']}.{last['action']} ran successfully in {last.get('latency_ms', 0)} ms.")
     return "\n".join(lines)
 
 
@@ -565,6 +624,8 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
                         "ids) that supports it. If something failed, say which part and what it means."),
         }]
         final = await _chat(synthesis, None, temperature=0.3, fast=True)
+        if not (final and (final.get("content") or "").strip()):
+            final = await _chat(synthesis, None, temperature=0.3, fast=False)
         if final and (final.get("content") or "").strip():
             answer = final["content"].strip()
 

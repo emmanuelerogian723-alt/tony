@@ -24,3 +24,17 @@ actions:
   url: https://api.supabase.com/v1/organizations
   response:
     max_items: 20
+- slug: create_project
+  name: Create project
+  description: Create a new Supabase project in an organization.
+  method: POST
+  url: https://api.supabase.com/v1/projects
+  tier: write
+  params:
+    name: {type: string, required: true}
+    organization_id: {type: string, required: true}
+    region: {type: string, default: eu-west-1}
+    db_pass: {type: string, required: true, description: Strong database password}
+    plan: {type: string, default: free}
+  required: [name, organization_id, db_pass]
+  danger_note: Provisions a real billable project.

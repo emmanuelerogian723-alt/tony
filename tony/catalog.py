@@ -62,10 +62,65 @@ class ActionSpec:
     response: dict[str, Any] = field(default_factory=dict)
     danger_note: str = ""
     public: bool = False
+    universal: bool = False
 
     @property
     def full_slug(self) -> str:
         return f"{self.slug}"
+
+
+# One shared, authenticated passthrough that every app gets. This is what makes
+# "every app in the catalogue can write" true without inventing endpoints: Tony
+# forwards any method/path/body the vendor documents, with the app's own stored
+# credentials attached by the normal auth layer. It is a single object shared by
+# all apps on purpose (7,900 copies would be pointless memory on a 512MB host).
+UNIVERSAL_REQUEST = ActionSpec(
+    slug="api_request",
+    name="Call any endpoint",
+    description=("Send any authenticated request to this app's API: pick the method, the path after "
+                 "the API root, query string and a JSON body. Use this for writes the built-in "
+                 "actions do not cover (create, update, delete, upload, custom fields)."),
+    method="POST",
+    url="{base_url}/{path}",
+    params={
+        "path": {"type": "string", "in": "path", "format": "path", "default": "",
+                 "description": "Path after the API root, e.g. v1/customers/42"},
+        "method": {"type": "string", "in": "query", "default": "POST",
+                   "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+                   "description": "HTTP verb to send"},
+        "query": {"type": "object", "in": "query", "description": "Query string parameters"},
+        "body": {"type": "object", "in": "body", "description": "JSON body for the request"},
+    },
+    tier="write",
+    danger_note="Writes reach the real API. Destructive calls still pass the approval gate.",
+    universal=True,
+)
+
+
+def infer_base_url(spec: "AppSpec") -> str:
+    """Best-effort API host for apps whose manifest never declared one.
+
+    Only scheme + host is used, so the passthrough path is always unambiguous
+    ("api/v3/customers/42" against CoinGecko, "v0/topstories.json" against
+    Hacker News). Directory apps with no real endpoints stay empty and are asked
+    for a base URL at connect time.
+    """
+    from urllib.parse import urlparse
+    urls = [a.url for a in spec.actions if not a.universal and a.url.startswith(("http://", "https://"))]
+    if not urls:
+        return ""
+    parsed = [urlparse(u) for u in urls]
+    hosts = {p.netloc for p in parsed}
+    if len(hosts) != 1:
+        return ""
+    return f"{parsed[0].scheme}://{parsed[0].netloc}"
+
+
+def attach_universal(spec: "AppSpec") -> "AppSpec":
+    """Give an app the shared write passthrough, unless it already declares one."""
+    if not any(a.slug == UNIVERSAL_REQUEST.slug for a in spec.actions):
+        spec.actions.append(UNIVERSAL_REQUEST)
+    return spec
 
 
 @dataclass
@@ -298,7 +353,9 @@ class Catalog:
                 self.errors.append(f"{path}: duplicate app slug '{spec.slug}'")
                 continue
             spec.haystack = f"{spec.slug} {spec.name} {spec.description} {spec.category}".lower()
-            self.apps[spec.slug] = spec
+            if not spec.base_url:
+                spec.base_url = infer_base_url(spec)
+            self.apps[spec.slug] = attach_universal(spec)
         if self.registry_file.exists():
             with self.registry_file.open("r", encoding="utf-8") as fh:
                 for line in fh:
@@ -313,9 +370,11 @@ class Catalog:
                         continue
                     spec.haystack = (
                         f"{spec.slug} {spec.name} {spec.description} {spec.category} "
-                        + " ".join(a.slug for a in spec.actions)
+                        + " ".join(a.slug for a in spec.actions if not a.universal)
                     ).lower()
-                    self.apps[spec.slug] = spec
+                    if not spec.base_url:
+                        spec.base_url = infer_base_url(spec)
+                    self.apps[spec.slug] = attach_universal(spec)
 
     # ── lookups ──────────────────────────────────────────────────────────
         self._mark_shadowed()

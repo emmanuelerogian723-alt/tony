@@ -34,3 +34,18 @@ actions:
   response:
     path: meetings
     max_items: 20
+- slug: create_meeting
+  name: Create meeting
+  description: Schedule a Zoom meeting on the signed-in account.
+  method: POST
+  url: https://api.zoom.us/v2/users/me/meetings
+  tier: write
+  params:
+    topic: {type: string, required: true}
+    type: {type: integer, default: 2, description: 1 instant, 2 scheduled, 8 recurring}
+    start_time: {type: string, description: "ISO 8601, e.g. 2026-11-12T10:00:00Z"}
+    duration: {type: integer, default: 30, description: Minutes}
+    timezone: {type: string, default: Africa/Lagos}
+    agenda: {type: string}
+  required: [topic]
+  danger_note: Creates a real meeting other people can join.

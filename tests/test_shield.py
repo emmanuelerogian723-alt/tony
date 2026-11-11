@@ -48,3 +48,23 @@ def test_one_attacker_does_not_block_others(client):
 def test_security_headers_present(client):
     r = client.get("/health")
     assert r.headers.get("x-content-type-options") == "nosniff"
+
+
+def test_ordinary_api_clients_are_not_scanners(client):
+    # curl and python-requests are how developers test; a handful of calls must
+    # never lock them out of the API or the site.
+    for i in range(6):
+        r = client.get("/v1/stats", headers={"user-agent": "python-requests/2.31.0",
+                                             "x-forwarded-for": "7.7.7.7"})
+        assert r.status_code != 403
+    for i in range(6):
+        r = client.get("/v1/stats", headers={"user-agent": "curl/7.81.0",
+                                             "x-forwarded-for": "7.7.7.6"})
+        assert r.status_code != 403
+
+
+def test_page_views_are_never_blocked(client):
+    for p in ("/.env", "/wp-admin", "/.git/config", "/phpmyadmin", "/etc/passwd"):
+        client.get(p, headers={"x-forwarded-for": "6.6.6.6"})
+    home = client.get("/", headers={"x-forwarded-for": "6.6.6.6"})
+    assert home.status_code == 200

@@ -23,10 +23,18 @@ BLOCK_AT = 100          # score at which a subject is blocked
 HALF_LIFE = 120.0       # seconds for a score to halve
 BASE_BLOCK = 600        # first block lasts ten minutes, then doubles
 
+# Genuine attack tooling. These earn points on their own.
 BOT_UA = re.compile(
     r"(sqlmap|nikto|nmap|masscan|zgrab|gobuster|dirbuster|wpscan|acunetix|nessus|hydra|"
-    r"python-requests/[01]\.|curl/7\.[0-4]\d?\.|go-http-client/1\.1$|libwww-perl|scrapy|"
-    r"headlesschrome|phantomjs|httpclient$)", re.I)
+    r"libwww-perl|scrapy)", re.I)
+# Scripted clients and headless browsers. Every developer tests with these, so they
+# only score when the caller is also sweeping many endpoints, never for one request.
+SOFT_UA = re.compile(
+    r"(python-requests|python-urllib|^curl/|go-http-client|httpclient$|"
+    r"headlesschrome|phantomjs|node-fetch|axios|okhttp)", re.I)
+
+# Page views are always readable: only the API can be blocked for behaviour.
+_PUBLIC_PREFIXES = ("/v1", "/oauth", "/connect", "/mcp", "/api")
 PROBE_PATHS = re.compile(
     r"(/\.env|/\.git|/wp-admin|/wp-login|/phpmyadmin|/admin\.php|/xmlrpc|/etc/passwd|"
     r"/cgi-bin|/vendor/phpunit|\.\./|%2e%2e|/actuator|/server-status|/\.aws|/id_rsa)", re.I)
@@ -109,6 +117,11 @@ def inspect(request: Request) -> None:
     path = request.url.path
     if path in {"/health", "/favicon.ico"} or path.startswith("/static"):
         return
+    page_view = request.method in {"GET", "HEAD"} and not path.startswith(_PUBLIC_PREFIXES)
+    probed = bool(PROBE_PATHS.search(path) or PROBE_PATHS.search(request.url.query or ""))
+    # A visitor reading pages is never scored or blocked. Probing for /.env still is.
+    if page_view and not probed:
+        return
     subject = subject_of(request)
     if is_blocked(subject):
         raise HTTPException(403, detail="Blocked for suspicious activity. This clears on its own; "
@@ -119,7 +132,7 @@ def inspect(request: Request) -> None:
 
     if PROBE_PATHS.search(path) or PROBE_PATHS.search(request.url.query or ""):
         points += 60; reasons.append("probe_path")
-    if BOT_UA.search(ua):
+    if BOT_UA.search(ua) and not page_view:
         points += 35; reasons.append("scanner_ua")
     if not ua and path.startswith("/v1/"):
         points += 4; reasons.append("no_ua")
@@ -128,6 +141,8 @@ def inspect(request: Request) -> None:
     paths.append((now, path))
     window = [p for t, p in paths if now - t < 20]
     distinct = len(set(window))
+    if SOFT_UA.search(ua) and distinct >= 8:
+        points += 20; reasons.append("scripted_sweep")      # a script walking many routes
     if len(window) >= 18 and distinct >= 15:
         points += 30; reasons.append("endpoint_sweep")      # walking many different routes fast
     if len(window) >= 30:

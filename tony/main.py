@@ -14,6 +14,9 @@ from fastapi.staticfiles import StaticFiles
 
 from .accounts import router as account_router
 from .api import router as api_router
+from .files_api import router as files_router
+from . import files as _files_models  # noqa: F401  (registers file_objects)
+from . import runtime as _runtime_models  # noqa: F401  (registers idempotency_records)
 from .billing import router as billing_router
 from .customtools import router as customtools_router
 from .assistant import router as assistant_router
@@ -101,6 +104,7 @@ app.add_middleware(
 
 app.include_router(account_router)
 app.include_router(api_router)
+app.include_router(files_router)
 app.include_router(mcp_router)
 @app.middleware("http")
 async def shield_mw(request, call_next):

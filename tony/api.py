@@ -170,7 +170,26 @@ def get_app(slug: str) -> dict[str, Any]:
 
 @router.get("/actions")
 def list_actions(search: str = "", app: str = "", tier: str = "", limit: int = 50,
-                 offset: int = 0) -> dict[str, Any]:
+                 offset: int = 0, ranked: bool = True) -> dict[str, Any]:
+    # natural-language search: rank ACTIONS by meaning, not substring luck
+    if search and ranked:
+        from .toolsearch import search_actions
+        hits = search_actions(catalog, search, limit=max(limit, 25), app=app or None,
+                              tier=tier or None)
+        payload = []
+        for h in hits:
+            spec = catalog.get(h["app"])
+            act = spec.action(h["action"].split(".", 1)[1]) if spec else None
+            payload.append({"app": h["app"], "app_name": h["app_name"], "score": h["score"],
+                            **({"slug": act.slug, "name": act.name, "description": act.description,
+                                "tier": act.tier, "tool_name": f"{h['app']}__{act.slug}"}
+                               if act else {"slug": h["action"], "name": h["name"],
+                                            "description": h["description"], "tier": h["tier"],
+                                            "tool_name": h["action"].replace('.', '__')})})
+        page = payload[offset: offset + limit] if limit else payload[offset:]
+        return {"actions": page, "total": len(payload), "offset": offset,
+                "has_more": bool(limit) and offset + limit < len(payload), "ranked": True,
+                "query": search}
     out = []
     for spec in catalog.apps.values():
         if app and spec.slug != app:
@@ -321,6 +340,7 @@ class ExecuteIn(BaseModel):
     approved: bool = False
     dry_run: bool = False
     source: str = "api"
+    idempotency_key: str | None = None
 
 
 class AgentTokenIn(BaseModel):
@@ -377,6 +397,29 @@ async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
     if body.action.startswith("custom."):
         return await _execute_custom(body, request, ws)
     resolved = catalog.find_action(body.action)
+    # typed connectors: friendly args, real payloads (email MIME, file handles)
+    typed_app = body.action.split(".", 1)[0] if "." in body.action else ""
+    typed_slug = body.action.split(".", 1)[1] if "." in body.action else ""
+    spec0 = catalog.get(typed_app) if typed_app else None
+    if spec0 is not None and typed_slug:
+        from . import connectors as _typed
+        if _typed.has(typed_app, typed_slug):
+            if not resolved:
+                # synthesise an ActionSpec so auth/approval machinery still applies
+                from .catalog import ActionSpec
+                resolved = (spec0, ActionSpec(slug=typed_slug, name=typed_slug.replace("_", " ").title(),
+                                              description=f"Typed {typed_app} action",
+                                              method="POST", url=(spec0.base_url or ""), tier="write"))
+            spec0b, action0b = resolved
+            try:
+                plan = _typed.build(typed_app, typed_slug, body.args,
+                                    workspace_id=workspace_from_request(request)[0])
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(400, detail=f"{body.action}: {exc}") from exc
+            if body.dry_run:
+                return {"ok": True, "dry_run": True, "plan": {k: plan[k] for k in plan if k != "file"},
+                        "action": body.action, "typed": True}
+            body.args = {**(body.args or {}), "__typed_plan__": plan}
     if not resolved:
         raise HTTPException(404, detail=f"Unknown action '{body.action}'. Try app.action, e.g. github.list_repos")
     spec, action = resolved

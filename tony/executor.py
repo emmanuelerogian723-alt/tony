@@ -377,14 +377,20 @@ def build_request(
     if action.body_template:
         body = _deep_merge(action.body_template, body)
 
+    # The effective verb: an explicit `method` argument (the proxy takes one, and
+    # so does any action with a verb enum) must win over the manifest default.
+    # This was silently discarded before, so POST /gists went out as a GET and
+    # wrote nothing while still reporting success.
+    effective = (method_override or action.method).upper()
+
     payload: Any = None
-    if action.method in {"POST", "PUT", "PATCH", "DELETE"} and body:
+    if effective in {"POST", "PUT", "PATCH", "DELETE"} and body:
         payload = body
-    elif action.method in {"POST", "PUT", "PATCH"}:
+    elif effective in {"POST", "PUT", "PATCH"}:
         payload = {}
 
     apply_auth(spec, headers, query, creds)
-    return url, action.method, headers, query, payload
+    return url, effective, headers, query, payload
 
 
 def _deep_merge(base: Any, override: Any) -> Any:

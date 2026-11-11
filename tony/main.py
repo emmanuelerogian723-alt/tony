@@ -14,6 +14,11 @@ from fastapi.staticfiles import StaticFiles
 
 from .accounts import router as account_router
 from .api import router as api_router
+from .files_api import router as files_router
+from .playground import router as playground_router
+from . import files as _files_models
+from . import playground as _pg_models  # noqa: F401  (registers file_objects)
+from . import runtime as _runtime_models  # noqa: F401  (registers idempotency_records)
 from .billing import router as billing_router
 from .customtools import router as customtools_router
 from .assistant import router as assistant_router
@@ -64,6 +69,15 @@ async def lifespan(app: FastAPI):
     ws, key = ensure_demo_workspace()
     demo_key = key
     log.info("Tony %s ready — %s apps, %s actions", __version__, catalog.stats()["apps"], catalog.stats()["actions"])
+    # Nango-style safety net: refresh connections before they expire, quietly.
+    try:
+        import asyncio as _aio
+
+        from . import connhealth as _ch
+
+        app.state.conn_watch = _aio.create_task(_ch.watch(900))
+    except Exception as exc:  # never block startup on the watcher
+        log.warning("connection watcher not started: %s", exc)
     if catalog.errors:
         for err in catalog.errors:
             log.warning("manifest: %s", err)
@@ -101,6 +115,8 @@ app.add_middleware(
 
 app.include_router(account_router)
 app.include_router(api_router)
+app.include_router(files_router)
+app.include_router(playground_router)
 app.include_router(mcp_router)
 @app.middleware("http")
 async def shield_mw(request, call_next):

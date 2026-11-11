@@ -455,6 +455,13 @@ function buildNav(){
   el('rail-nav').innerHTML = NAV.map(([id,label,d])=>
     '<button class="nav" data-p="'+id+'">'+iconNav(d)+'<span>'+label+'</span></button>').join('');
   el('rail-nav').querySelectorAll('.nav').forEach(b=>b.onclick=()=>go(b.dataset.p));
+  // Two surfaces that stand alone as their own pages (plain links, so the
+  // existing panels and their state machine stay untouched).
+  el('rail-nav').insertAdjacentHTML('beforeend',
+    '<a class="nav" href="/playground" target="_blank" rel="noopener">'+
+    iconNav('M8 5l-4 7 4 7M16 5l4 7-4 7M13 4l-2 16')+'<span>Playground</span></a>'+
+    '<a class="nav" href="/query" target="_blank" rel="noopener">'+
+    iconNav('M10.5 3a7.5 7.5 0 105.3 12.9L21 21M10.5 7v7M7 10.5h7')+'<span>Queries</span></a>');
   const labels = {apps:'Apps', connections:'Links', runs:'Activity', keys:'Keys', sessions:'Sessions', billing:'Billing', profile:'You'};
   const icons = Object.fromEntries(NAV.map(([id,l,d])=>[id,d]));
   el('tabbar').innerHTML = MOBILE.map(id=>

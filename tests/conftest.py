@@ -45,3 +45,10 @@ def _shield_clean():
     wipe()
     yield
     wipe()
+
+
+@pytest.fixture()
+def ws():
+    """An isolated workspace id for engine-level tests."""
+    import uuid
+    return "ws_" + uuid.uuid4().hex[:20]

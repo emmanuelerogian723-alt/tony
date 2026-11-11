@@ -132,15 +132,17 @@ def meta() -> dict[str, Any]:
 
 @router.get("/apps")
 def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "", source: str = "",
-              with_actions: bool = False, limit: int = 60, offset: int = 0) -> dict[str, Any]:
+              with_actions: bool = False, limit: int = 60, offset: int = 0,
+              dedupe: bool = False) -> dict[str, Any]:
     """Paginated catalogue search. `limit=0` returns everything (use with care)."""
     search = (search or q).strip()
-    matched = catalog.search(search, category, tier=tier, source=source)
+    matched = catalog.search(search, category, tier=tier, source=source, dedupe=dedupe)
     total = len(matched)
     window = matched[offset: offset + limit] if limit else matched[offset:]
     return {
         "apps": [a.to_public(include_actions=with_actions) for a in window],
         "categories": catalog.categories(),
+        "category_counts": catalog.category_counts(),
         "total": total,
         "offset": offset,
         "limit": limit,
@@ -170,7 +172,26 @@ def get_app(slug: str) -> dict[str, Any]:
 
 @router.get("/actions")
 def list_actions(search: str = "", app: str = "", tier: str = "", limit: int = 50,
-                 offset: int = 0) -> dict[str, Any]:
+                 offset: int = 0, ranked: bool = True) -> dict[str, Any]:
+    # natural-language search: rank ACTIONS by meaning, not substring luck
+    if search and ranked:
+        from .toolsearch import search_actions
+        hits = search_actions(catalog, search, limit=max(limit, 25), app=app or None,
+                              tier=tier or None)
+        payload = []
+        for h in hits:
+            spec = catalog.get(h["app"])
+            act = spec.action(h["action"].split(".", 1)[1]) if spec else None
+            payload.append({"app": h["app"], "app_name": h["app_name"], "score": h["score"],
+                            **({"slug": act.slug, "name": act.name, "description": act.description,
+                                "tier": act.tier, "tool_name": f"{h['app']}__{act.slug}"}
+                               if act else {"slug": h["action"], "name": h["name"],
+                                            "description": h["description"], "tier": h["tier"],
+                                            "tool_name": h["action"].replace('.', '__')})})
+        page = payload[offset: offset + limit] if limit else payload[offset:]
+        return {"actions": page, "total": len(payload), "offset": offset,
+                "has_more": bool(limit) and offset + limit < len(payload), "ranked": True,
+                "query": search}
     out = []
     for spec in catalog.apps.values():
         if app and spec.slug != app:
@@ -187,6 +208,24 @@ def list_actions(search: str = "", app: str = "", tier: str = "", limit: int = 5
     matched = out[offset: offset + limit] if limit else out[offset:]
     return {"actions": matched, "total": len(out), "offset": offset,
             "has_more": bool(limit) and offset + limit < len(out)}
+
+
+@router.get("/connections/health")
+def connections_health(request: Request) -> dict[str, Any]:
+    """Per-app connection health so a broken integration is visible early."""
+    ws, _ = workspace_from_request(request)
+    from . import connhealth
+    return connhealth.summary(ws)
+
+
+@router.post("/connections/refresh")
+async def refresh_connections(request: Request) -> dict[str, Any]:
+    """Sweep now: refresh anything expiring, mark what needs re-auth."""
+    ws, _ = workspace_from_request(request)
+    from . import connhealth
+    result = await connhealth.sweep()
+    result["workspace"] = ws
+    return result
 
 
 @router.get("/connections")
@@ -321,6 +360,7 @@ class ExecuteIn(BaseModel):
     approved: bool = False
     dry_run: bool = False
     source: str = "api"
+    idempotency_key: str | None = None
 
 
 class AgentTokenIn(BaseModel):
@@ -377,6 +417,29 @@ async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
     if body.action.startswith("custom."):
         return await _execute_custom(body, request, ws)
     resolved = catalog.find_action(body.action)
+    # typed connectors: friendly args, real payloads (email MIME, file handles)
+    typed_app = body.action.split(".", 1)[0] if "." in body.action else ""
+    typed_slug = body.action.split(".", 1)[1] if "." in body.action else ""
+    spec0 = catalog.get(typed_app) if typed_app else None
+    if spec0 is not None and typed_slug:
+        from . import connectors as _typed
+        if _typed.has(typed_app, typed_slug):
+            if not resolved:
+                # synthesise an ActionSpec so auth/approval machinery still applies
+                from .catalog import ActionSpec
+                resolved = (spec0, ActionSpec(slug=typed_slug, name=typed_slug.replace("_", " ").title(),
+                                              description=f"Typed {typed_app} action",
+                                              method="POST", url=(spec0.base_url or ""), tier="write"))
+            spec0b, action0b = resolved
+            try:
+                plan = _typed.build(typed_app, typed_slug, body.args,
+                                    workspace_id=workspace_from_request(request)[0])
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(400, detail=f"{body.action}: {exc}") from exc
+            if body.dry_run:
+                return {"ok": True, "dry_run": True, "plan": {k: plan[k] for k in plan if k != "file"},
+                        "action": body.action, "typed": True}
+            body.args = {**(body.args or {}), "__typed_plan__": plan}
     if not resolved:
         raise HTTPException(404, detail=f"Unknown action '{body.action}'. Try app.action, e.g. github.list_repos")
     spec, action = resolved

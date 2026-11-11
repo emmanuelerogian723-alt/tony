@@ -352,6 +352,14 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
 footer .mono{font-family:var(--mono);font-size:10.5px;color:var(--dim)}
 footer a:hover{color:var(--blue-2)}
 
+body{overflow-x:clip}
+.tape{overflow:hidden;border-bottom:1px solid #111;padding:17px 0;margin-top:0}
+.tape-track{display:flex;width:max-content;animation:slide 42s linear infinite;
+ font-family:'JetBrains Mono',monospace;font-size:11.6px;letter-spacing:.06em;text-transform:uppercase;color:#5a5a5a}
+.tape-track span{display:inline-flex;align-items:center;gap:34px;padding-right:34px;white-space:nowrap}
+.tape-track i{width:3px;height:3px;border-radius:50%;background:#393939;display:block}
+@keyframes slide{to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.tape-track{animation:none}}
 .rv{opacity:0;transform:translateY(16px);transition:opacity .65s cubic-bezier(.2,.7,.3,1),transform .65s cubic-bezier(.2,.7,.3,1)}
 .rv.on{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){

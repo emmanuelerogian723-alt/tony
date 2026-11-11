@@ -19,6 +19,9 @@ from .playground import router as playground_router
 from . import files as _files_models
 from . import playground as _pg_models  # noqa: F401  (registers file_objects)
 from . import runtime as _runtime_models  # noqa: F401  (registers idempotency_records)
+from . import events as _event_models  # noqa: F401  (inbound_events, subscriptions)
+from . import flows as _flow_models  # noqa: F401  (flows, flow_steps)
+from . import syncs as _sync_models  # noqa: F401  (syncs, sync_records)
 from .billing import router as billing_router
 from .customtools import router as customtools_router
 from .assistant import router as assistant_router
@@ -30,6 +33,10 @@ from .security import router as security_router
 from .health import router as health_router
 from .install import router as install_router
 from .sessions import router as sessions_router
+from .events import router as events_router
+from .flows import router as flows_router
+from .syncs import router as syncs_router
+from .firewall import router as firewall_router
 
 from . import __version__
 from .catalog import catalog
@@ -82,6 +89,10 @@ async def lifespan(app: FastAPI):
         for err in catalog.errors:
             log.warning("manifest: %s", err)
     _poller_task = asyncio.create_task(poller())
+    # Durable flow + sync workers: the half of Tony that wakes up on its own.
+    from .flows import runner as _flow_runner
+    from .syncs import runner as _sync_runner
+    app.state.workers = [asyncio.create_task(_flow_runner()), asyncio.create_task(_sync_runner())]
     if settings.self_url and settings.ping_seconds > 0:
         _tasks = getattr(app.state, "tasks", [])
         _tasks.append(asyncio.create_task(self_ping(settings.self_url, settings.ping_seconds)))
@@ -89,6 +100,13 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        for _t in getattr(app.state, "workers", []):
+            _t.cancel()
+        for _t in getattr(app.state, "workers", []):
+            try:
+                await _t
+            except (asyncio.CancelledError, Exception):
+                pass
         if _poller_task:
             _poller_task.cancel()
             try:
@@ -151,6 +169,10 @@ app.include_router(customtools_router)
 app.include_router(assistant_router)
 app.include_router(ecosystem_router)
 app.include_router(power_router)
+app.include_router(events_router)
+app.include_router(flows_router)
+app.include_router(syncs_router)
+app.include_router(firewall_router)
 
 
 _STATIC = Path(__file__).parent / "static"

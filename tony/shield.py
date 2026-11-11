@@ -119,6 +119,10 @@ def inspect(request: Request) -> None:
     path = request.url.path
     if path in {"/health", "/favicon.ico"} or path.startswith("/static"):
         return
+    # Provider webhooks arrive in bursts, from shared provider IPs, signed and
+    # deduplicated. Behavioural scoring would frame them for their neighbours.
+    if path.startswith("/v1/hooks/"):
+        return
     page_view = request.method in {"GET", "HEAD"} and not path.startswith(_API_PREFIXES)
     probed = bool(PROBE_PATHS.search(path) or PROBE_PATHS.search(request.url.query or ""))
     # A visitor reading pages is never scored or blocked. Probing for /.env still is.

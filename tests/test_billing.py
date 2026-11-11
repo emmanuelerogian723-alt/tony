@@ -36,15 +36,16 @@ def test_plans_are_public_and_generous(client):
     free = d["plans"][0]
     assert free["runs"] >= 5000
     assert free["apps"] == "all" and free["write"] is True
-    assert d["trial_days"] >= 7
+    # A trial is opt-in per deployment: nothing paid is handed out by default.
+    assert d["trial_days"] == 0
 
 
-def test_signup_starts_a_pro_trial(client):
+def test_signup_starts_on_free_not_pro(client):
     signup(client)
     me = client.get("/v1/account/me").json()
-    assert me["billing"]["plan_id"] == "pro"
-    assert me["billing"]["status"] == "trialing"
-    assert me["billing"]["days_left"] >= 7
+    assert me["billing"]["plan_id"] == "free"
+    assert me["billing"]["paid"] is False
+    assert me["billing"]["status"] in {"active", "trialing"}
 
 
 def test_billing_me_reports_usage_and_limits(client):
@@ -68,7 +69,8 @@ def test_key_capacity_follows_plan(client, monkeypatch):
     from tony.billing import PLANS
 
     signup(client)
-    monkeypatch.setitem(PLANS["pro"], "keys", 1)
+    # the new account is on Free, so Free's key limit is what applies
+    monkeypatch.setitem(PLANS["free"], "keys", 1)
     assert client.post("/v1/account/keys", json={"name": "one"}).status_code == 200
     r = client.post("/v1/account/keys", json={"name": "two"})
     assert r.status_code == 402

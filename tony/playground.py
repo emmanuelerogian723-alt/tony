@@ -28,6 +28,12 @@ from .models import Base, now, uid
 router = APIRouter(include_in_schema=False)
 
 
+def settings_data_dir():
+    from .config import DATA_DIR
+
+    return DATA_DIR
+
+
 # ── storage ───────────────────────────────────────────────────────────────────
 
 class Query(Base):
@@ -369,24 +375,59 @@ def icon_url(spec: Any) -> str:
 
 @router.get("/v1/icon/{slug}")
 def app_icon(slug: str) -> Any:
-    """Always answers with a usable image: the real logo, or a clean colored tile."""
+    """Always answer with image bytes, never a redirect.
+
+    A 302 to a third-party favicon service is what made icons look broken: some
+    clients do not follow redirects, Google rate-limits the service, and every
+    <img> paid a second round trip. Now Tony serves the bytes itself: a local
+    brand SVG, a cached copy, or one fetch that is cached on disk for a day.
+    The letter tile is the floor, so an icon is never missing.
+    """
+    import time as _time
+
+    from pathlib import Path as _P
+
+    icon_path = _P(__file__).parent / "static" / "brand" / "icons"
     spec = catalog.catalog.resolve(slug) or catalog.catalog.get(slug)
     name = getattr(spec, "name", slug.replace("_", " ").replace("-", " ").title())
-    local = None
-    try:
-        from pathlib import Path as _P
-        base = _P(__file__).parent / "static" / "brand" / "icons"
-        for cand in (slug, slug.replace("_", "").replace("-", ""), getattr(spec, "slug", "")):
-            if cand and (base / f"{cand}.svg").exists():
-                local = f"/static/brand/icons/{cand}.svg"
-                break
-    except Exception:
-        local = None
-    if local:
-        return _Redirect(local, status_code=302, headers={"Cache-Control": "public, max-age=86400"})
+    cache_dir = settings_data_dir() / "icons"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    safe = _re.sub(r"[^a-z0-9_.-]", "", (slug or "").lower())[:60] or "app"
+
+    # 1. a real local brand mark, shipped with Tony
+    for cand in (slug, slug.replace("_", "").replace("-", ""), getattr(spec, "slug", "")):
+        if cand and (icon_path / f"{cand}.svg").exists():
+            return _Response((icon_path / f"{cand}.svg").read_bytes(), media_type="image/svg+xml",
+                             headers={"Cache-Control": "public, max-age=604800"})
+
+    # 2. anything already fetched
+    for ext, media in (("png", "image/png"), ("jpg", "image/jpeg"), ("svg", "image/svg+xml")):
+        cached = cache_dir / f"{safe}.{ext}"
+        if cached.exists() and cached.stat().st_size > 0:
+            return _Response(cached.read_bytes(), media_type=media,
+                             headers={"Cache-Control": "public, max-age=604800"})
+
+    # 3. fetch once, cache for a week. Short timeout: an icon is never worth a stall.
     url = icon_url(spec) if spec else ""
-    if url:
-        return _Redirect(url, status_code=302, headers={"Cache-Control": "public, max-age=86400"})
+    if url.startswith("http"):
+        try:
+            import httpx as _httpx
+
+            with _httpx.Client(timeout=4.0, follow_redirects=True) as client:
+                r = client.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; TonyIcons/1.0)"})
+            ctype = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
+            if r.status_code == 200 and ctype.startswith("image/") and 0 < len(r.content) <= 300_000:
+                ext = {"image/png": "png", "image/jpeg": "jpg", "image/svg+xml": "svg"}.get(ctype, "png")
+                try:
+                    (cache_dir / f"{safe}.{ext}").write_bytes(r.content)
+                except Exception:  # noqa: BLE001 - read-only disk must not break the icon
+                    pass
+                return _Response(r.content, media_type=ctype,
+                                 headers={"Cache-Control": "public, max-age=604800"})
+        except Exception:  # noqa: BLE001
+            pass
+
+    # 4. the floor: a clean, deterministic letter tile
     return _Response(_initial_tile(name, slug), media_type="image/svg+xml",
                      headers={"Cache-Control": "public, max-age=86400"})
 

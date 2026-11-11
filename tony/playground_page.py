@@ -575,9 +575,10 @@ def _firebase_bits() -> tuple[str, str]:
 
 def playground_page() -> str:
     _fb_cfg, _fb_js = _firebase_bits()
-    nav = [("play", "Playground", "/playground", True), ("cat", "Catalog", "/#catalog", False),
-           ("plug", "Integrations", "/providers", False), ("key", "Connections", "/account", False),
-           ("log", "Logs", "/app", False), ("book", "Docs", "/sdk", False)]
+    # every entry is a real surface: the same order as tony/pages.py
+    nav = [("play", "Playground", "/playground", True), ("cat", "Catalog", "/catalog", False),
+           ("plug", "Integrations", "/integrations", False), ("key", "Connections", "/connections", False),
+           ("log", "Logs", "/logs", False), ("book", "Docs", "/sdk", False)]
     nav_html = "".join(f'<a href="{h}" class="{"on" if on else ""}">{_I[i]}{t}</a>' for i, t, h, on in nav)
     sats = ("".join(f'<span class="sat s{n}"><img alt="" src="/v1/icon/{s}"></span>'
                     for n, s in ((1, "slack"), (2, "github"), (3, "google_calendar"), (4, "notion"))))

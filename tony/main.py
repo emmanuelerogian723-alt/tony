@@ -37,6 +37,7 @@ from .events import router as events_router
 from .flows import router as flows_router
 from .syncs import router as syncs_router
 from .firewall import router as firewall_router
+from .pages import router as pages_router
 
 from . import __version__
 from .catalog import catalog
@@ -173,6 +174,7 @@ app.include_router(events_router)
 app.include_router(flows_router)
 app.include_router(syncs_router)
 app.include_router(firewall_router)
+app.include_router(pages_router)
 
 
 _STATIC = Path(__file__).parent / "static"

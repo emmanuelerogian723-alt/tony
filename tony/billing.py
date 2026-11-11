@@ -36,7 +36,9 @@ from .models import (
 log = logging.getLogger("tony.billing")
 router = APIRouter(prefix="/v1/billing", tags=["billing"])
 
-TRIAL_DAYS = int(os.getenv("TONY_TRIAL_DAYS", "14"))
+# No plan is granted without payment. A trial is opt-in per deployment:
+# set TONY_TRIAL_DAYS to hand new accounts a temporary Pro window.
+TRIAL_DAYS = int(os.getenv("TONY_TRIAL_DAYS", "0"))
 PAYSTACK_API = "https://api.paystack.co"
 
 # Generous by design. Free is a real product tier, not a demo.
@@ -160,6 +162,10 @@ def effective_plan(sub: Subscription | None) -> str:
     if sub is None:
         return "free"
     end = _aware(sub.current_period_end)
+    # A trial that nobody configured is not a plan. This also revokes trials
+    # handed out by an older build, so nobody keeps Pro without paying.
+    if sub.status == "trialing" and sub.provider == "none" and TRIAL_DAYS <= 0:
+        return "free"
     if sub.status in {"active", "trialing"} and (end is None or end > _now()):
         return sub.plan if sub.plan in PLANS else "free"
     return "free"
@@ -260,6 +266,8 @@ def summary(ws: str) -> dict[str, Any]:
         "status": sub.status if sub else "active",
         "provider": sub.provider if sub else "none",
         "trial": bool(sub and sub.status == "trialing"),
+        "paid": bool(sub and sub.status == "active"
+                     and sub.provider in {"paystack", "passcode", "admin", "stripe"}),
         "period_start": (sub.current_period_start.isoformat() if sub and sub.current_period_start else _period_start().isoformat()),
         "period_end": end.isoformat() if end else None,
         "days_left": max(0, (end - _now()).days) if end else None,

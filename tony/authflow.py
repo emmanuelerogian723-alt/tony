@@ -63,7 +63,7 @@ async def one_click_connect(app_slug: str, request: Request, entity_id: str = "d
         return HTMLResponse(setup_page(spec, str(exc)), status_code=200)
 
 
-@router.get("/connections", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/connections/classic", response_class=HTMLResponse, include_in_schema=False)
 def connections_page(request: Request):
     import json as _json
 

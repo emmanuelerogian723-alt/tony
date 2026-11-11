@@ -183,6 +183,8 @@ class AppSpec:
             "description": self.description,
             "docs": self.docs,
             "logo": self.logo,
+            "icon": f"/v1/icon/{self.slug}",
+            "icon_tile": f"/v1/icon-tile/{self.slug}",
             "verified": self.verified,
             "auth": {
                 "type": self.auth.type,

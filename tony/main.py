@@ -20,6 +20,7 @@ from .assistant import router as assistant_router
 from .power import router as power_router
 from .ecosystem import router as ecosystem_router
 from .mcp import router as mcp_router
+from .health import router as health_router
 from .install import router as install_router
 from .sessions import router as sessions_router
 
@@ -100,6 +101,7 @@ app.include_router(account_router)
 app.include_router(api_router)
 app.include_router(mcp_router)
 app.include_router(install_router)
+app.include_router(health_router)
 app.include_router(billing_router)
 app.include_router(sessions_router)
 app.include_router(customtools_router)

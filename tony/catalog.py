@@ -394,6 +394,7 @@ class Catalog:
             if len(key) >= 4:
                 groups.setdefault(key, []).append(a)
         self.shadowed: set[str] = set()
+        self.alias_of: dict[str, str] = {}
         for members in groups.values():
             if len(members) < 2:
                 continue
@@ -406,9 +407,28 @@ class Catalog:
                     if dup.source == keeper.source:
                         continue
                 self.shadowed.add(dup.slug)
+                self.alias_of[dup.slug] = keeper.slug
 
     def get(self, slug: str) -> AppSpec | None:
         return self.apps.get(slug)
+
+    def resolve(self, slug: str) -> AppSpec | None:
+        """Look a slug up through the duplicate map.
+
+        The same product is imported from several catalogs, so an agent that names
+        "hacker-news" must land on the curated, keyless "hackernews" spec instead of
+        the empty generated twin that then claims the app is not connected.
+        """
+        key = (slug or "").strip().lower()
+        spec = self.apps.get(key) or self.apps.get(slug or "")
+        alias = getattr(self, "alias_of", {}).get(key)
+        if alias:
+            keeper = self.apps.get(alias)
+            if keeper is not None:
+                # a connected account always wins over tidiness
+                if spec is None or spec.auth.type != "none" or keeper.auth.type == "none":
+                    return keeper
+        return spec
 
     def search(self, query: str = "", category: str = "", tier: str = "",
                source: str = "", limit: int = 0, offset: int = 0,

@@ -691,6 +691,71 @@ async def execute(
             await client.aclose()
 
 
+async def execute_plan(
+    spec: AppSpec,
+    action: ActionSpec,
+    plan: dict[str, Any],
+    creds: dict[str, Any] | None,
+    *,
+    dry_run: bool = False,
+) -> ExecResult:
+    """Run a typed connector's request plan (email MIME, file uploads, typed args).
+
+    Connectors hand back the exact verb, URL and payload they want sent. Without
+    this the plan was silently dropped and the raw catalog endpoint ran instead,
+    which is why friendly actions like gmail.send_email used to fail.
+    """
+    started = time.perf_counter()
+    url = str(plan.get("url") or "")
+    method = str(plan.get("method") or "POST").upper()
+    headers = {k: str(v) for k, v in (plan.get("headers") or {}).items()}
+    query = dict(plan.get("params") or plan.get("query") or {})
+    payload = plan.get("body")
+    if not url:
+        raise ExecutionError(f"{spec.slug}.{action.slug}: connector produced no URL")
+    apply_auth(spec, headers, query, creds)
+    headers.setdefault("Accept", "application/json")
+    assert_safe_url(url)
+    if dry_run:
+        return ExecResult(True, 0, 0, None, {
+            "dry_run": True, "method": method, "url": redact_url(url),
+            "query": {k: ("***" if "token" in k.lower() else v) for k, v in query.items()},
+            "body": {k: v for k, v in (payload or {}).items() if k != "raw"} if isinstance(payload, dict) else payload,
+            "summary": plan.get("summary", ""),
+        })
+    attempt = 0
+    async with httpx.AsyncClient(timeout=settings.http_timeout, follow_redirects=False) as client:
+        while True:
+            try:
+                resp = await _guarded_request(client, method, url, headers=headers, params=query,
+                                              json_body=payload)
+            except httpx.HTTPError as exc:
+                if attempt < settings.http_retries:
+                    attempt += 1
+                    await asyncio.sleep(0.4 * attempt)
+                    continue
+                raise ExecutionError(f"Network error: {type(exc).__name__}: {exc}") from exc
+            if resp.status_code in {429, 500, 502, 503, 504} and attempt < settings.http_retries:
+                attempt += 1
+                await asyncio.sleep(min(0.5 * (2 ** attempt), 5))
+                continue
+            break
+    if resp.status_code >= 400:
+        try:
+            detail = resp.json()
+        except ValueError:
+            detail = resp.text[:800]
+        raise ExecutionError(f"{spec.name} returned HTTP {resp.status_code}", status=resp.status_code,
+                             detail=detail)
+    try:
+        raw = resp.json()
+    except ValueError:
+        raw = {"text": resp.text[: settings.max_response_chars]}
+    data, shape_meta = shape_response(action, raw)
+    meta = {"typed": True, "summary": plan.get("summary", ""), **shape_meta}
+    return ExecResult(True, resp.status_code, int((time.perf_counter() - started) * 1000), data, meta)
+
+
 async def execute_direct(
     url: str,
     method: str = "GET",

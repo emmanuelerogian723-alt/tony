@@ -384,7 +384,7 @@ def playground_page() -> str:
   </div></div>
   <div class="foot"><div class="col">
    <div class="comp"><textarea id="q" rows="1" placeholder="Ask the agent to do something…" autocomplete="off"></textarea>
-    <div class="bar"><label class="chk"><input type="checkbox" id="dry" checked> Safe mode (no writes)</label><span class="grow"></span>
+    <div class="bar"><label class="chk"><input type="checkbox" id="dry"> Safe mode (no writes)</label><span class="grow"></span>
      <span>Tony agent</span><button class="send" id="go" disabled aria-label="Send">{_I["send"]}</button></div></div>
    <div id="sugw"><div class="sug" id="sug"></div></div>
    <div class="hint">Tony runs real API calls on your connected accounts. Writes need Safe mode off.</div>

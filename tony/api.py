@@ -23,7 +23,7 @@ from .billing import check_capacity, check_run, enforce_session, rate_for, resol
 from .catalog import catalog
 from .config import settings
 from .db import session
-from .executor import ExecutionError, execute, needs_base_url
+from .executor import ExecutionError, execute, execute_plan, needs_base_url
 from .models import ActionRun, ApiKey, ConnectedAccount, Entity, Trigger, WebhookDelivery
 from .oauth import (
     OAuthError,
@@ -429,6 +429,7 @@ async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
     if body.action.startswith("custom."):
         return await _execute_custom(body, request, ws)
     resolved = catalog.find_action(body.action)
+    typed_plan: dict[str, Any] | None = None
     # typed connectors: friendly args, real payloads (email MIME, file handles)
     typed_app = body.action.split(".", 1)[0] if "." in body.action else ""
     typed_slug = body.action.split(".", 1)[1] if "." in body.action else ""
@@ -451,7 +452,9 @@ async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
             if body.dry_run:
                 return {"ok": True, "dry_run": True, "plan": {k: plan[k] for k in plan if k != "file"},
                         "action": body.action, "typed": True}
-            body.args = {**(body.args or {}), "__typed_plan__": plan}
+            # keep the plan on the request itself: storing it inside args would leak
+            # into approvals and the run log, and it is rebuilt deterministically
+            typed_plan = plan
     if not resolved:
         raise HTTPException(404, detail=f"Unknown action '{body.action}'. Try app.action, e.g. github.list_repos")
     spec, action = resolved
@@ -502,12 +505,20 @@ async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
                 await _refresh(row, spec)
                 creds = credentials_for(ws, entity, spec)
 
+    if typed_plan is None and isinstance(body.args, dict):
+        typed_plan = body.args.pop("__typed_plan__", None)   # older queued approvals
     try:
         try:
-            result = await asyncio.wait_for(
-                execute(spec, action, body.args, creds, dry_run=body.dry_run),
-                timeout=settings.execution_deadline,
-            )
+            if typed_plan:
+                result = await asyncio.wait_for(
+                    execute_plan(spec, action, typed_plan, creds, dry_run=body.dry_run),
+                    timeout=settings.execution_deadline,
+                )
+            else:
+                result = await asyncio.wait_for(
+                    execute(spec, action, body.args, creds, dry_run=body.dry_run),
+                    timeout=settings.execution_deadline,
+                )
         except asyncio.TimeoutError:
             raise HTTPException(
                 504,

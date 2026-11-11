@@ -11,6 +11,10 @@ def fake_execute(monkeypatch):
         return ExecResult(True, 200, 42, {"echo": args, "app": spec.slug, "action": action.slug}, {"chars": 20})
 
     monkeypatch.setattr("tony.api.execute", _fake)
+    # typed connectors (gmail.send_email, github.create_issue, ...) run their own plan
+    async def _fake_plan(spec, action, plan, creds, **kw):
+        return ExecResult(True, 200, 42, {"plan": plan, "app": spec.slug, "action": action.slug}, {"chars": 20})
+    monkeypatch.setattr("tony.api.execute_plan", _fake_plan)
     # pretend every app is connected so the credential gate passes
     monkeypatch.setattr("tony.api.credentials_for", lambda *a, **k: {"access_token": "test", "api_key": "test"})
     return _fake

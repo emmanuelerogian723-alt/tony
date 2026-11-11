@@ -323,9 +323,15 @@ def _best_action(goal: str, spec: Any) -> Any | None:
 
 async def _run_one(ws: str, entity: str, app_slug: str, action_slug: str | None,
                    args: dict[str, Any], dry_run: bool) -> dict[str, Any]:
-    spec = catalog.get(app_slug)
+    spec = catalog.get(app_slug) or catalog.resolve(app_slug)
     if not spec:
         return {"ok": False, "error": "unknown app"}
+    # the same product ships twice in the catalog (curated + generated twin); if the
+    # twin we were handed cannot run, fall through to the canonical one
+    twin = catalog.resolve(spec.slug)
+    if twin is not None and twin.slug != spec.slug:
+        if spec.auth.type != "none" and credentials_for(ws, entity, spec) is None:
+            spec = twin
     action = None
     if action_slug:
         action = next((a for a in spec.actions if a.slug == action_slug or a.name == action_slug), None)

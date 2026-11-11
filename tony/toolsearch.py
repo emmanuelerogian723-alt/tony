@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from typing import Any, Iterable
 
 STOP = {
@@ -93,6 +93,12 @@ PROXY_PENALTY = 0.8
 GENERIC_APPS = {"api", "proxy", "http", "rest", "public-api", "apis"}
 GENERIC_PENALTY = 1.6
 
+# questions ask for information, so read actions should win them outright
+READ_INTENT = re.compile(
+    r"\b(what|whats|what's|which|who|when|where|how many|how much|show|list|"
+    r"summari[sz]e|summary|latest|recent|check|read|find|search|look|any|"
+    r"status|report|history|fetch|get)\b", re.I)
+
 
 def _tokens(text: str) -> list[str]:
     raw = re.findall(r"[a-z0-9]+", (text or "").lower())
@@ -143,6 +149,9 @@ class ToolIndex:
         self.docs: list[dict[str, Any]] = []
         self._usage: Counter[str] = Counter()
         self._built_for: Any = None
+        self._postings: dict[str, list[int]] = {}
+        self._vocab: dict[str, list[str]] = {}
+        self._cache: dict[Any, list[dict[str, Any]]] = {}
 
     # ── building ───────────────────────────────────────────────────────────
     def build(self, catalog: Any, force: bool = False) -> "ToolIndex":
@@ -150,7 +159,10 @@ class ToolIndex:
         if not force and self._built_for == revision and self.docs:
             return self
         docs: list[dict[str, Any]] = []
+        shadowed = getattr(catalog, "shadowed", set()) or set()
         for app in (catalog.apps.values() if hasattr(catalog, "apps") else []):
+            if app.slug in shadowed:
+                continue   # duplicate import of a product we already index
             app_tokens = _tokens(f"{app.slug} {app.name} {getattr(app, 'category', '')} "
                                  f"{getattr(app, 'description', '')}")
             for action in app.actions:
@@ -204,6 +216,15 @@ class ToolIndex:
         except Exception:
             pass
         self.docs = docs
+        postings: dict[str, list[int]] = defaultdict(list)
+        vocab: dict[str, list[str]] = defaultdict(list)
+        for i, d in enumerate(docs):
+            for t in set(d["tokens"]) | set(d["app_tokens"]):
+                postings[t].append(i)
+                vocab[t[:1]].append(t)
+        self._postings = dict(postings)
+        self._vocab = {k: sorted(set(v)) for k, v in vocab.items()}
+        self._cache = {}
         self._built_for = revision
         return self
 
@@ -224,9 +245,28 @@ class ToolIndex:
         expanded = expand(q)
         exp_tokens = [t for t in expanded if t not in q_tokens]
         verb_hits = {t for t in q_tokens if t in VERBS}
+        read_intent = bool(READ_INTENT.search(q_low))
+        # ── candidate narrowing ────────────────────────────────────────────
+        # Scoring 40k actions per query is what made the playground hang, so the
+        # inverted index narrows the field first. Anything that shares a token
+        # (or a very close spelling of one) with the query becomes a candidate.
+        key = (q_low, limit, app, tier)
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+        cand: set[int] = set()
+        for t in list(q_tokens) + list(exp_tokens):
+            cand.update(self._postings.get(t, ()))
+            if len(t) > 2:
+                for vt in self._vocab.get(t[:1], ()):
+                    if abs(len(vt) - len(t)) <= 3 and _ratio(t, vt) >= 0.72:
+                        cand.update(self._postings.get(vt, ()))
+        if not cand:
+            return []
+        pool = [self.docs[i] for i in sorted(cand)]
         scored: list[tuple[float, dict[str, Any]]] = []
 
-        for d in self.docs:
+        for d in pool:
             if app and d["app"].slug != app:
                 continue
             if tier and d["tier"] != tier:
@@ -259,11 +299,13 @@ class ToolIndex:
 
             # fuzzy / typo tolerance
             if hit < len(q_tokens):
+                missing = [qt for qt in q_tokens if qt not in tok_set]
                 best = 0.0
-                for qt in q_tokens:
-                    if qt in tok_set:
-                        continue
-                    best = max(best, max((_ratio(qt, t) for t in toks), default=0.0))
+                for t in toks:
+                    for qt in missing:
+                        if t[:1] != qt[:1] or abs(len(t) - len(qt)) > 3:
+                            continue
+                        best = max(best, _ratio(qt, t))
                 score += 1.5 * best
 
             # query expansion (synonyms + intent concepts)
@@ -298,6 +340,8 @@ class ToolIndex:
             if usage:
                 score += 0.6 * min(1.0, math.log1p(usage) / 3)
             score += TIER_BONUS.get(d["tier"], 0.0)
+            if read_intent:
+                score += 0.75 if d["tier"] == "read" else -0.35
             if getattr(d["action"], "url", "").endswith(("",)) and "proxy" in d["slug"]:
                 score -= PROXY_PENALTY
 
@@ -323,6 +367,9 @@ class ToolIndex:
             })
             if len(out) >= limit:
                 break
+        if len(self._cache) > 256:
+            self._cache.clear()
+        self._cache[key] = out
         return out
 
 

@@ -772,7 +772,7 @@ async function loadInstall(){
         '<span class="tiny muted">'+esc(c.file||c.kind)+'</span>'+
         '<button class="btn ghost sm" data-cp="'+esc(c.id)+'" style="margin-left:10px">Copy</button></div>'+
         '<pre class="mono tiny" id="sn-'+esc(c.id)+'" style="margin:8px 0 4px;padding:12px;border:1px solid var(--line);'+
-        'border-radius:10px;background:var(--slate);overflow-x:auto;white-space:pre-wrap;word-break:break-all">'+esc(c.snippet)+'</pre>'+
+        'border-radius:10px;background:var(--slate);overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;box-sizing:border-box">'+esc(c.snippet)+'</pre>'+
         '<span class="tiny muted">'+esc(c.note)+'</span></div>').join('')+'</div>').join('');
     el('in-clients').querySelectorAll('[data-cp]').forEach(b=>b.onclick=()=>
       copyText(el('sn-'+b.dataset.cp).textContent, b));
@@ -1476,11 +1476,11 @@ def console_html(user: Any = None) -> str:
           <div id="ag-steps" style="margin-top:8px"><div class="empty">No calls yet.</div></div>
         </div>
       </section>
-      <section class="pg" id="p-install">
+      <section class="pg" id="p-install" style="min-width:0;overflow-x:clip">
         <div class="hd"><div><h1>Install</h1><p>Pick where your agent lives. Tony gives you the exact line to paste, already pointing at this server.</p></div></div>
         <div class="card pad" style="margin-bottom:12px">
           <div class="row"><b style="font-size:14px">MCP endpoint</b><span class="sp"></span><span class="tiny muted">works in any MCP client</span></div>
-          <div class="pk" style="margin-top:10px"><code id="in-mcp" style="word-break:break-all">loading</code>
+          <div class="pk" style="margin-top:10px;flex-wrap:wrap;min-width:0"><code id="in-mcp" style="overflow-wrap:anywhere;min-width:0;flex:1 1 100%">loading</code>
             <span class="sp"></span><button class="btn ghost sm" id="in-mcp-copy">Copy</button></div>
           <div class="field" style="margin-top:12px"><label>Your API key <span class="hint">pasted into every snippet below</span></label>
             <input class="inp" id="in-key" placeholder="tk_live_... or tony_at_..." autocomplete="off"></div>

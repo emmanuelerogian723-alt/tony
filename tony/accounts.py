@@ -103,7 +103,9 @@ def is_instance_owner(user: User) -> bool:
     """
     import os as _os
 
-    allow = [e.strip().lower() for e in (_os.getenv("TONY_OWNER_EMAIL") or "").split(",") if e.strip()]
+    raw = ",".join(x for x in ((_os.getenv("TONY_OWNER_EMAIL") or ""),
+                               (_os.getenv("TONY_ADMIN_EMAILS") or "")) if x)
+    allow = [e.strip().lower() for e in raw.split(",") if e.strip()]
     if allow:
         return (user.email or "").lower() in allow
     with session() as s:

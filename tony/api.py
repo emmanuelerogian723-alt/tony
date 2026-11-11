@@ -411,6 +411,7 @@ def managed_providers() -> dict[str, Any]:
             "managed_by": managed.managed_by_platform(slug),
             "env": list(p.env),
             "docs": p.docs,
+            "google": "accounts.google.com" in p.authorize_url,
             "authorize_url": p.authorize_url,
             "pkce": p.pkce,
             "setup_endpoint": f"/v1/account/providers/{slug}",

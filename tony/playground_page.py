@@ -350,9 +350,9 @@ async function loadProviders(){
 }
 
 function canGoogle(app){
-  const prov=PROVIDERS[app.slug]||{};
-  const isGoogle=/accounts\.google\.com/.test((app.auth&&app.auth.authorize_url)||'')||/^google_|^gmail$/.test(app.slug);
-  return !!(window.TonyConnect&&TonyConnect.config&&TonyConnect.config.api_key&&isGoogle&&prov.managed_by!=='required');
+  const prov=PROVIDERS[app.slug]||PROVIDERS[(app.slug||'').replace(/-/g,'_')]||{};
+  const isGoogle=prov.google===true||/^google|^gmail|^youtube|^googleapis/.test(app.slug||'');
+  return !!(window.TonyConnect&&TonyConnect.config&&TonyConnect.config.api_key&&isGoogle);
 }
 function openGoogleModal(app,name){
   pendingConn.mode='google';

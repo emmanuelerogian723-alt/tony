@@ -2,7 +2,9 @@
    Uses the Firebase project the deployment already signs users in with, so a
    provider account can be connected with one tap and no client secret. */
 (function () {
-  var FB = window.TONY_FB || {};
+  function cfg() { return window.TONY_FB || {}; }
+  Object.defineProperty(window, 'TonyConnect', { configurable: true, writable: true, value: null });
+  var FB = null;
   var AUTH = 'https://www.googleapis.com/auth/';
   function scopeUrl(s) {
     if (!s) return '';
@@ -12,11 +14,13 @@
     if (s === 'openid') return 'openid';
     return AUTH + s;
   }
+  FB = null;
+  function conf() { return cfg(); }
   function auth() {
-    if (!FB.api_key) throw new Error('Google sign-in is not configured on this server.');
+    if (!conf().api_key) throw new Error('Google sign-in is not configured on this server.');
     if (!window.firebase || !window.firebase.auth) throw new Error('Google is still loading. Try again in a second.');
     if (!firebase.apps.length) {
-      firebase.initializeApp({ apiKey: FB.api_key, authDomain: FB.auth_domain, projectId: FB.project_id });
+      firebase.initializeApp({ apiKey: conf().api_key, authDomain: conf().auth_domain, projectId: conf().project_id });
     }
     return firebase.auth();
   }
@@ -47,5 +51,9 @@
     var token = res && res.credential && res.credential.accessToken;
     return token || null;
   }
-  window.TonyConnect = { google: google, finishRedirect: finishRedirect, config: FB };
+  window.TonyConnect = {
+    google: google,
+    finishRedirect: finishRedirect,
+    get config() { return conf(); },
+  };
 })();

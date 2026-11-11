@@ -549,8 +549,8 @@ def playground_page() -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Playground · Tony</title><meta name="theme-color" content="#ffffff">
 <link rel="icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<style>{_CSS}</style>{_fb_js}
-<script>window.TONY_FB={_fb_cfg};</script></head><body>
+<style>{_CSS}</style>
+<script>window.TONY_FB={_fb_cfg};</script>{_fb_js}</head><body>
 <div class="app">
  <aside class="side" id="side">
   <div class="env">{logo(30, 's')}<div><b>Tony</b><small>dev environment</small></div></div>

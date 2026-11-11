@@ -72,10 +72,10 @@ def connections_page(request: Request):
     cfg = firebase.web_config()
     page = dashboard_html()
     if cfg["api_key"]:
-        bits = ('<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>'
+        bits = (f'<script>window.TONY_FB={_json.dumps(cfg)};</script>'
+                '<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>'
                 '<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>'
-                '<script src="/static/connect.js"></script>'
-                f'<script>window.TONY_FB={_json.dumps(cfg)};</script>')
+                '<script src="/static/connect.js"></script>')
         page = page.replace("</head>", bits + "</head>", 1)
     return HTMLResponse(page)
 

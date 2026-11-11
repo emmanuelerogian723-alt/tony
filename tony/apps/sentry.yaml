@@ -11,6 +11,7 @@ auth:
 base_url: https://sentry.io/api/0
 actions:
 - slug: list_projects
+  tier: read
   name: List projects
   description: Projects in the organisation.
   method: GET
@@ -18,6 +19,7 @@ actions:
   response:
     max_items: 30
 - slug: list_issues
+  tier: read
   name: List issues
   description: Unresolved issues for a project.
   method: GET

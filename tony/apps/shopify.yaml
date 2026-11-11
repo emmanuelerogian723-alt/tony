@@ -12,6 +12,7 @@ auth:
 base_url: https://{shop}/admin/api/2024-10
 actions:
 - slug: list_orders
+  tier: read
   name: List orders
   description: Recent orders.
   method: GET
@@ -36,6 +37,7 @@ actions:
     path: orders
     max_items: 25
 - slug: list_products
+  tier: read
   name: List products
   description: Products in the store.
   method: GET

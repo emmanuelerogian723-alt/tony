@@ -10,6 +10,7 @@ auth:
 base_url: https://openlibrary.org
 actions:
 - slug: search
+  tier: read
   name: Search books
   description: Search by title, author or ISBN.
   method: GET
@@ -29,6 +30,7 @@ actions:
     path: docs
     max_items: 15
 - slug: book
+  tier: read
   name: Book detail
   description: Work detail for an Open Library id.
   method: GET

@@ -10,6 +10,7 @@ auth:
 base_url: https://public.api.bsky.app/xrpc
 actions:
 - slug: search_posts
+  tier: read
   name: Search posts
   description: Search public Bluesky posts.
   method: GET
@@ -30,6 +31,7 @@ actions:
     path: posts
     max_items: 20
 - slug: profile
+  tier: read
   name: Profile
   description: Public profile for a handle.
   method: GET

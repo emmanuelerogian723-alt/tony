@@ -11,11 +11,13 @@ auth:
 base_url: https://api.vercel.com
 actions:
 - slug: me
+  tier: read
   name: Current user
   description: Authenticated Vercel user.
   method: GET
   url: https://api.vercel.com/v2/user
 - slug: list_projects
+  tier: read
   name: List projects
   description: Projects in the account.
   method: GET
@@ -28,6 +30,7 @@ actions:
   response:
     max_items: 30
 - slug: list_deployments
+  tier: read
   name: List deployments
   description: Recent deployments with state and URL.
   method: GET

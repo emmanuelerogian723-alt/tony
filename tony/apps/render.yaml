@@ -11,6 +11,7 @@ auth:
 base_url: https://api.render.com/v1
 actions:
 - slug: list_services
+  tier: read
   name: List services
   description: Web services, cron jobs and databases.
   method: GET
@@ -23,6 +24,7 @@ actions:
   response:
     max_items: 30
 - slug: list_deploys
+  tier: read
   name: List deploys
   description: Recent deploys for a service.
   method: GET

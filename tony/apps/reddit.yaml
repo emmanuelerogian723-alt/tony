@@ -19,11 +19,13 @@ auth:
 base_url: https://oauth.reddit.com
 actions:
 - slug: me
+  tier: read
   name: Current user
   description: Profile of the signed-in account.
   method: GET
   url: https://oauth.reddit.com/api/v1/me
 - slug: hot
+  tier: read
   name: Hot posts
   description: Hot posts in a subreddit.
   method: GET
@@ -44,6 +46,7 @@ actions:
     path: data.children
     max_items: 25
 - slug: search
+  tier: read
   name: Search posts
   description: Search Reddit.
   method: GET

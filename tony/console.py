@@ -446,7 +446,6 @@ const NAV = [['overview','Overview','M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5'],
              ['sessions','Sessions','M12 3a9 9 0 100 18 9 9 0 000-18zm0 4v5l3.5 2'],
              ['billing','Billing','M3 7h18M3 7l0 11a1 1 0 001 1h16a1 1 0 001-1V7M7 13h4'],
              ['install','Install','M12 3v12m0 0-4-4m4 4 4-4M5 19h14'],
-             ['ecosystem','Ecosystem','M4 17V7m5 10V4m5 13v-7m5 7V9'],
              ['profile','Profile','M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0']];
 const MOBILE = ['apps','runs','sessions','billing','profile'];
 
@@ -481,7 +480,6 @@ function go(page){
   if(page==='overview'){ loadOverview() }
   if(page==='billing'){ loadBilling() }
   if(page==='sessions'){ loadSessions() }
-  if(page==='ecosystem'){ loadEcosystem() }
   if(page==='agent'){ mountAgent() }
   if(page==='install'){ loadInstall() }
 }
@@ -536,7 +534,7 @@ async function runAgent(){
 async function boot(){
   renderWho(); buildNav(); checkBillingReturn();
   const h = (location.hash||'#overview').slice(1);
-  go(['overview','agent','apps','connections','runs','keys','sessions','billing','install','ecosystem','profile'].includes(h) ? h : 'overview');
+  go(['overview','agent','apps','connections','runs','keys','sessions','billing','install','profile'].includes(h) ? h : 'overview');
 }
 function renderWho(){
   const u = S.user || {};
@@ -1132,50 +1130,6 @@ function sendAsk(ev){
   ev.preventDefault(); const q = el('ask-q'); const v = q.value; q.value=''; askTony(v); return false;
 }
 
-/* ── ecosystem ──────────────────────────────────────────── */
-async function loadEcosystem(){
-  try{
-    const [sum, use, rat, rev] = await Promise.all([
-      api('/v1/ecosystem/summary'), api('/v1/stats/usage?days=30'),
-      api('/v1/ratings'), api('/v1/revenue')]);
-    el('ec-meters').innerHTML =
-      '<div class="mtr"><div class="k">apps</div><div class="v">'+n(sum.apps)+'</div><div class="bar"><i style="width:100%"></i></div></div>'+
-      '<div class="mtr"><div class="k">actions</div><div class="v">'+n(sum.actions)+'</div><div class="bar"><i style="width:100%"></i></div></div>'+
-      '<div class="mtr"><div class="k">avg rating</div><div class="v">'+(sum.ratings.average||0)+' <small>/ 5</small></div><div class="bar"><i style="width:'+Math.round((sum.ratings.average||0)/5*100)+'%"></i></div></div>'+
-      '<div class="mtr"><div class="k">runs all time</div><div class="v">'+n(sum.runs_all_time)+'</div><div class="bar"><i style="width:100%"></i></div></div>';
-
-    const top = (use.by_app||[]).slice(0,6);
-    const max = Math.max(1, ...top.map(r=>r.runs));
-    el('ec-usage').innerHTML = top.length ? top.map(r=>
-      '<div class="ec-row"><span class="mono" style="min-width:110px">'+esc(r.app)+'</span>'+
-      '<span class="ec-bar"><i style="width:'+Math.round(r.runs/max*100)+'%"></i></span>'+
-      '<b style="font-size:12px">'+n(r.runs)+'</b><span class="tiny muted">'+r.avg_latency_ms+'ms</span></div>'
-    ).join('') : '<div class="empty">Send your first call and this fills in.</div>';
-
-    const apps = (rat.apps||[]).slice(0,6);
-    el('ec-ratings').innerHTML = apps.length ? apps.map(a=>
-      '<div class="ec-row"><span class="mono" style="min-width:110px">'+esc(a.app)+'</span>'+
-      '<span class="ec-bar"><i style="width:'+Math.round(a.average/5*100)+'%"></i></span>'+
-      '<b style="font-size:12px">'+a.average.toFixed(1)+'</b><span class="tiny muted">'+a.ratings+' votes</span></div>'
-    ).join('') : '<div class="empty">No ratings yet.</div>';
-
-    el('ec-rev-state').textContent = rev.eligible ? 'eligible' : 'not eligible';
-    const st = rev.statements||[];
-    el('ec-revenue').innerHTML =
-      '<div class="ec-row"><span class="mono">pending</span><span class="sp"></span><b>₦'+n(rev.pending_ngn)+'</b></div>'+
-      '<div class="ec-row"><span class="mono">paid</span><span class="sp"></span><b>₦'+n(rev.paid_ngn)+'</b></div>'+
-      (st.length ? st.map(x=>'<div class="ec-row">'+esc(x.period)+' · '+esc(x.app||'—')+
-        '<span class="sp"></span><span class="badge">'+esc(x.status)+'</span></div>').join('')
-        : '<p class="tiny muted" style="margin:8px 0 0">'+esc(rev.policy)+'</p>');
-
-    el('ec-security').innerHTML =
-      'Credentials: AES-256-GCM at rest, decrypted per call.<br>'+
-      'API keys: stored as hashes, bound to your workspace.<br>'+
-      'Writes: explicit approval with a preview and a full run log.<br>'+
-      'Sessions: app allowlist, tier ceiling, TTL, own run budget.';
-  }catch(e){ el('ec-meters').innerHTML='<div class="empty">'+esc(e.message)+'</div>' }
-}
-
 /* ── profile ────────────────────────────────────────────── */
 function renderProfile(){
   const u = S.user||{};
@@ -1507,24 +1461,6 @@ def console_html(user: Any = None) -> str:
             <input class="inp" id="in-key" placeholder="tk_live_... or tony_at_..." autocomplete="off"></div>
         </div>
         <div id="in-clients"><div class="empty">Loading…</div></div>
-      </section>
-      <section class="pg" id="p-ecosystem">
-        <div class="hd"><div><h1>Ecosystem</h1><p>Ratings, changelogs, security verdicts, usage and builder revenue. The parts a gateway normally hides.</p></div></div>
-        <div class="meters" id="ec-meters"><div class="empty">Loading…</div></div>
-        <div class="grid" style="grid-template-columns:1fr;gap:12px">
-          <div class="card pad"><div class="row" style="margin-bottom:10px"><b style="font-size:14px">Most used apps</b>
-            <span class="sp"></span><span class="tiny muted">last 30 days</span></div>
-            <div id="ec-usage"><div class="empty">No runs yet.</div></div></div>
-          <div class="card pad"><div class="row" style="margin-bottom:10px"><b style="font-size:14px">Community ratings</b>
-            <span class="sp"></span><a class="tiny" href="/docs" style="color:var(--accent)">Rate an app</a></div>
-            <div id="ec-ratings"><div class="empty">No ratings yet. Be the first.</div></div></div>
-          <div class="card pad"><div class="row" style="margin-bottom:10px"><b style="font-size:14px">Builder revenue</b>
-            <span class="sp"></span><span class="badge" id="ec-rev-state">—</span></div>
-            <div id="ec-revenue"><div class="empty">Publish an integration to earn from its runs.</div></div></div>
-          <div class="card pad"><div class="row" style="margin-bottom:10px"><b style="font-size:14px">Security posture</b>
-            <span class="sp"></span><span class="tiny muted">encryption · approval gate</span></div>
-            <div id="ec-security" class="tiny muted" style="line-height:1.7"></div></div>
-        </div>
       </section>
 
     </main>

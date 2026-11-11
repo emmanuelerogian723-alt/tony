@@ -12,6 +12,7 @@ auth:
 base_url: https://api.monday.com/v2
 actions:
 - slug: me
+  tier: read
   name: Current user
   description: The token owner.
   method: POST
@@ -25,6 +26,7 @@ actions:
   response:
     path: data.me
 - slug: boards
+  tier: read
   name: List boards
   description: Boards in the account.
   method: POST
@@ -38,3 +40,26 @@ actions:
   response:
     path: data.boards
     max_items: 25
+
+- slug: create_item
+  tier: write
+  name: Create item
+  description: Add an item to a board.
+  method: POST
+  url: https://api.monday.com/v2
+  params:
+    query:
+      type: string
+      description: GraphQL mutation. Leave the default.
+      default: 'mutation($boardId: ID!, $itemName: String!, $columnValues: JSON){ create_item(board_id: $boardId, item_name: $itemName, column_values: $columnValues){ id } }'
+      in: body
+    variables:
+      type: object
+      description: 'GraphQL variables, e.g. {"boardId":"123","itemName":"New lead","columnValues":"{}"}'
+      required: true
+      in: body
+  required:
+  - variables
+  response:
+    path: data.create_item
+  danger_note: Creates a real item on the user's board.

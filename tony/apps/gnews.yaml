@@ -13,6 +13,7 @@ auth:
 base_url: https://gnews.io/api/v4
 actions:
 - slug: top_headlines
+  tier: read
   name: Top headlines
   description: Headlines for a category or country.
   method: GET
@@ -34,6 +35,7 @@ actions:
     path: articles
     max_items: 20
 - slug: search
+  tier: read
   name: Search news
   description: Search articles by keyword.
   method: GET

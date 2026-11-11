@@ -13,6 +13,7 @@ auth:
 base_url: https://finnhub.io/api/v1
 actions:
 - slug: quote
+  tier: read
   name: Stock quote
   description: Current price and change for a ticker.
   method: GET
@@ -25,6 +26,7 @@ actions:
   required:
   - symbol
 - slug: company_news
+  tier: read
   name: Company news
   description: Recent news for a ticker.
   method: GET

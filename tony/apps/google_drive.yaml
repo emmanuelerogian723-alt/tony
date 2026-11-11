@@ -21,6 +21,7 @@ auth:
 base_url: https://www.googleapis.com/drive/v3
 actions:
 - slug: list_files
+  tier: read
   name: List files
   description: Recent files, newest first.
   method: GET
@@ -41,6 +42,7 @@ actions:
     path: files
     max_items: 30
 - slug: file_info
+  tier: read
   name: File info
   description: Metadata for one file.
   method: GET

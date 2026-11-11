@@ -11,6 +11,7 @@ auth:
   token_url: https://oauth2.googleapis.com/token
   scopes:
   - https://www.googleapis.com/auth/youtube.readonly
+  - https://www.googleapis.com/auth/youtube
   client_id_env: GOOGLE_CLIENT_ID
   client_secret_env: GOOGLE_CLIENT_SECRET
   authorize_params:
@@ -19,6 +20,7 @@ auth:
 base_url: https://www.googleapis.com/youtube/v3
 actions:
 - slug: my_channel
+  tier: read
   name: My channel
   description: Channel stats for the signed-in account.
   method: GET
@@ -36,6 +38,7 @@ actions:
     path: items
     max_items: 5
 - slug: search
+  tier: read
   name: Search videos
   description: Search YouTube videos.
   method: GET
@@ -60,6 +63,7 @@ actions:
     path: items
     max_items: 15
 - slug: video_stats
+  tier: read
   name: Video stats
   description: Views, likes and comments for video ids.
   method: GET
@@ -78,3 +82,22 @@ actions:
   response:
     path: items
     max_items: 10
+- slug: add_to_playlist
+  tier: write
+  name: Add to playlist
+  description: Add a video to one of the channel's playlists.
+  method: POST
+  url: https://www.googleapis.com/youtube/v3/playlistItems
+  params:
+    part:
+      type: string
+      default: snippet
+      in: query
+    snippet:
+      type: object
+      description: 'e.g. {"playlistId":"PL...","resourceId":{"kind":"youtube#video","videoId":"VIDEO_ID"}}'
+      required: true
+      in: body
+  required:
+  - snippet
+  danger_note: Changes a public playlist on the user's channel.

@@ -11,6 +11,7 @@ auth:
 base_url: https://api.paddle.com
 actions:
 - slug: list_customers
+  tier: read
   name: List customers
   description: Customers on the account.
   method: GET
@@ -19,6 +20,7 @@ actions:
     path: data
     max_items: 25
 - slug: list_transactions
+  tier: read
   name: List transactions
   description: Recent transactions.
   method: GET

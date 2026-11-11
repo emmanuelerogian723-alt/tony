@@ -12,6 +12,7 @@ actions:
     name: Coin price
     description: Current price of a coin in one or more currencies.
     method: GET
+    tier: read
     url: https://api.coingecko.com/api/v3/simple/price
     params:
       ids: {type: string, description: "Comma separated coin ids, e.g. bitcoin,ethereum", default: "bitcoin", required: true}
@@ -22,6 +23,7 @@ actions:
     name: Top markets
     description: Ranked coins with price, market cap and 24h change.
     method: GET
+    tier: read
     url: https://api.coingecko.com/api/v3/coins/markets
     params:
       vs_currency: {type: string, default: usd, required: true}
@@ -35,6 +37,7 @@ actions:
     name: Trending coins
     description: Coins trending in search on CoinGecko right now.
     method: GET
+    tier: read
     url: https://api.coingecko.com/api/v3/search/trending
     response:
       path: coins

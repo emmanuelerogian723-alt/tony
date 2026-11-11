@@ -14,11 +14,13 @@ actions:
     name: Balance
     description: Available and pending balance by currency.
     method: GET
+    tier: read
     url: https://api.stripe.com/v1/balance
   - slug: list_customers
     name: List customers
     description: Most recent customers with email and metadata.
     method: GET
+    tier: read
     url: https://api.stripe.com/v1/customers
     params:
       limit: {type: integer, default: 10, minimum: 1, maximum: 100}
@@ -30,6 +32,7 @@ actions:
     name: List payments
     description: Recent PaymentIntents with amount, currency and status.
     method: GET
+    tier: read
     url: https://api.stripe.com/v1/payment_intents
     params:
       limit: {type: integer, default: 10, minimum: 1, maximum: 100}
@@ -40,6 +43,7 @@ actions:
     name: List invoices
     description: Recent invoices with totals and status.
     method: GET
+    tier: read
     url: https://api.stripe.com/v1/invoices
     params:
       limit: {type: integer, default: 10, minimum: 1, maximum: 100}

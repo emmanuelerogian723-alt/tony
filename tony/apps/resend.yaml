@@ -11,6 +11,7 @@ auth:
 base_url: https://api.resend.com
 actions:
 - slug: list_domains
+  tier: read
   name: List domains
   description: Verified sending domains.
   method: GET

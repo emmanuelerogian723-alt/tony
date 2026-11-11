@@ -11,6 +11,7 @@ auth:
 base_url: https://api.netlify.com/api/v1
 actions:
 - slug: list_sites
+  tier: read
   name: List sites
   description: All sites with URLs and repo info.
   method: GET
@@ -18,6 +19,7 @@ actions:
   response:
     max_items: 30
 - slug: list_deploys
+  tier: read
   name: List deploys
   description: Deploys for a site.
   method: GET

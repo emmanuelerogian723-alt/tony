@@ -13,6 +13,7 @@ auth:
 base_url: https://api.nasa.gov
 actions:
 - slug: apod
+  tier: read
   name: Picture of the day
   description: NASA's astronomy picture of the day.
   method: GET
@@ -23,6 +24,7 @@ actions:
       description: ''
       default: DEMO_KEY
 - slug: mars_photos
+  tier: read
   name: Mars photos
   description: Photos from a rover on a sol.
   method: GET

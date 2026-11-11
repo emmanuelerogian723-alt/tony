@@ -12,6 +12,7 @@ actions:
     name: Countries
     description: Countries with ISO codes and income level.
     method: GET
+    tier: read
     url: https://api.worldbank.org/v2/country
     params:
       format: {type: string, default: json, in: query}
@@ -23,6 +24,7 @@ actions:
     name: Indicator time series
     description: Historical values for an indicator and country (e.g. SP.POP.TOTL = population).
     method: GET
+    tier: read
     url: https://api.worldbank.org/v2/country/{country}/indicator/{indicator}
     params:
       country: {type: string, description: "ISO code, e.g. NGA", required: true, in: path}

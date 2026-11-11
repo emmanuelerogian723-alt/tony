@@ -12,6 +12,7 @@ auth:
 base_url: https://api.elevenlabs.io/v1
 actions:
 - slug: list_voices
+  tier: read
   name: List voices
   description: Voices on the account.
   method: GET

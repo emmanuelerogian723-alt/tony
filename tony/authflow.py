@@ -118,6 +118,8 @@ user just clicks Connect.</p>
 
 def dashboard_html() -> str:
     hot = "#E2542B"
+    import json as _json
+    from .playground_page import logo as _logo
     return """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Connected accounts · Tony</title>
@@ -202,6 +204,16 @@ display:flex;gap:10px;align-items:center;font-size:13px;margin-bottom:7px}
 background:#f4f3ef;border:1px solid var(--line);color:var(--mut)}
 .ev .t{margin-left:auto;color:var(--mut);font-size:12px;white-space:nowrap}
 .note{font-size:12.5px;color:var(--mut);margin-top:14px}
+
+.tpair{display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.tpair .tl,.tpair .ap{width:60px;height:60px;border-radius:16px;display:grid;place-items:center;overflow:hidden;background:#fff;border:1px solid var(--line);box-shadow:0 6px 20px rgba(13,13,12,.09)}
+.tpair .tl{border:0;background:transparent;box-shadow:0 6px 20px rgba(13,13,12,.22)}.tpair .tl svg{width:60px;height:60px;display:block}
+.tpair .ap img{width:34px;height:34px;object-fit:contain}.tpair .ap.fill img{width:100%;height:100%;border-radius:16px}
+.tpair .lk{position:relative;width:54px;height:2px;margin:0 6px;background:repeating-linear-gradient(90deg,#c9c7bf 0 5px,transparent 5px 9px)}
+.tpair .lk:after{content:"";position:absolute;top:-3px;left:0;width:8px;height:8px;border-radius:50%;background:#E2542B;animation:tlk 1.5s ease-in-out infinite}
+@keyframes tlk{0%{left:0;opacity:.2}50%{opacity:1}100%{left:calc(100% - 8px);opacity:.2}}
+.modal .ico{width:auto!important;height:auto!important;border:0!important;background:none!important;box-shadow:none!important}
+.more{display:block;margin:14px auto 0;padding:9px 18px}
 </style></head><body>
 <div class="top"><div class="in">
   <a class="logo" href="/playground"><img src="/static/brand/tony-mark.svg" alt="">Tony</a>
@@ -229,6 +241,11 @@ background:#f4f3ef;border:1px solid var(--line);color:var(--mut)}
   <div class="grid" id="grid"></div>
   <h2>Other apps</h2>
   <div class="grid" id="other"></div>
+  <h2>All apps <span id="catTotal" style="color:var(--mut);font-weight:500"></span></h2>
+  <p class="sub" style="margin-top:-4px">Every app in Tony's catalogue connects from here. Sign-in apps go straight to consent; the rest open Tony's secure key page. Nothing is ever pasted into a chat.</p>
+  <div class="bar"><input class="search" id="cq" placeholder="Search the whole catalogue…" autocomplete="off"></div>
+  <div class="grid" id="cat"></div>
+  <button class="btn ghost more" id="catMore" style="display:none">Show more</button>
   <h2>Recent authentication activity</h2>
   <div id="events"><div class="empty">No activity yet.</div></div>
   <p class="note">Tokens are encrypted at rest and never sent to the browser or to the model.
@@ -331,7 +348,7 @@ async function googleConnect(slug,isNew){
 async function start(slug,isNew){
   const p=providers.find(x=>x.app===slug)||{app:slug,name:pname(slug),ready:false};
   current={slug,isNew,mode:p.ready?'managed':(p.canGoogle?'google':'setup')};
-  $('#mico').innerHTML=icon(slug);$('#mh').textContent='Connect '+p.name;
+  $('#mico').innerHTML=pairHdr(slug);$('#mh').textContent='Connect '+p.name;
   $('#mp').textContent=p.ready
     ? 'A pop-up will open on '+p.name+"'s own sign-in page. Approve access and you will come straight back."
     : p.canGoogle
@@ -373,6 +390,40 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   filter=t.dataset.f;render();});
 $('#q').oninput=render;
 
+const LOGO60=__LOGO60__;
+function pairHdr(slug){const sl=encodeURIComponent(slug);
+  return `<div class="tpair"><div class="tl">${LOGO60}</div><div class="lk"></div><div class="ap"><img alt="" src="/v1/icon/${sl}" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='/v1/icon-tile/${sl}';this.parentNode.classList.add('fill')}"></div></div>`}
+let catQ='',catOff=0,catBusy=false;
+function catCard(a){
+  const on=conns.some(c=>c.app===a.slug&&c.status==='active');
+  const kind=a.auth&&a.auth.type==='oauth2'?'Sign in':(a.auth&&a.auth.type==='none'?'Public API':'Secure key page');
+  return `<div class="app ${on?'':'off'}"><div class="ico">${icon(a.slug)}</div><div class="body">
+   <div class="nm">${esc(a.name)}${on?'<span class="pill on"><i></i>Connected</span>':''}</div>
+   <div class="who">${esc(a.category||'')} · ${kind}</div>
+   <div class="act">${on?'<button class="btn ghost" disabled>Connected</button>':`<button class="btn hot" data-hosted="${esc(a.slug)}">Connect</button>`}</div></div></div>`}
+async function loadCat(reset){
+  if(catBusy)return;catBusy=true;if(reset){catOff=0;$('#cat').innerHTML=''}
+  const r=await api('/v1/apps?limit=24&offset='+catOff+'&dedupe=true&q='+encodeURIComponent(catQ));
+  $('#cat').insertAdjacentHTML('beforeend',(r.apps||[]).map(catCard).join('')||(reset?'<div class="empty">No app matches that search.</div>':''));
+  $('#catTotal').textContent='· '+(r.total||0).toLocaleString()+' apps';
+  catOff+=(r.apps||[]).length;$('#catMore').style.display=r.has_more?'':'none';catBusy=false;
+  document.querySelectorAll('[data-hosted]').forEach(b=>b.onclick=()=>hosted(b.dataset.hosted,b));
+}
+async function hosted(slug,btn){
+  const p=providers.find(x=>x.app===slug);
+  if(p&&(p.ready||p.canGoogle)){return start(slug,false)}
+  if(btn){btn.disabled=true;btn.textContent='Opening…'}
+  const w=window.open('about:blank','tony_link','width=480,height=720');
+  const r=await api('/v1/connect-links',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({app:slug,entity_id:ENTITY,agent_name:'Tony',tiers:['read','write'],redirect_url:location.origin+'/connections'})});
+  if(r.url){if(w)w.location=r.url;else location.href=r.url;current={slug,isNew:false,mode:'hosted'};
+    setTimeout(()=>{current=null;load()},60000)}
+  else{if(w)w.close();alert(r.detail||'Could not open the connect page.')}
+  if(btn){btn.disabled=false;btn.textContent='Connect'}
+}
+$('#cq').oninput=()=>{clearTimeout(window._ct);window._ct=setTimeout(()=>{catQ=$('#cq').value.trim();loadCat(true)},250)};
+$('#catMore').onclick=()=>loadCat(false);
+
 async function load(){
   const [p,c]=await Promise.all([api('/v1/providers'),api('/v1/connections?entity_id='+ENTITY)]);
   providers=(p.providers||[]).map(x=>{x.canGoogle=!!(window.TONY_FB&&window.TONY_FB.api_key)&&/^google|gmail/.test(x.app);return x});
@@ -387,7 +438,7 @@ async function load(){
       {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({access_token:t})});
     sessionStorage.removeItem('tony_dash_conn');await load();
   }catch(e){}})();
-  render();
+  render();loadCat(true);
   const ev=await api('/v1/connections/events?limit=8');
   const rows=ev.events||[];
   $('#events').innerHTML=rows.length?rows.map(e=>`<div class="ev"><span class="k">${esc(e.kind)}</span>
@@ -399,7 +450,7 @@ setInterval(async()=>{ if(current){const c=await api('/v1/connections?entity_id=
   const row=(c.connections||[]).find(x=>x.app===current.slug&&x.status==='active');
   if(row){close();await load()}}},2500);
 if(filterApp){const p=providers.find(x=>x.app===filterApp);if(p)setTimeout(()=>start(filterApp,false),400)}
-</script></body></html>"""
+</script></body></html>""".replace("__LOGO60__", _json.dumps(_logo(60, "dp")))
 
 
 # ── connecting a provider account through Firebase Auth ────────────────────────
@@ -437,10 +488,8 @@ def firebase_web_config() -> dict[str, Any]:
     return {"ready": bool(cfg["api_key"]), **cfg}
 
 
-@router.post("/v1/connections/{app_slug}/firebase-token", include_in_schema=False)
-async def connect_with_firebase(app_slug: str, body: dict[str, Any], request: Request,
-                               entity_id: str = "default") -> dict[str, Any]:
-    """Store a Google access token the browser obtained with the user's consent."""
+async def store_google_token(workspace_id: str, entity_id: str, spec: Any, token: str) -> dict[str, Any]:
+    """Verify a browser-obtained Google token, check scopes, and store it encrypted."""
     import httpx
     from datetime import datetime, timedelta, timezone
 
@@ -450,15 +499,10 @@ async def connect_with_firebase(app_slug: str, body: dict[str, Any], request: Re
     from .models import ConnectedAccount
     from .oauth import audit, public_redact, set_account_meta
 
-    spec = catalog.resolve(app_slug) or catalog.get(app_slug)
-    if spec is None:
-        raise HTTPException(404, detail=f"Unknown app '{app_slug}'")
     if spec.auth.type != "oauth2" or "accounts.google.com" not in (spec.auth.authorize_url or ""):
         raise HTTPException(400, detail="This app cannot use Google sign-in.")
-    token = str(body.get("access_token") or "").strip()
     if not token:
         raise HTTPException(400, detail="Missing access token.")
-    workspace_id = _workspace(request)
 
     need = set(_scope_urls(spec.auth.scopes))
     async with httpx.AsyncClient(timeout=25) as client:
@@ -514,3 +558,14 @@ async def connect_with_firebase(app_slug: str, body: dict[str, Any], request: Re
 
     return {"connection": payload, "identity": identity,
             "expires_at": expires_at.isoformat(), "refreshable": False}
+
+
+@router.post("/v1/connections/{app_slug}/firebase-token", include_in_schema=False)
+async def connect_with_firebase(app_slug: str, body: dict[str, Any], request: Request,
+                               entity_id: str = "default") -> dict[str, Any]:
+    """Store a Google access token the browser obtained with the user's consent."""
+    spec = catalog.resolve(app_slug) or catalog.get(app_slug)
+    if spec is None:
+        raise HTTPException(404, detail=f"Unknown app '{app_slug}'")
+    token = str(body.get("access_token") or "").strip()
+    return await store_google_token(_workspace(request), entity_id, spec, token)

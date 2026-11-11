@@ -12,6 +12,7 @@ actions:
     name: Fetch URL
     description: GET any public URL and return JSON or text. Useful for open data endpoints and RSS-to-JSON proxies.
     method: GET
+    tier: read
     url: "{url}"
     params:
       url: {type: string, description: Absolute http(s) URL, required: true, in: path}
@@ -22,6 +23,7 @@ actions:
     name: Read page text
     description: Fetch a web page and return its readable text (tags and scripts stripped).
     method: GET
+    tier: read
     url: "{url}"
     params:
       url: {type: string, description: Page to read, required: true, in: path}
@@ -35,6 +37,7 @@ actions:
     name: Web search
     description: Search the web through a keyless engine and get titles, URLs and snippets.
     method: GET
+    tier: read
     url: https://news.google.com/rss/search
     params:
       q: {type: string, description: Search query, required: true}

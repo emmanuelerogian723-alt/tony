@@ -22,11 +22,13 @@ actions:
     name: Current user
     description: Profile of the authenticated user.
     method: GET
+    tier: read
     url: https://api.github.com/user
   - slug: list_repos
     name: List repositories
     description: Repositories for the authenticated user, newest first.
     method: GET
+    tier: read
     url: https://api.github.com/user/repos
     params:
       type: {type: string, enum: [all, owner, member], default: all}
@@ -39,6 +41,7 @@ actions:
     name: Search repositories
     description: Search public repositories by keyword, language or stars.
     method: GET
+    tier: read
     url: https://api.github.com/search/repositories
     params:
       q: {type: string, description: "GitHub search syntax, e.g. language:python stars:>1000", required: true}
@@ -53,6 +56,7 @@ actions:
     name: List issues
     description: Issues in a repository, filtered by state.
     method: GET
+    tier: read
     url: https://api.github.com/repos/{owner}/{repo}/issues
     params:
       owner: {type: string, required: true, in: path}
@@ -80,6 +84,7 @@ actions:
     name: List pull requests
     description: Pull requests in a repository.
     method: GET
+    tier: read
     url: https://api.github.com/repos/{owner}/{repo}/pulls
     params:
       owner: {type: string, required: true, in: path}
@@ -93,6 +98,7 @@ actions:
     name: List commits
     description: Recent commits on a branch.
     method: GET
+    tier: read
     url: https://api.github.com/repos/{owner}/{repo}/commits
     params:
       owner: {type: string, required: true, in: path}
@@ -106,6 +112,7 @@ actions:
     name: Repository info
     description: Stars, forks, language and description for one repository.
     method: GET
+    tier: read
     url: https://api.github.com/repos/{owner}/{repo}
     params:
       owner: {type: string, required: true, in: path}

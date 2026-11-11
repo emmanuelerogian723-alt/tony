@@ -16,6 +16,35 @@ _SLUG_RE = re.compile(r"^[a-z0-9_]{2,40}$")
 _REG_SLUG_RE = re.compile(r"^[a-z0-9_-]{2,64}$")
 _TIERS = {"read", "write", "destructive"}
 
+# Verbs that can never change state remotely. Everything else needs approval.
+_READ_VERBS = {"GET", "HEAD", "OPTIONS"}
+
+# A few APIs only expose a query over POST (GraphQL, search, list). Those are
+# reads even though the verb is POST, so they must not be gated as writes.
+_READ_ONLY_POST = {
+    ("dropbox", "account"), ("dropbox", "list_folder"),
+    ("linear", "viewer"), ("linear", "issues"),
+    ("monday", "me"), ("monday", "boards"),
+    ("notion", "search"), ("notion", "query_database"),
+    ("tiktok", "list_videos"),
+}
+
+
+def infer_tier(app: str, action: str, method: str) -> str:
+    """Read/write tier for an action that does not declare one.
+
+    A missing tier used to default to "read", which silently let POST, PUT,
+    PATCH and DELETE actions run without approval. The verb is the safe
+    default: only known query-by-POST endpoints stay on the read side.
+    """
+    verb = (method or "GET").upper()
+    if verb in _READ_VERBS:
+        return "read"
+    if (app, action) in _READ_ONLY_POST:
+        return "read"
+    return "write"
+
+
 
 class ManifestError(ValueError):
     pass
@@ -225,7 +254,7 @@ def parse_manifest(path: Path) -> AppSpec:
         if a_slug in seen:
             raise ManifestError(f"{where}: duplicate action '{a_slug}'")
         seen.add(a_slug)
-        tier = str(a.get("tier", "read")).lower()
+        tier = str(a.get("tier") or infer_tier(slug, a_slug, str(a.get("method", "GET")))).lower()
         if tier not in _TIERS:
             raise ManifestError(f"{where}: action '{a_slug}' tier must be one of {_TIERS}")
         params = a.get("params") or {}
@@ -293,7 +322,8 @@ def parse_registry_line(line: str, where: str) -> AppSpec:
             url=str(a.get("url") or ""),
             params=a.get("params") or {},
             required=[str(r) for r in (a.get("required") or [])],
-            tier=str(a.get("tier", "read")).lower() if str(a.get("tier", "read")).lower() in _TIERS else "read",
+            tier=(str(a.get("tier")).lower() if str(a.get("tier")).lower() in _TIERS
+                  else infer_tier(slug, act_slug, str(a.get("method", "GET")))),
             headers={str(k): str(v) for k, v in (a.get("headers") or {}).items()},
             body_template=a.get("body_template"),
             pagination=a.get("pagination"),

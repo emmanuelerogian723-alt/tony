@@ -170,8 +170,19 @@ button{font:inherit;color:inherit;cursor:pointer}
 .ans ol,.ans ul{margin:4px 0 8px;padding-left:20px}.ans li{margin:3px 0}
 .ans code{font:12.5px ui-monospace,Menlo,monospace;background:#f1f0ec;border-radius:6px;padding:1px 6px}
 .ans a{color:#1d4ed8}
+/* tony x app pair header */
+.tpair{display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.tpair .tl,.tpair .ap{width:60px;height:60px;border-radius:16px;display:grid;place-items:center;overflow:hidden;background:#fff;border:1px solid var(--line);box-shadow:0 6px 20px rgba(13,13,12,.09)}
+.tpair .tl{border:0;background:transparent;box-shadow:0 6px 20px rgba(13,13,12,.22)}
+.tpair .tl svg{width:60px;height:60px;display:block}
+.tpair .ap img{width:34px;height:34px;object-fit:contain}
+.tpair .ap.fill img{width:100%;height:100%;border-radius:16px}
+.tpair .lk{position:relative;width:54px;height:2px;margin:0 6px;background:repeating-linear-gradient(90deg,#c9c7bf 0 5px,transparent 5px 9px)}
+.tpair .lk:after{content:"";position:absolute;top:-3px;left:0;width:8px;height:8px;border-radius:50%;background:#E2542B;animation:tlk 1.5s ease-in-out infinite}
+@keyframes tlk{0%{left:0;opacity:.2}50%{opacity:1}100%{left:calc(100% - 8px);opacity:.2}}
+.modal .in{background-image:linear-gradient(180deg,rgba(255,138,92,.13),rgba(255,255,255,0) 120px)}
 /* modal polish */
-.modal .big{width:64px;height:64px;border-radius:16px;box-shadow:0 4px 16px rgba(13,13,12,.08)}
+.modal .big{width:auto;height:auto;border:0;box-shadow:none;background:none;border-radius:0;margin:0 auto}
 .modal .big .tile{width:100%;height:100%;border:0;border-radius:16px}
 .modal .btn.hot{background:var(--hot)}
 .modal .row2{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:10px}
@@ -344,6 +355,10 @@ async function send(textOverride){
 
 /* ── connect modal (Link <App> Account) ── */
 let PROVIDERS={};
+function pairHdr(slug){
+  const sl=encodeURIComponent(slug);
+  return `<div class="tpair"><div class="tl">${LOGO60}</div><div class="lk"></div><div class="ap"><img alt="" src="/v1/icon/${sl}" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='/v1/icon-tile/${sl}';this.parentNode.classList.add('fill')}"></div></div>`;
+}
 async function loadProviders(){
   const r=await api('/v1/providers');
   (r.providers||[]).forEach(p=>PROVIDERS[p.app]=p);
@@ -356,7 +371,7 @@ function canGoogle(app){
 }
 function openGoogleModal(app,name){
   pendingConn.mode='google';
-  $('#mApp').innerHTML=tile(app.slug,52,0);
+  $('#mApp').innerHTML=pairHdr(app.slug);
   $('#mTitle').textContent='Connect '+name;
   $('#mSub').textContent='Sign in with your Google account to let Tony use your own '+name+'. You approve the permissions on the Google consent screen, and Tony never sees your password.';
   $('#mErr').textContent=''; $('#mTok').value='';
@@ -368,7 +383,7 @@ function openGoogleModal(app,name){
 }
 function openSetupModal(app,name){
   pendingConn.mode='setup';
-  $('#mApp').innerHTML=tile(app.slug,52,0);
+  $('#mApp').innerHTML=pairHdr(app.slug);
   $('#mTitle').textContent='Connect '+name;
   $('#mSub').textContent='This app needs Tony\'s one-time provider setup before anyone can sign in. No keys needed from you.';
   $('#mTokWrap').style.display='none'; $('#mTokLink').style.display='none'; $('#mOr').style.display='none';
@@ -423,13 +438,14 @@ async function openConnect(slug,goal){
     if(canGoogle(app)){ openGoogleModal(app,name); return; }
     openSetupModal(app,name); return;
   }
+  if(needsToken||needsBase){ return openHosted(app,name,goal) }
   $('#mSave').style.display='';$('#mDocs').textContent='Open the API docs →';
   if(!needsToken&&!needsBase){
     const c=await api('/v1/connections/'+encodeURIComponent(app.slug)+'/start?entity_id='+ENTITY,{method:'POST'});
     if(c.connection||c.mode==='public'){await afterConnected(app.slug,name)}
     return;
   }
-  $('#mApp').innerHTML=tile(app.slug,52,0);
+  $('#mApp').innerHTML=pairHdr(app.slug);
   $('#mTitle').textContent='Link '+name+' Account';
   $('#mErr').textContent=''; $('#mTok').value=''; $('#mBase').value='';
   $('#mBase').style.display=(needsBase)?'':'none';
@@ -450,6 +466,7 @@ $('#mTokLink').onclick=()=>{$('#mTokWrap').style.display='';$('#mTokLink').style
 $('#mOauth').onclick=async()=>{
   if(!pendingConn)return;
   if(pendingConn.mode==='google')return runGoogle(pendingConn.real||pendingConn.slug);
+  if(pendingConn.mode==='hosted')return runHosted();
   const b=$('#mOauth'); b.disabled=true; b.textContent='Opening…';
   const slug=pendingConn.real||pendingConn.slug;
   const w=window.open('about:blank','tony_oauth','width=520,height=700');
@@ -472,6 +489,27 @@ $('#mSave').onclick=async()=>{
   if(r.connection){const nm=$('#mTitle').textContent.replace(/^Link | Account$/g,''); await afterConnected(slug,nm)}
   else{$('#mErr').textContent=(typeof r.detail==='string'?r.detail:'Could not save that. Check the key and try again.')}
 };
+
+async function openHosted(app,name,goal){
+  // Same hosted page an end user of a developer's agent sees: Tony x App header, key entered on Tony's vault.
+  pendingConn.mode='hosted';
+  $('#mApp').innerHTML=pairHdr(app.slug);
+  $('#mTitle').textContent='Connect '+name;
+  $('#mSub').textContent='Tony opens a secure page for '+name+'. Your credentials go straight into Tony\'s encrypted vault and are never shown to the AI.';
+  $('#mErr').textContent=''; $('#mTokWrap').style.display='none'; $('#mTokLink').style.display='none';
+  $('#mOr').style.display='none'; $('#mSave').style.display='none'; $('#mDocs').style.display='none';
+  $('#mOauth').style.display=''; $('#mOauth').disabled=false; $('#mOauth').textContent='Connect '+name;
+  $('#mask').classList.add('on');
+}
+async function runHosted(){
+  const slug=pendingConn.real||pendingConn.slug;
+  const b=$('#mOauth'); b.disabled=true; b.textContent='Opening…';
+  const w=window.open('about:blank','tony_link','width=480,height=720');
+  const r=await api('/v1/connect-links',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({app:slug,entity_id:ENTITY,agent_name:'Tony Playground',tiers:['read','write']})});
+  if(r.url){ if(w)w.location=r.url; else location.href=r.url; b.textContent='Waiting for you to finish…'; watchConn(slug) }
+  else { if(w)w.close(); $('#mErr').textContent=r.detail||'Could not open the connect page.'; b.disabled=false; b.textContent='Connect' }
+}
 function watchConn(slug){
   let n=0; const t=setInterval(async()=>{
     n++; const c=await api('/v1/connections?entity_id='+ENTITY);
@@ -591,4 +629,4 @@ def playground_page() -> str:
  <a href="/connections" style="display:block;margin:8px 12px 0;font-size:12.5px;color:#6b6a63;text-decoration:none">Manage all accounts and permissions →</a>
  <input class="search" id="dSearch" placeholder="Search 7,900 apps to connect…" autocomplete="off">
  <div class="list"><div id="dRes"></div><div id="dList"></div></div></aside>
-<script>const LOGO28={json.dumps(logo(28,'m'))};{_JS}</script></body></html>"""
+<script>const LOGO28={json.dumps(logo(28,'m'))};const LOGO60={json.dumps(logo(60,'mp'))};{_JS}</script></body></html>"""

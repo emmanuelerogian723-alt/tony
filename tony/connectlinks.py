@@ -18,7 +18,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -26,6 +26,7 @@ from .auth import workspace_from_request
 from .catalog import catalog
 from .db import session
 from .models import ConnectLink, ResumeTask
+from .connectbrand import PAIR_CSS, pair
 from .oauth import OAuthError, start_oauth
 
 router = APIRouter(tags=["connect-links"])
@@ -102,28 +103,86 @@ def _expired(row: ConnectLink) -> bool:
 TIER_WORDS = {"read": "View data", "write": "Create and change things", "destructive": "Delete things"}
 
 
-def _page(title: str, body: str) -> HTMLResponse:
-    return HTMLResponse(f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)}</title>
-<meta name="robots" content="noindex"><style>
-*{{box-sizing:border-box}}body{{margin:0;min-height:100vh;display:grid;place-items:center;background:#f7f8fa;
-color:#0a0c11;font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;padding:20px}}
-.card{{width:100%;max-width:400px;background:#fff;border:1px solid rgba(10,12,17,.1);border-radius:20px;
-padding:28px 24px;box-shadow:0 20px 60px rgba(10,12,17,.08)}}
-.pair{{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:18px}}
-.logo{{width:52px;height:52px;border-radius:14px;border:1px solid rgba(10,12,17,.1);display:grid;place-items:center;
-font-weight:700;font-size:20px;background:#fff}}
-.logo.t{{background:#0a0c11;color:#fff}}.line{{width:26px;height:2px;background:#0ea5e9;border-radius:2px}}
-h1{{font-size:19px;margin:0 0 6px;text-align:center;letter-spacing:-.01em}}
-p{{margin:0 0 14px;color:#3b4451;text-align:center;font-size:14px}}
-ul{{list-style:none;padding:0;margin:0 0 18px}}
-li{{padding:10px 12px;border:1px solid rgba(10,12,17,.1);border-radius:12px;margin-bottom:8px;font-size:14px}}
-li b{{display:block;font-size:13px}}li span{{color:#5f6875;font-size:12.5px}}
-.btn{{display:block;width:100%;padding:13px;border-radius:12px;border:0;background:#0a0c11;color:#fff;
-font-weight:600;font-size:15px;text-align:center;text-decoration:none;cursor:pointer}}
-.btn.ghost{{background:#fff;color:#0a0c11;border:1px solid rgba(10,12,17,.16);margin-top:8px}}
-.foot{{margin-top:16px;font-size:12px;color:#8b939f;text-align:center}}
-.ok{{color:#047857}}.bad{{color:#b91c1c}}</style></head><body><div class="card">{body}</div></body></html>""")
+_BASE_CSS = """
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f7f6f3;
+color:#0d0d0c;font:15px/1.55 Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:20px;-webkit-font-smoothing:antialiased}
+.card{width:100%;max-width:400px;background:#fff;border:1px solid rgba(13,13,12,.1);border-radius:22px;
+padding:30px 26px 22px;box-shadow:0 24px 70px rgba(13,13,12,.12);text-align:center;
+background-image:linear-gradient(180deg,rgba(255,138,92,.14),rgba(255,255,255,0) 130px)}
+h1{font-size:19px;margin:0 0 6px;letter-spacing:-.01em;font-weight:650}
+p{margin:0 0 14px;color:#55544d;font-size:14px}
+ul{list-style:none;padding:0;margin:0 0 18px;text-align:left}
+li{padding:10px 12px;border:1px solid rgba(13,13,12,.1);border-radius:12px;margin-bottom:8px;font-size:14px}
+li b{display:block;font-size:13px}li span{color:#5f6875;font-size:12.5px}
+.btn{display:block;width:100%;padding:13px;border-radius:12px;border:0;background:#0d0d0c;color:#fff;
+font-weight:600;font-size:15px;text-align:center;text-decoration:none;cursor:pointer}
+.btn[disabled]{background:#9a9892;cursor:default}
+.btn.ghost{background:#fff;color:#0d0d0c;border:1px solid rgba(13,13,12,.16);margin-top:8px}
+.foot{margin-top:16px;padding-top:14px;border-top:1px solid #f0efeb;font-size:12px;color:#8b8a82;text-align:center}
+.ok{color:#047857}.bad{color:#b91c1c}
+input.k{width:100%;border:1px solid rgba(13,13,12,.16);border-radius:12px;padding:12px;font:inherit;font-size:14px;margin:0 0 10px;outline:0}
+input.k:focus{border-color:#0d0d0c}label.l{display:block;font-size:12.5px;color:#3b4451;margin:0 0 4px;text-align:left}
+.err{color:#b91c1c;font-size:13px;margin:0 0 10px;text-align:center}.hint{font-size:12.5px;color:#5f6875;text-align:left;margin:-4px 0 12px}
+"""
+
+
+def _page(title: str, body: str, script: str = "") -> HTMLResponse:
+    return HTMLResponse(
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        f'<title>{html.escape(title)}</title><meta name="robots" content="noindex">'
+        '<link rel="icon" href="/favicon.ico">'
+        f'<style>{_BASE_CSS}{PAIR_CSS}</style></head><body><div class="card">{body}</div>{script}</body></html>')
+
+
+def _mode(spec) -> str:
+    """How this app signs a user in: google (Firebase consent), oauth, key, or none."""
+    from . import provider_registry as pr
+
+    if spec.auth.type == "none":
+        return "none"
+    prov = pr.provider_for(spec.slug)
+    if prov and prov.slug in {"gmail", "google_drive", "google_calendar", "google_sheets"} and _firebase_ready():
+        return "google"
+    if spec.auth.type == "oauth2":
+        from .oauth import provider_ready
+        if provider_ready(spec.slug) or (prov and pr.ready(spec.slug)):
+            return "oauth"
+        if _firebase_ready() and prov and prov.authorize_url.startswith("https://accounts.google.com"):
+            return "google"
+        return "oauth-setup"
+    return "key"
+
+
+def _firebase_ready() -> bool:
+    from . import firebase
+    try:
+        return bool(firebase.web_config().get("api_key"))
+    except Exception:
+        return False
+
+
+def _key_fields(spec) -> list[dict[str, str]]:
+    """The single secret a key app needs, labelled the way its own dashboard calls it."""
+    from .executor import needs_base_url
+
+    t = spec.auth.type
+    label = {"bearer": "Access token", "basic": "API key", "path": "API key"}.get(t, "API key")
+    where = f"{spec.name} dashboard → Settings → API"
+    fields = [{"name": "token", "label": f"{spec.name} {label.lower()}", "type": "password", "hint": where}]
+    if t == "basic":
+        fields = [{"name": "username", "label": "Username or account ID", "type": "text", "hint": ""},
+                  {"name": "password", "label": "Password or API secret", "type": "password", "hint": where}]
+    if needs_base_url(spec):
+        fields.append({"name": "base_url", "label": "API base URL", "type": "text",
+                       "hint": "Example: https://api.yourcompany.com/v1"})
+    return fields
+
+
+def _head(spec, agent: str, done: bool = False) -> str:
+    name = html.escape(spec.name)
+    return (pair(spec.slug, done=done) +
+            f'<h1>{agent} wants to connect to your {name}</h1>')
 
 
 @router.get("/connect/{token}", response_class=HTMLResponse)
@@ -139,19 +198,141 @@ def consent(token: str):
     name = html.escape(spec.name)
     agent = html.escape(row.agent_name)
     if row.status == "connected":
-        return _page("Connected", f'<div class="pair"><div class="logo t">T</div><div class="line"></div>'
-                                   f'<div class="logo">{name[:1]}</div></div><h1 class="ok">{name} is connected</h1>'
-                                   f'<p>You can close this page. {agent} can now act within the access you approved.</p>')
+        return _page("Connected", pair(spec.slug, done=True) +
+                     f'<h1 class="ok">{name} is connected</h1>'
+                     f'<p>You can close this page. {agent} can now act within the access you approved.</p>'
+                     '<div class="foot">Secured by Tony</div>')
     tiers = [t for t in row.tiers.split(",") if t]
     items = "".join(f'<li><b>{html.escape(TIER_WORDS.get(t, t))}</b><span>in your {name} account</span></li>' for t in tiers)
-    return _page(f"Connect {spec.name}", f"""
-<div class="pair"><div class="logo t">T</div><div class="line"></div><div class="logo">{name[:1]}</div></div>
-<h1>{agent} wants to connect to your {name}</h1>
-<p>You will sign in on {name}'s own page. Tony never sees your password.</p>
-<ul>{items}</ul>
-<a class="btn" href="/connect/{html.escape(token)}/go">Continue to {name}</a>
-<a class="btn ghost" href="/connect/{html.escape(token)}/deny">Cancel</a>
-<div class="foot">Secured by Tony. You can revoke access any time.</div>""")
+    mode = _mode(spec)
+    tok = html.escape(token)
+    if mode == "key":
+        fields = _key_fields(spec)
+        form = "".join(
+            f'<label class="l" for="f_{f["name"]}">{html.escape(f["label"])}</label>'
+            f'<input class="k" id="f_{f["name"]}" name="{f["name"]}" type="{f["type"]}" autocomplete="off" '
+            f'placeholder="{html.escape(f["label"])}">' + (f'<div class="hint">{html.escape(f["hint"])}</div>' if f["hint"] else "")
+            for f in fields)
+        docs = (f'<a class="btn ghost" style="font-weight:500" href="{html.escape(spec.docs)}" target="_blank" rel="noopener">'
+                f'Where do I find it? ↗</a>' if spec.docs else "")
+        body = (_head(spec, agent) +
+                f'<p>{name} does not offer a sign-in page, so you add your key here once. It goes straight to Tony\'s '
+                f'encrypted vault and is never shown to {agent} or any AI model.</p><ul>{items}</ul>'
+                f'<form id="kf">{form}<div class="err" id="err"></div>'
+                f'<button class="btn" id="kb" type="submit">Connect {name}</button></form>{docs}'
+                '<div class="foot">Secured by Tony · encrypted at rest · revoke any time</div>')
+        script = ("<script>const T=" + __import__("json").dumps(token) + ";"
+                  "document.getElementById('kf').onsubmit=async e=>{e.preventDefault();const b=document.getElementById('kb'),"
+                  "er=document.getElementById('err');er.textContent='';const v={};"
+                  "new FormData(e.target).forEach((x,k)=>v[k]=String(x).trim());"
+                  "if(!Object.values(v).some(Boolean)){er.textContent='Enter your key to continue.';return}"
+                  "b.disabled=true;b.textContent='Connecting…';"
+                  "try{const r=await fetch('/connect/'+T+'/key',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({values:v})});"
+                  "const j=await r.json();if(j.ok){location.href=j.next}else{er.textContent=j.detail||'That key did not work.';"
+                  "b.disabled=false;b.textContent='Connect'}}catch(x){er.textContent='Network error. Try again.';b.disabled=false;b.textContent='Connect'}};</script>")
+        return _page(f"Connect {spec.name}", body, script)
+    if mode == "google":
+        body = (_head(spec, agent) +
+                f'<p>You will sign in with Google and approve the permissions on Google\'s own screen. Tony never sees your password.</p>'
+                f'<ul>{items}</ul><button class="btn" id="gb">Continue with Google</button>'
+                f'<a class="btn ghost" href="/connect/{tok}/deny">Cancel</a>'
+                '<div class="err" id="err" style="margin-top:10px"></div>'
+                '<div class="foot">Secured by Tony · encrypted at rest · revoke any time</div>')
+        return _page(f"Connect {spec.name}", body, _google_script(token, spec))
+    if mode == "oauth-setup":
+        return _page(f"Connect {spec.name}", _head(spec, agent) +
+                     f'<p>{name} sign-in is not switched on for this Tony deployment yet. The owner adds its OAuth app once, '
+                     f'then everyone connects with one click. When it is on you sign in on {name}\'s own page, so {agent} '
+                     f'never sees your password.</p><ul>{items}</ul><a class="btn ghost" href="/providers">Open provider setup</a>'
+                     '<div class="foot">Secured by Tony</div>')
+    if mode == "none":
+        body = (_head(spec, agent) + f'<p>{name} is a public API, so no sign-in is needed and Tony never sees your password.</p><ul>{items}</ul>'
+                f'<a class="btn" href="/connect/{tok}/go">Connect {name}</a>'
+                '<div class="foot">Secured by Tony</div>')
+        return _page(f"Connect {spec.name}", body)
+    return _page(f"Connect {spec.name}", _head(spec, agent) +
+                 f'<p>You will sign in on {name}\'s own page. Tony never sees your password.</p><ul>{items}</ul>'
+                 f'<a class="btn" href="/connect/{tok}/go">Continue to {name}</a>'
+                 f'<a class="btn ghost" href="/connect/{tok}/deny">Cancel</a>'
+                 '<div class="foot">Secured by Tony · encrypted at rest · revoke any time</div>')
+
+
+def _google_script(token: str, spec) -> str:
+    import json as _j
+    from . import firebase, provider_registry as pr
+
+    cfg = _j.dumps(firebase.web_config())
+    prov = pr.provider_for(spec.slug)
+    scopes = _j.dumps(list(prov.scopes) if prov else [])
+    return (
+        '<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>'
+        '<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>'
+        f'<script>window.TONY_FB={cfg};</script><script src="/static/connect.js"></script>'
+        f'<script>const T={_j.dumps(token)},SC={scopes};const b=document.getElementById("gb"),er=document.getElementById("err");'
+        'async function fin(tk){b.disabled=true;b.textContent="Connecting…";'
+        'const r=await fetch("/connect/"+T+"/google",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({access_token:tk})});'
+        'const j=await r.json();if(j.ok){location.href=j.next}else{er.textContent=j.detail||"Google sign-in did not complete.";b.disabled=false;b.textContent="Continue with Google"}}'
+        'b.onclick=async()=>{er.textContent="";b.disabled=true;b.textContent="Opening Google…";'
+        'try{const tk=await TonyConnect.google(SC,"link");if(tk)await fin(tk)}catch(e){er.textContent=String((e&&(e.code||e.message))||"Sign-in failed").replace("auth/","");'
+        'b.disabled=false;b.textContent="Continue with Google"}};'
+        '(async()=>{try{const tk=await TonyConnect.finishRedirect();if(tk)await fin(tk)}catch(e){}})();</script>')
+
+
+class _KeyBody(BaseModel):
+    values: dict[str, str] = Field(default_factory=dict)
+
+
+class _GoogleBody(BaseModel):
+    access_token: str
+
+
+def _live_link(token: str) -> tuple[ConnectLink, Any]:
+    row = _load(token)
+    if row is None or _expired(row) or row.status in {"expired", "denied"}:
+        raise HTTPException(410, detail="This link has expired. Ask for a new one.")
+    spec = catalog.get(row.app_slug)
+    if spec is None:
+        raise HTTPException(404, detail="Unknown app")
+    return row, spec
+
+
+def _mark_connected(token: str) -> str:
+    return f"/connect/{token}/done"
+
+
+@router.post("/connect/{token}/key")
+async def submit_key(token: str, body: _KeyBody):
+    """A user pastes their key on Tony's own page. It is probed once, then stored encrypted."""
+    from .api import normalise_base_url
+    from .oauth import store_api_key
+
+    row, spec = _live_link(token)
+    if spec.auth.type in {"oauth2", "none"}:
+        raise HTTPException(400, detail="This app does not use a key.")
+    values = {k: v.strip() for k, v in body.values.items() if v and v.strip()}
+    if "base_url" in values:
+        values["base_url"] = normalise_base_url(values["base_url"])
+    secret = {k: v for k, v in values.items() if k != "base_url"}
+    if not secret:
+        raise HTTPException(400, detail="Enter your key to continue.")
+    if "token" in secret:
+        values.setdefault("api_key", secret["token"])
+        values.setdefault("access_token", secret["token"])
+    store_api_key(row.workspace_id, row.entity_id, spec, values, "connected via Tony link")
+    return {"ok": True, "next": _mark_connected(token)}
+
+
+@router.post("/connect/{token}/google")
+async def submit_google(token: str, body: _GoogleBody):
+    """Google apps: the browser got a token through the Firebase project; verify and store it."""
+    from . import authflow
+
+    row, spec = _live_link(token)
+    try:
+        res = await authflow.store_google_token(row.workspace_id, row.entity_id, spec, body.access_token)
+    except HTTPException as exc:
+        return JSONResponse(status_code=200, content={"ok": False, "detail": exc.detail})
+    return {"ok": bool(res), "next": _mark_connected(token)}
 
 
 @router.get("/connect/{token}/go")
@@ -162,13 +343,19 @@ async def go(token: str, request: Request):
     spec = catalog.get(row.app_slug)
     if spec is None:
         return RedirectResponse(f"/connect/{token}")
+    if spec.auth.type == "none":
+        from .models import ConnectedAccount
+        with session() as s:
+            s.add(ConnectedAccount(workspace_id=row.workspace_id, entity_id=row.entity_id, app_slug=spec.slug,
+                                   auth_type="none", status="active", label="public access",
+                                   credentials_enc="", scopes="", meta_json="{}"))
+        return RedirectResponse(f"/connect/{token}/done")
     if spec.auth.type != "oauth2":
-        return _page("Needs a key", f'<h1>{html.escape(spec.name)} uses a key</h1>'
-                                    f'<p>This app does not offer a sign-in page, so the owner needs to add its key in the console.</p>')
+        return RedirectResponse(f"/connect/{token}")
     try:
         _sid, url = await start_oauth(row.workspace_id, row.entity_id, spec, f"/connect/{token}/done")
     except OAuthError as exc:
-        return _page("Not ready", f'<h1>One-time setup needed</h1><p>{html.escape(str(exc))}</p>')
+        return _page("Not ready", pair(spec.slug) + f'<h1>One-time setup needed</h1><p>{html.escape(str(exc))}</p>')
     with session() as s:
         live = s.scalar(select(ConnectLink).where(ConnectLink.token_hash == _hash(token)))
         if live is not None:

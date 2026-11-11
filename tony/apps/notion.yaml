@@ -22,6 +22,7 @@ actions:
     name: Search
     description: Search pages and databases shared with the integration.
     method: POST
+    tier: read
     url: https://api.notion.com/v1/search
     params:
       query: {type: string}
@@ -34,6 +35,7 @@ actions:
     name: Get page
     description: Page properties and metadata.
     method: GET
+    tier: read
     url: https://api.notion.com/v1/pages/{page_id}
     params:
       page_id: {type: string, required: true, in: path}
@@ -42,6 +44,7 @@ actions:
     name: Query database
     description: Rows from a Notion database, newest first.
     method: POST
+    tier: read
     url: https://api.notion.com/v1/databases/{database_id}/query
     params:
       database_id: {type: string, required: true, in: path}
@@ -66,7 +69,30 @@ actions:
     name: List users
     description: People in the workspace.
     method: GET
+    tier: read
     url: https://api.notion.com/v1/users
     response:
       path: results
       max_items: 30
+
+  - slug: update_page
+    tier: write
+    name: Update page
+    description: Change page properties or archive a page.
+    method: PATCH
+    url: https://api.notion.com/v1/pages/{page_id}
+    params:
+      page_id: {type: string, required: true, in: path}
+      properties: {type: object, description: 'Notion properties object'}
+      archived: {type: boolean}
+    required: [page_id]
+  - slug: append_blocks
+    tier: write
+    name: Append blocks
+    description: Add content blocks to the end of a page.
+    method: PATCH
+    url: https://api.notion.com/v1/blocks/{block_id}/children
+    params:
+      block_id: {type: string, required: true, in: path}
+      children: {type: array, description: 'Array of Notion block objects'}
+    required: [block_id, children]

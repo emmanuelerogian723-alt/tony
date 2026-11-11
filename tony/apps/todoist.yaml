@@ -11,6 +11,7 @@ auth:
 base_url: https://api.todoist.com/rest/v2
 actions:
 - slug: list_tasks
+  tier: read
   name: List tasks
   description: Active tasks.
   method: GET
@@ -18,6 +19,7 @@ actions:
   response:
     max_items: 40
 - slug: list_projects
+  tier: read
   name: List projects
   description: Projects in the account.
   method: GET

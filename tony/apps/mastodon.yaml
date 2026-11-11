@@ -10,6 +10,7 @@ auth:
 base_url: https://mastodon.social/api/v1
 actions:
 - slug: trending_tags
+  tier: read
   name: Trending tags
   description: Hashtags trending on the instance.
   method: GET
@@ -22,6 +23,7 @@ actions:
   response:
     max_items: 25
 - slug: timeline
+  tier: read
   name: Public timeline
   description: Latest public posts.
   method: GET

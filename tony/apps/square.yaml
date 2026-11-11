@@ -11,6 +11,7 @@ auth:
 base_url: https://connect.squareup.com/v2
 actions:
 - slug: list_locations
+  tier: read
   name: List locations
   description: Locations on the account.
   method: GET
@@ -19,6 +20,7 @@ actions:
     path: locations
     max_items: 20
 - slug: list_payments
+  tier: read
   name: List payments
   description: Recent payments.
   method: GET

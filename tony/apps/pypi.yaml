@@ -10,6 +10,7 @@ auth:
 base_url: https://pypi.org/pypi
 actions:
 - slug: package
+  tier: read
   name: Package info
   description: Metadata and latest release for a project.
   method: GET

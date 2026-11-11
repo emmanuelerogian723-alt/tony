@@ -11,6 +11,7 @@ auth:
 base_url: https://api.supabase.com/v1
 actions:
 - slug: list_projects
+  tier: read
   name: List projects
   description: All Supabase projects.
   method: GET
@@ -18,6 +19,7 @@ actions:
   response:
     max_items: 30
 - slug: list_organizations
+  tier: read
   name: List organisations
   description: Organisations for this token.
   method: GET

@@ -12,11 +12,13 @@ auth:
 base_url: https://gitlab.com/api/v4
 actions:
 - slug: me
+  tier: read
   name: Current user
   description: Profile of the token owner.
   method: GET
   url: https://gitlab.com/api/v4/user
 - slug: list_projects
+  tier: read
   name: List projects
   description: Projects the token can see.
   method: GET
@@ -40,6 +42,7 @@ actions:
   response:
     max_items: 25
 - slug: list_merge_requests
+  tier: read
   name: Merge requests
   description: Merge requests in a project.
   method: GET
@@ -64,6 +67,7 @@ actions:
   response:
     max_items: 25
 - slug: list_pipelines
+  tier: read
   name: Pipelines
   description: Recent CI pipelines.
   method: GET

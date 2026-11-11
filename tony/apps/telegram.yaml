@@ -11,6 +11,7 @@ auth:
 base_url: https://api.telegram.org
 actions:
 - slug: get_me
+  tier: read
   name: Bot info
   description: Identity of the bot behind the token.
   method: GET
@@ -42,6 +43,7 @@ actions:
   tier: write
   danger_note: Sends a real message to the chat.
 - slug: get_updates
+  tier: read
   name: Get updates
   description: Recent updates waiting for the bot.
   method: GET

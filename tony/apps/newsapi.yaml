@@ -13,6 +13,7 @@ auth:
 base_url: https://newsapi.org/v2
 actions:
 - slug: top_headlines
+  tier: read
   name: Top headlines
   description: Current headlines by country or category.
   method: GET
@@ -40,6 +41,7 @@ actions:
     path: articles
     max_items: 20
 - slug: search
+  tier: read
   name: Search articles
   description: Search news by keyword.
   method: GET

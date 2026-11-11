@@ -12,6 +12,7 @@ auth:
 base_url: https://api.airtable.com/v0
 actions:
 - slug: list_records
+  tier: read
   name: List records
   description: Records in a table.
   method: GET

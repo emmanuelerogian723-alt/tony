@@ -19,6 +19,7 @@ actions:
     name: List messages
     description: Message ids matching a Gmail search query.
     method: GET
+    tier: read
     url: https://gmail.googleapis.com/gmail/v1/users/me/messages
     params:
       q: {type: string, description: "Gmail query, e.g. from:boss@company.com is:unread", default: ""}
@@ -30,6 +31,7 @@ actions:
     name: Get message
     description: Full headers and snippet for a message id.
     method: GET
+    tier: read
     url: https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}
     params:
       message_id: {type: string, required: true, in: path}
@@ -49,7 +51,56 @@ actions:
     name: List labels
     description: Labels and ids in the mailbox.
     method: GET
+    tier: read
     url: https://gmail.googleapis.com/gmail/v1/users/me/labels
     response:
       path: labels
       max_items: 40
+  - slug: create_draft
+    tier: write
+    name: Create draft
+    description: Save a draft email without sending it.
+    method: POST
+    url: https://gmail.googleapis.com/gmail/v1/users/me/drafts
+    params:
+      message:
+        type: object
+        description: 'Draft wrapper, e.g. {"raw":"base64url-encoded MIME message"}'
+        required: true
+    required:
+    - message
+    response:
+      path: message
+  - slug: modify_message
+    tier: write
+    name: Change labels
+    description: Add or remove labels on a message, e.g. mark read or archive it.
+    method: POST
+    url: https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}/modify
+    params:
+      message_id:
+        type: string
+        required: true
+        in: path
+      addLabelIds:
+        type: array
+        description: Label ids to add, e.g. ["UNREAD"] or a custom label id
+      removeLabelIds:
+        type: array
+        description: Label ids to remove, e.g. ["UNREAD","INBOX"]
+    required:
+    - message_id
+  - slug: trash_message
+    tier: destructive
+    name: Move to trash
+    description: Move a message to the trash. Recoverable for 30 days.
+    method: POST
+    url: https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}/trash
+    params:
+      message_id:
+        type: string
+        required: true
+        in: path
+    required:
+    - message_id
+    danger_note: Removes the message from the inbox.

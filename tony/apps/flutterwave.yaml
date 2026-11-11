@@ -11,6 +11,7 @@ auth:
 base_url: https://api.flutterwave.com/v3
 actions:
 - slug: list_transactions
+  tier: read
   name: List transactions
   description: Recent transactions.
   method: GET
@@ -24,6 +25,7 @@ actions:
     path: data
     max_items: 25
 - slug: balances
+  tier: read
   name: Balances
   description: Wallet balances by currency.
   method: GET
@@ -44,6 +46,7 @@ actions:
   required: [tx_ref, amount, redirect_url, customer]
   danger_note: Creates a live payment request.
 - slug: verify_transaction
+  tier: read
   name: Verify transaction
   description: Confirm a payment by its transaction id.
   method: GET

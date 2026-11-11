@@ -10,6 +10,7 @@ auth:
 base_url: https://jsonplaceholder.typicode.com
 actions:
 - slug: list_posts
+  tier: read
   name: List posts
   description: Read the first posts.
   method: GET
@@ -20,6 +21,7 @@ actions:
       description: How many posts to return.
       default: 5
 - slug: get_post
+  tier: read
   name: Get a post
   description: Read one post by id.
   method: GET

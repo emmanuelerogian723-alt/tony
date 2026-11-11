@@ -11,11 +11,13 @@ auth:
 base_url: https://api.paystack.co
 actions:
 - slug: balance
+  tier: read
   name: Balance
   description: Merchant balance by currency.
   method: GET
   url: https://api.paystack.co/balance
 - slug: list_transactions
+  tier: read
   name: List transactions
   description: Recent transactions with status.
   method: GET
@@ -29,6 +31,7 @@ actions:
     path: data
     max_items: 25
 - slug: list_customers
+  tier: read
   name: List customers
   description: Customers on the account.
   method: GET
@@ -42,6 +45,7 @@ actions:
     path: data
     max_items: 25
 - slug: verify_transaction
+  tier: read
   name: Verify transaction
   description: Confirm a transaction by reference.
   method: GET

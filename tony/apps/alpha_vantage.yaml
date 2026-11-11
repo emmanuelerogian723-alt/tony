@@ -13,6 +13,7 @@ auth:
 base_url: https://www.alphavantage.co/query
 actions:
 - slug: global_quote
+  tier: read
   name: Global quote
   description: Latest price for an equity symbol.
   method: GET
@@ -29,6 +30,7 @@ actions:
   required:
   - symbol
 - slug: fx_rate
+  tier: read
   name: FX rate
   description: Exchange rate between two currencies.
   method: GET

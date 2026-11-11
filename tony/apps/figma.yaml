@@ -12,11 +12,13 @@ auth:
 base_url: https://api.figma.com/v1
 actions:
 - slug: me
+  tier: read
   name: Current user
   description: Profile of the token owner.
   method: GET
   url: https://api.figma.com/v1/me
 - slug: file_info
+  tier: read
   name: File info
   description: Metadata for a Figma file.
   method: GET
@@ -33,3 +35,26 @@ actions:
       default: 1
   required:
   - file_key
+
+- slug: post_comment
+  tier: write
+  name: Post comment
+  description: Leave a comment on a Figma file.
+  method: POST
+  url: https://api.figma.com/v1/files/{file_key}/comments
+  params:
+    file_key:
+      type: string
+      required: true
+      in: path
+    message:
+      type: string
+      description: Comment text
+      required: true
+    comment_id:
+      type: string
+      description: Reply to an existing comment thread
+  required:
+  - file_key
+  - message
+  danger_note: Posts a visible comment in the user's Figma file.

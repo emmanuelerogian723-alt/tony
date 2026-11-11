@@ -19,11 +19,13 @@ auth:
 base_url: https://graph.microsoft.com/v1.0
 actions:
 - slug: me
+  tier: read
   name: Current user
   description: Profile of the signed-in account.
   method: GET
   url: https://graph.microsoft.com/v1.0/me
 - slug: list_messages
+  tier: read
   name: List messages
   description: Latest messages in the mailbox.
   method: GET
@@ -44,6 +46,7 @@ actions:
     path: value
     max_items: 20
 - slug: list_events
+  tier: read
   name: List events
   description: Upcoming calendar events.
   method: GET

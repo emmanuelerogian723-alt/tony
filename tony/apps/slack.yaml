@@ -18,6 +18,7 @@ actions:
     name: List channels
     description: Public channels in the workspace with ids and topics.
     method: GET
+    tier: read
     url: https://slack.com/api/conversations.list
     params:
       limit: {type: integer, default: 50, maximum: 200}
@@ -42,6 +43,7 @@ actions:
     name: List users
     description: Workspace members with display names and ids.
     method: GET
+    tier: read
     url: https://slack.com/api/users.list
     params:
       limit: {type: integer, default: 100, maximum: 200}
@@ -52,6 +54,7 @@ actions:
     name: Search messages
     description: Full-text search across channels the user can see.
     method: GET
+    tier: read
     url: https://slack.com/api/search.messages
     params:
       query: {type: string, required: true}
@@ -64,6 +67,7 @@ actions:
     name: Channel history
     description: Recent messages in a channel.
     method: GET
+    tier: read
     url: https://slack.com/api/conversations.history
     params:
       channel: {type: string, required: true}

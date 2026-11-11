@@ -10,6 +10,7 @@ auth:
 base_url: https://huggingface.co/api
 actions:
 - slug: search_models
+  tier: read
   name: Search models
   description: Most downloaded models for a query.
   method: GET
@@ -32,6 +33,7 @@ actions:
   response:
     max_items: 15
 - slug: model_info
+  tier: read
   name: Model info
   description: Metadata, tags and downloads for a model.
   method: GET
@@ -45,6 +47,7 @@ actions:
   required:
   - model_id
 - slug: trending
+  tier: read
   name: Trending models
   description: Trending models right now.
   method: GET

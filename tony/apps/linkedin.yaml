@@ -18,6 +18,7 @@ auth:
 base_url: https://api.linkedin.com/v2
 actions:
 - slug: me
+  tier: read
   name: Current user
   description: OpenID profile of the member.
   method: GET

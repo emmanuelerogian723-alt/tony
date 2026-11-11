@@ -20,6 +20,7 @@ auth:
 base_url: https://www.googleapis.com/calendar/v3
 actions:
 - slug: list_calendars
+  tier: read
   name: List calendars
   description: Calendars visible to the user.
   method: GET
@@ -28,6 +29,7 @@ actions:
     path: items
     max_items: 25
 - slug: list_events
+  tier: read
   name: List events
   description: Events on a calendar in a window.
   method: GET

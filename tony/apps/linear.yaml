@@ -12,6 +12,7 @@ auth:
 base_url: https://api.linear.app/graphql
 actions:
 - slug: viewer
+  tier: read
   name: Current user
   description: The authenticated Linear user.
   method: POST
@@ -25,6 +26,7 @@ actions:
   response:
     path: data.viewer
 - slug: issues
+  tier: read
   name: List issues
   description: Recent issues with state and assignee.
   method: POST
@@ -38,3 +40,47 @@ actions:
   response:
     path: data.issues.nodes
     max_items: 25
+
+- slug: create_issue
+  tier: write
+  name: Create issue
+  description: Open a new issue in a team.
+  method: POST
+  url: https://api.linear.app/graphql
+  params:
+    query:
+      type: string
+      description: GraphQL mutation. Leave the default.
+      default: 'mutation IssueCreate($input: IssueCreateInput!){ issueCreate(input:$input){ success issue { id identifier title url } } }'
+      in: body
+    variables:
+      type: object
+      description: 'GraphQL variables, e.g. {"input":{"teamId":"TEAM_ID","title":"Fix login","description":"Steps..."}}'
+      required: true
+      in: body
+  required:
+  - variables
+  response:
+    path: data.issueCreate
+  danger_note: Creates a real issue in the user's Linear workspace.
+- slug: comment_on_issue
+  tier: write
+  name: Comment on issue
+  description: Post a comment on an existing issue.
+  method: POST
+  url: https://api.linear.app/graphql
+  params:
+    query:
+      type: string
+      description: GraphQL mutation. Leave the default.
+      default: 'mutation CommentCreate($input: CommentCreateInput!){ commentCreate(input:$input){ success comment { id url } } }'
+      in: body
+    variables:
+      type: object
+      description: 'GraphQL variables, e.g. {"input":{"issueId":"ISSUE_ID","body":"Looking into this"}}'
+      required: true
+      in: body
+  required:
+  - variables
+  response:
+    path: data.commentCreate

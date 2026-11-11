@@ -11,11 +11,13 @@ auth:
 base_url: https://app.asana.com/api/1.0
 actions:
 - slug: me
+  tier: read
   name: Current user
   description: Profile of the token owner.
   method: GET
   url: https://app.asana.com/api/1.0/users/me
 - slug: list_projects
+  tier: read
   name: List projects
   description: Projects visible to the user.
   method: GET
@@ -29,6 +31,7 @@ actions:
     path: data
     max_items: 25
 - slug: list_tasks
+  tier: read
   name: List tasks
   description: Tasks in a project.
   method: GET

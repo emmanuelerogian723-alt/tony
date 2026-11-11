@@ -12,6 +12,7 @@ actions:
     name: Search articles
     description: Full-text search across Wikipedia.
     method: GET
+    tier: read
     url: https://en.wikipedia.org/w/api.php
     params:
       action: {type: string, default: query, in: query}
@@ -26,6 +27,7 @@ actions:
     name: Article summary
     description: Short extract plus thumbnail for a page title.
     method: GET
+    tier: read
     url: https://en.wikipedia.org/api/rest_v1/page/summary/{title}
     params:
       title: {type: string, description: Exact page title, required: true, in: path}
@@ -34,6 +36,7 @@ actions:
     name: On this day
     description: Historical events for a date (MM/DD).
     method: GET
+    tier: read
     url: https://en.wikipedia.org/api/rest_v1/feed/onthisday/events/{month}/{day}
     params:
       month: {type: integer, required: true, in: path}

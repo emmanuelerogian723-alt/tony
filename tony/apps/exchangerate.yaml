@@ -12,6 +12,7 @@ actions:
     name: Latest rates
     description: Current exchange rates for one base currency.
     method: GET
+    tier: read
     url: https://open.er-api.com/v6/latest/{base}
     params:
       base: {type: string, default: USD, required: true, in: path}

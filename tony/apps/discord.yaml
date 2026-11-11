@@ -17,11 +17,13 @@ auth:
 base_url: https://discord.com/api/v10
 actions:
 - slug: me
+  tier: read
   name: Current user
   description: Profile of the signed-in user.
   method: GET
   url: https://discord.com/api/v10/users/@me
 - slug: list_guilds
+  tier: read
   name: List servers
   description: Servers the user belongs to.
   method: GET
@@ -29,6 +31,7 @@ actions:
   response:
     max_items: 40
 - slug: list_channels
+  tier: read
   name: List channels
   description: Channels in a server.
   method: GET

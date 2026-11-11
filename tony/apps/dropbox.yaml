@@ -11,11 +11,13 @@ auth:
 base_url: https://api.dropboxapi.com/2
 actions:
 - slug: account
+  tier: read
   name: Account info
   description: Name, email and plan.
   method: POST
   url: https://api.dropboxapi.com/2/users/get_current_account
 - slug: list_folder
+  tier: read
   name: List folder
   description: Entries in a folder.
   method: POST

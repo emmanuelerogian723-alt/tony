@@ -10,6 +10,7 @@ auth:
 base_url: https://registry.npmjs.org
 actions:
 - slug: package
+  tier: read
   name: Package info
   description: Latest version, description and maintainers.
   method: GET
@@ -23,6 +24,7 @@ actions:
   required:
   - package
 - slug: search
+  tier: read
   name: Search packages
   description: Search the registry.
   method: GET
@@ -42,6 +44,7 @@ actions:
     path: objects
     max_items: 15
 - slug: downloads
+  tier: read
   name: Download counts
   description: Last-week downloads for a package.
   method: GET

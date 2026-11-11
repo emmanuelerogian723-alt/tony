@@ -11,11 +11,13 @@ auth:
 base_url: https://api.sendgrid.com/v3
 actions:
 - slug: profile
+  tier: read
   name: Account profile
   description: Account details for the API key.
   method: GET
   url: https://api.sendgrid.com/v3/user/profile
 - slug: stats
+  tier: read
   name: Email stats
   description: Aggregated delivery stats for a date range.
   method: GET

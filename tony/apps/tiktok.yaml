@@ -19,6 +19,7 @@ actions:
     name: Creator profile
     description: Display name, avatar, follower count and bio for the connected creator.
     method: GET
+    tier: read
     url: https://open.tiktokapis.com/v2/user/info/
     params:
       fields: {type: string, default: "open_id,union_id,avatar_url,display_name,bio_description,is_verified,follower_count,following_count,likes_count,video_count"}
@@ -26,6 +27,7 @@ actions:
     name: List videos
     description: The creator's recent videos with captions, views, likes and shares.
     method: POST
+    tier: read
     url: https://open.tiktokapis.com/v2/video/list/
     params:
       max_count: {type: integer, default: 10, maximum: 20}
@@ -39,6 +41,7 @@ actions:
     name: Video info (no login)
     description: Real metadata for any TikTok video URL — title, author, thumbnail and embed. Uses TikTok oEmbed, so no developer account is needed.
     method: GET
+    tier: read
     url: https://www.tiktok.com/oembed
     params:
       url: {type: string, required: true, description: "Full TikTok video URL"}
@@ -51,6 +54,7 @@ actions:
     name: Trending on TikTok now
     description: What people are currently posting about on TikTok — pulled live from trending hashtags, sounds and videos in the news and creator ecosystem. Returns titles, links and snippets.
     method: GET
+    tier: read
     url: https://news.google.com/rss/search
     params:
       q: {type: string, default: "tiktok trending hashtags today", description: "Search query"}

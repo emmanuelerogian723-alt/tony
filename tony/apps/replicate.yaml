@@ -11,6 +11,7 @@ auth:
 base_url: https://api.replicate.com/v1
 actions:
 - slug: list_predictions
+  tier: read
   name: List predictions
   description: Recent prediction runs and their status.
   method: GET

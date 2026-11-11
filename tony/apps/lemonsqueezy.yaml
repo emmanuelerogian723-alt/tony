@@ -13,6 +13,7 @@ default_headers:
   Accept: application/vnd.api+json
 actions:
 - slug: list_orders
+  tier: read
   name: List orders
   description: Recent orders.
   method: GET
@@ -21,6 +22,7 @@ actions:
     path: data
     max_items: 25
 - slug: list_products
+  tier: read
   name: List products
   description: Products in the store.
   method: GET

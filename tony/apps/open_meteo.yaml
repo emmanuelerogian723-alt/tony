@@ -12,6 +12,7 @@ actions:
     name: Current weather
     description: Temperature, wind and condition code right now.
     method: GET
+    tier: read
     url: https://api.open-meteo.com/v1/forecast
     params:
       latitude: {type: number, required: true}
@@ -22,6 +23,7 @@ actions:
     name: Daily forecast
     description: Up to 16 days of highs, lows and precipitation.
     method: GET
+    tier: read
     url: https://api.open-meteo.com/v1/forecast
     params:
       latitude: {type: number, required: true}

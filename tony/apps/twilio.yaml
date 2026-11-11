@@ -11,6 +11,7 @@ auth:
 base_url: https://api.twilio.com/2010-04-01
 actions:
 - slug: list_messages
+  tier: read
   name: List messages
   description: Recent messages on the account.
   method: GET

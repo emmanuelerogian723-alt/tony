@@ -12,6 +12,7 @@ actions:
     name: Top stories
     description: Current front-page story IDs, ranked.
     method: GET
+    tier: read
     url: https://hacker-news.firebaseio.com/v0/topstories.json
     response:
       max_items: 30
@@ -19,6 +20,7 @@ actions:
     name: Story detail
     description: Title, score, author, URL and comment count for one story.
     method: GET
+    tier: read
     url: https://hacker-news.firebaseio.com/v0/item/{id}.json
     params:
       id: {type: integer, description: HN item id, required: true, in: path}
@@ -27,6 +29,7 @@ actions:
     name: Newest stories
     description: Most recently submitted story IDs.
     method: GET
+    tier: read
     url: https://hacker-news.firebaseio.com/v0/newstories.json
     response:
       max_items: 30

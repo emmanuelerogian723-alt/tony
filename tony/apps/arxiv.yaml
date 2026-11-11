@@ -10,6 +10,7 @@ auth:
 base_url: https://export.arxiv.org/api
 actions:
 - slug: search
+  tier: read
   name: Search papers
   description: Query the arXiv API.
   method: GET

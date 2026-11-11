@@ -11,6 +11,7 @@ auth:
 base_url: https://api.groq.com/openai/v1
 actions:
 - slug: list_models
+  tier: read
   name: List models
   description: Models served by Groq.
   method: GET

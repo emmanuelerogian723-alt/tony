@@ -11,11 +11,13 @@ auth:
 base_url: https://api.cloudflare.com/client/v4
 actions:
 - slug: verify_token
+  tier: read
   name: Verify token
   description: Check that the API token is active.
   method: GET
   url: https://api.cloudflare.com/client/v4/user/tokens/verify
 - slug: list_zones
+  tier: read
   name: List zones
   description: Domains on the account.
   method: GET
@@ -29,6 +31,7 @@ actions:
     path: result
     max_items: 30
 - slug: list_dns
+  tier: read
   name: List DNS records
   description: DNS records for a zone.
   method: GET

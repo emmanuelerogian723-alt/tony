@@ -19,6 +19,7 @@ auth:
 base_url: https://sheets.googleapis.com/v4
 actions:
 - slug: read_range
+  tier: read
   name: Read range
   description: Values from an A1 range.
   method: GET

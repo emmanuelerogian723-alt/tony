@@ -41,10 +41,23 @@ def _client_creds(spec: AppSpec) -> tuple[str, str]:
     if stored:
         stored_cid = _real_cred(stored.get("client_id", ""))
         stored_secret = _real_cred(stored.get("client_secret", ""))
-        if stored_cid:
-            return stored_cid, stored_secret or secret
+        if stored_cid and stored_secret:
+            return stored_cid, stored_secret
+    # One Google OAuth client covers every Google app, so a single paste on any
+    # of those rows unlocks the whole family.
+    if spec.slug in GOOGLE_FAMILY:
+        for sibling in sorted(GOOGLE_FAMILY - {spec.slug}):
+            row = stored_provider(sibling)
+            if not row:
+                continue
+            sib_cid = _real_cred(row.get("client_id", ""))
+            sib_secret = _real_cred(row.get("client_secret", ""))
+            if sib_cid and sib_secret:
+                return sib_cid, sib_secret
     return _real_cred(cid), secret
 
+
+GOOGLE_FAMILY = {"gmail", "google_drive", "google_calendar", "google_sheets", "youtube", "google"}
 
 PLACEHOLDER_CREDS = {"cid_test", "test", "test_id", "changeme", "your_client_id", "your-client-id",
                      "client_id", "xxx", "todo", "none", "null", "demo"}

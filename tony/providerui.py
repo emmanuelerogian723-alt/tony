@@ -85,7 +85,8 @@ function card(p){
    +'<span class="pill '+(p.ready?'ok':'')+'">'+(p.ready?'ready':'not set')+'</span></div>'
    +'<div class="acts"><button class="btn link" type="button">'+(p.ready?'Update credentials':'Add credentials')+'</button>'
    +(p.docs?'<a class="btn link get" href="'+esc(p.docs)+'" target="_blank" rel="noopener">Get credentials ↗</a>':'')
-   +(p.env&&p.env.length?'<span class="envmono">'+esc(p.env.join(' · '))+'</span>':'')+'</div>'
+   +(p.env&&p.env.length?'<span class="envmono">'+esc(p.env.join(' · '))+'</span>':'')
+   +(p.slug==='gmail'?'<span class="envmono" style="color:#1a7f4b">one paste covers Gmail, Drive, Calendar, Sheets and YouTube</span>':'')+'</div>'
    +'<div class="form"><div class="field"><label>client id</label><input class="cid" placeholder="Iv1.abc123"></div>'
    +'<div class="field"><label>client secret</label><input class="sec" type="password" placeholder="optional for public clients"></div>'
    +'<div class="actions"><button class="btn hot save" type="button">Save</button>'

@@ -21,9 +21,19 @@ def project_id() -> str:
 
 
 def google_oauth_ready() -> bool:
-    """True when Tony has its own Google OAuth client, so app connections never need Firebase."""
-    return bool((os.getenv("GOOGLE_CLIENT_ID") or "").strip()
-                and (os.getenv("GOOGLE_CLIENT_SECRET") or "").strip())
+    """True when Tony has its own Google OAuth client, so app connections never need Firebase.
+
+    The client can live in the environment or in the owner-registered provider
+    store; either way Google apps then sign in on Tony's own domain.
+    """
+    if (os.getenv("GOOGLE_CLIENT_ID") or "").strip() and (os.getenv("GOOGLE_CLIENT_SECRET") or "").strip():
+        return True
+    try:
+        from .oauth import provider_ready
+        return any(provider_ready(slug) for slug in
+                   ("gmail", "google_drive", "google_calendar", "google_sheets"))
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def web_config() -> dict[str, Any]:

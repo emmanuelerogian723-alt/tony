@@ -240,9 +240,35 @@ _ALIASES = {
 }
 
 
-def provider_for(slug: str) -> Provider | None:
+def _norm(value: str) -> str:
+    return "".join(ch for ch in (value or "").lower() if ch.isalnum())
+
+
+_PREFIXES = ("googleapis", "google", "api", "www", "microsoft", "ms")
+
+
+def canonical(slug: str) -> str:
+    """Map catalog noise ("googleapis-gmail", "gmail-api", "google-mail") to the real app."""
     key = (slug or "").strip().lower()
-    return PROVIDERS.get(key) or PROVIDERS.get(_ALIASES.get(key, ""))
+    if key in PROVIDERS:
+        return key
+    if key in _ALIASES:
+        return _ALIASES[key]
+    bare = _norm(key)
+    for prefix in _PREFIXES:
+        if bare.startswith(prefix) and bare != prefix:
+            bare = bare[len(prefix):]
+    for suffix in ("api", "oauth", "app", "integration", "connector"):
+        if bare.endswith(suffix) and len(bare) > len(suffix) + 2:
+            bare = bare[: -len(suffix)]
+    for cand in PROVIDERS:
+        if _norm(cand) == bare or _norm(PROVIDERS[cand].name) == bare:
+            return cand
+    return key
+
+
+def provider_for(slug: str) -> Provider | None:
+    return PROVIDERS.get(canonical(slug)) or None
 
 
 def credentials(provider: Provider) -> tuple[str, str]:

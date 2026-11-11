@@ -393,8 +393,30 @@ class Catalog:
         except Exception:  # pragma: no cover
             pass
 
+
     # ── lookups ──────────────────────────────────────────────────────────
         self._mark_shadowed()
+        self._apply_managed_aliases()
+
+    def _apply_managed_aliases(self) -> None:
+        """Duplicate imports of a managed app resolve to the managed one.
+
+        Without this an agent can rank "googleapis-gmail" above "gmail", find no
+        account attached to the stub, and wrongly tell the user Gmail is not
+        connected. Runs after the shadow map so it is never overwritten.
+        """
+        try:
+            from . import provider_registry as managed
+        except Exception:  # pragma: no cover
+            return
+        self.alias_of = getattr(self, "alias_of", {})
+        for slug in list(self.apps.keys()):
+            try:
+                canon = managed.canonical(slug)
+            except Exception:  # noqa: BLE001
+                continue
+            if canon != slug and canon in self.apps:
+                self.alias_of.setdefault(slug, canon)
 
     def _mark_shadowed(self) -> None:
         """Same product imported from several catalogs: keep the best, hide the rest.

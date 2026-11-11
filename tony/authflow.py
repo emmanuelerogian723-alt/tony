@@ -65,7 +65,19 @@ async def one_click_connect(app_slug: str, request: Request, entity_id: str = "d
 
 @router.get("/connections", response_class=HTMLResponse, include_in_schema=False)
 def connections_page(request: Request):
-    return HTMLResponse(dashboard_html())
+    import json as _json
+
+    from . import firebase
+
+    cfg = firebase.web_config()
+    page = dashboard_html()
+    if cfg["api_key"]:
+        bits = ('<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>'
+                '<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>'
+                '<script src="/static/connect.js"></script>'
+                f'<script>window.TONY_FB={_json.dumps(cfg)};</script>')
+        page = page.replace("</head>", bits + "</head>", 1)
+    return HTMLResponse(page)
 
 
 def setup_page(spec: Any, reason: str) -> str:
@@ -266,7 +278,7 @@ function card(p){
         ${on?`<button class="btn ghost" data-reconnect="${esc(p.app)}" ${p.ready?'':'disabled'}>Reconnect</button>
               <button class="btn ghost" data-add="${esc(p.app)}" ${p.ready?'':'disabled'}>Add account</button>
               <button class="btn ghost" data-off="${esc(mine[0].id)}">Disconnect</button>`
-            :`<button class="btn hot" data-connect="${esc(p.app)}" ${p.ready?'':'disabled'}>Connect</button>
+            :`<button class="btn hot" data-connect="${esc(p.app)}" ${(p.ready||p.canGoogle)?'':'disabled'}>Connect</button>
               ${p.ready?'':`<a class="btn ghost" href="/providers">Set up</a>`}`}
       </div>
       ${p.scopes&&p.scopes.length?`<div class="scopes">${p.scopes.slice(0,4).map(s=>`<span class="scope">${esc(s.split('/').pop())}</span>`).join('')}${p.scopes.length>4?`<span class="scope">+${p.scopes.length-4}</span>`:''}</div>`:''}
@@ -300,17 +312,42 @@ function bind(){
     if(!confirm('Disconnect this account? Tony will lose access and the token is revoked.'))return;
     b.disabled=true;await api('/v1/connections/id/'+b.dataset.off,{method:'DELETE'});await load();});
 }
+async function googleConnect(slug,isNew){
+  const p=providers.find(x=>x.app===slug)||{};
+  const b=$('#moauth');b.disabled=true;b.textContent='Opening Google…';$('#merr').textContent='';
+  try{
+    sessionStorage.setItem('tony_dash_conn',JSON.stringify({slug}));
+    const token=await TonyConnect.google(p.scopes||[],slug);
+    if(!token)return;
+    const r=await api(`/v1/connections/${slug}/firebase-token?entity_id=${ENTITY}${isNew?'&new_account=1':''}`,
+      {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({access_token:token})});
+    if(r.connection){sessionStorage.removeItem('tony_dash_conn');$('#mask').classList.remove('on');await load();return}
+    $('#merr').textContent=typeof r.detail==='string'?r.detail:'Could not connect that account.';
+  }catch(e){
+    $('#merr').textContent=String((e&&(e.code||e.message))||'Google sign-in failed').replace('auth/','');
+  }
+  b.disabled=false;b.textContent='Continue with Google';sessionStorage.removeItem('tony_dash_conn');
+}
 async function start(slug,isNew){
   const p=providers.find(x=>x.app===slug)||{app:slug,name:pname(slug),ready:false};
-  current={slug,isNew};
+  current={slug,isNew,mode:p.ready?'managed':(p.canGoogle?'google':'setup')};
   $('#mico').innerHTML=icon(slug);$('#mh').textContent='Connect '+p.name;
-  $('#mp').textContent='A pop-up will open on '+p.name+"'s own sign-in page. Approve access and you will come straight back.";
+  $('#mp').textContent=p.ready
+    ? 'A pop-up will open on '+p.name+"'s own sign-in page. Approve access and you will come straight back."
+    : p.canGoogle
+      ? 'Sign in with the Google account you want Tony to use. You approve the permissions on the Google consent screen.'
+      : "This app needs the owner to finish its one-time provider setup before anyone can sign in.";
   $('#merr').textContent='';$('#mkey').style.display='none';$('#mbase').style.display='none';
   $('#moauth').style.display='';$('#mor').style.display='';$('#mfallback').style.display='';
+  const g=current.mode==='google', st=current.mode==='setup';
+  $('#moauth').textContent=g?'Continue with Google':'Continue to sign in';
+  $('#moauth').disabled=st; $('#mor').style.display=(g||st)?'none':'';
   $('#mask').classList.add('on');
 }
 $('#moauth').onclick=async()=>{
   if(!current)return;
+  if(current.mode==='google')return googleConnect(current.slug,current.isNew);
+  if(current.mode==='setup')return;
   const slug=current.slug,isNew=current.isNew;
   const w=window.open('about:blank','tony_auth','width=540,height=720');
   const r=await api(`/v1/connections/${slug}/start?entity_id=${ENTITY}&redirect_after=/connections&new_account=${isNew}`,{method:'POST'});
@@ -337,7 +374,18 @@ $('#q').oninput=render;
 
 async function load(){
   const [p,c]=await Promise.all([api('/v1/providers'),api('/v1/connections?entity_id='+ENTITY)]);
-  providers=p.providers||[];conns=c.connections||[];
+  providers=(p.providers||[]).map(x=>{x.canGoogle=!!(window.TONY_FB&&window.TONY_FB.api_key)&&/^google|gmail/.test(x.app);return x});
+  conns=c.connections||[];
+  (async()=>{try{
+    if(!window.TonyConnect)return;
+    const t=await TonyConnect.finishRedirect();
+    if(!t)return;
+    const pend=JSON.parse(sessionStorage.getItem('tony_dash_conn')||'{}');
+    if(!pend.slug)return;
+    await api(`/v1/connections/${pend.slug}/firebase-token?entity_id=${ENTITY}`,
+      {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({access_token:t})});
+    sessionStorage.removeItem('tony_dash_conn');await load();
+  }catch(e){}})();
   render();
   const ev=await api('/v1/connections/events?limit=8');
   const rows=ev.events||[];
@@ -351,3 +399,117 @@ setInterval(async()=>{ if(current){const c=await api('/v1/connections?entity_id=
   if(row){close();await load()}}},2500);
 if(filterApp){const p=providers.find(x=>x.app===filterApp);if(p)setTimeout(()=>start(filterApp,false),400)}
 </script></body></html>"""
+
+
+# ── connecting a provider account through Firebase Auth ────────────────────────
+# The deployment already trusts Firebase for user sign-in. The same Google
+# identity can be asked for consent to an app's scopes in the browser, which
+# means a user connects Gmail with one tap and Tony never stores a client secret.
+
+GOOGLE_AUTH = "https://www.googleapis.com/auth/"
+
+
+def _scope_urls(scopes: list[str]) -> list[str]:
+    out = []
+    for raw in scopes or []:
+        s = (raw or "").strip()
+        if not s:
+            continue
+        if s.startswith("http"):
+            out.append(s)
+        elif s == "email":
+            out.append("https://www.googleapis.com/auth/userinfo.email")
+        elif s == "profile":
+            out.append("https://www.googleapis.com/auth/userinfo.profile")
+        elif s == "openid":
+            out.append("openid")
+        else:
+            out.append(GOOGLE_AUTH + s)
+    return out
+
+
+@router.get("/v1/firebase/config", include_in_schema=False)
+def firebase_web_config() -> dict[str, Any]:
+    from . import firebase
+
+    cfg = firebase.web_config()
+    return {"ready": bool(cfg["api_key"]), **cfg}
+
+
+@router.post("/v1/connections/{app_slug}/firebase-token", include_in_schema=False)
+async def connect_with_firebase(app_slug: str, body: dict[str, Any], request: Request,
+                               entity_id: str = "default") -> dict[str, Any]:
+    """Store a Google access token the browser obtained with the user's consent."""
+    import httpx
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import select
+    from .crypto import encrypt_json
+    from .db import session
+    from .models import ConnectedAccount
+    from .oauth import audit, public_redact, set_account_meta
+
+    spec = catalog.resolve(app_slug) or catalog.get(app_slug)
+    if spec is None:
+        raise HTTPException(404, detail=f"Unknown app '{app_slug}'")
+    if spec.auth.type != "oauth2" or "accounts.google.com" not in (spec.auth.authorize_url or ""):
+        raise HTTPException(400, detail="This app cannot use Google sign-in.")
+    token = str(body.get("access_token") or "").strip()
+    if not token:
+        raise HTTPException(400, detail="Missing access token.")
+    workspace_id = _workspace(request)
+
+    need = set(_scope_urls(spec.auth.scopes))
+    async with httpx.AsyncClient(timeout=25) as client:
+        info_resp = await client.get("https://oauth2.googleapis.com/tokeninfo",
+                                     params={"access_token": token})
+        if info_resp.status_code >= 400:
+            raise HTTPException(400, detail="That Google session expired. Please sign in again.")
+        info = info_resp.json()
+        granted = set(str(info.get("scope") or "").split())
+        missing = sorted(need - granted)
+        if missing:
+            short = ", ".join(s.rsplit("/", 1)[-1] for s in missing[:4])
+            raise HTTPException(400, detail=f"Google did not grant: {short}. Approve those permissions and try again.")
+        who = await client.get("https://www.googleapis.com/oauth2/v3/userinfo",
+                               headers={"Authorization": f"Bearer {token}"})
+
+    profile = who.json() if who.status_code < 400 else {}
+    identity = str(profile.get("email") or info.get("email") or "").strip()
+    expires_in = int(info.get("expires_in") or 3300)
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=max(expires_in - 60, 60))
+    creds = {
+        "access_token": token,
+        "refresh_token": "",
+        "token_type": "Bearer",
+        "scope": " ".join(sorted(granted)),
+        "raw": {"expires_in": expires_in},
+    }
+
+    with session() as s:
+        account = s.scalars(select(ConnectedAccount).where(
+            ConnectedAccount.workspace_id == workspace_id,
+            ConnectedAccount.entity_id == entity_id,
+            ConnectedAccount.app_slug == spec.slug,
+        ).order_by(ConnectedAccount.created_at.asc())).first()
+        if account is None:
+            account = ConnectedAccount(workspace_id=workspace_id, entity_id=entity_id,
+                                       app_slug=spec.slug)
+            s.add(account)
+        account.auth_type = "oauth2"
+        account.status = "active"
+        account.credentials_enc = encrypt_json(creds)
+        account.scopes = creds["scope"]
+        account.expires_at = expires_at
+        account.label = (identity or profile.get("name") or spec.name)[:160]
+        s.flush()
+        set_account_meta(account, identity=identity, name=str(profile.get("name") or "")[:120],
+                         picture=str(profile.get("picture") or ""),
+                         connected_via="firebase-google", provider=spec.slug)
+        s.flush()
+        audit(account.workspace_id, account.entity_id, account.app_slug, "connect",
+              account.id, account.label, f"google consent via firebase · {creds['scope'][:200]}")
+        payload = public_redact(account)
+
+    return {"connection": payload, "identity": identity,
+            "expires_at": expires_at.isoformat(), "refreshable": False}

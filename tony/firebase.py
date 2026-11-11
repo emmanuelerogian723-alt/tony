@@ -20,6 +20,16 @@ def project_id() -> str:
     return (os.getenv("FIREBASE_PROJECT_FALLBACK") or "ominiassist-ai").strip()
 
 
+def web_config() -> dict[str, str]:
+    """Public Firebase web settings. The API key is a public identifier, not a secret."""
+    project = project_id()
+    return {
+        "api_key": (os.getenv("FIREBASE_API_KEY") or "").strip(),
+        "auth_domain": (os.getenv("FIREBASE_AUTH_DOMAIN") or f"{project}.firebaseapp.com").strip(),
+        "project_id": project,
+    }
+
+
 def enabled() -> bool:
     return bool(os.getenv("FIREBASE_API_KEY") or os.getenv("FIREBASE_PROJECT_ID"))
 

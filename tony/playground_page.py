@@ -348,6 +348,61 @@ async function loadProviders(){
   const r=await api('/v1/providers');
   (r.providers||[]).forEach(p=>PROVIDERS[p.app]=p);
 }
+
+function canGoogle(app){
+  const prov=PROVIDERS[app.slug]||{};
+  const isGoogle=/accounts\.google\.com/.test((app.auth&&app.auth.authorize_url)||'')||/^google_|^gmail$/.test(app.slug);
+  return !!(window.TonyConnect&&TonyConnect.config&&TonyConnect.config.api_key&&isGoogle&&prov.managed_by!=='required');
+}
+function openGoogleModal(app,name){
+  pendingConn.mode='google';
+  $('#mApp').innerHTML=tile(app.slug,52,0);
+  $('#mTitle').textContent='Connect '+name;
+  $('#mSub').textContent='Sign in with your Google account to let Tony use your own '+name+'. You approve the permissions on the Google consent screen, and Tony never sees your password.';
+  $('#mErr').textContent=''; $('#mTok').value='';
+  $('#mTokWrap').style.display='none'; $('#mTokLink').style.display='none'; $('#mOr').style.display='none';
+  $('#mSave').style.display='none';
+  $('#mOauth').style.display=''; $('#mOauth').textContent='Continue with Google'; $('#mOauth').disabled=false;
+  $('#mDocs').style.display='none';
+  $('#mask').classList.add('on');
+}
+function openSetupModal(app,name){
+  pendingConn.mode='setup';
+  $('#mApp').innerHTML=tile(app.slug,52,0);
+  $('#mTitle').textContent='Connect '+name;
+  $('#mSub').textContent='This app needs Tony\'s one-time provider setup before anyone can sign in. No keys needed from you.';
+  $('#mTokWrap').style.display='none'; $('#mTokLink').style.display='none'; $('#mOr').style.display='none';
+  $('#mSave').style.display='none'; $('#mOauth').style.display='none';
+  $('#mErr').textContent='';
+  $('#mDocs').href='/providers'; $('#mDocs').style.display=''; $('#mDocs').textContent='Open provider setup';
+  $('#mask').classList.add('on');
+}
+async function runGoogle(slug){
+  const app=await api('/v1/apps/'+encodeURIComponent(slug));
+  const prov=PROVIDERS[slug]||PROVIDERS[(slug||'').replace(/-/g,'_')]||{};
+  const scopes=prov.scopes||(app.auth&&app.auth.scopes)||[];
+  $('#mOauth').disabled=true; $('#mOauth').textContent='Opening Google…'; $('#mErr').textContent='';
+  try{
+    sessionStorage.setItem('tony_pending_conn',JSON.stringify({slug,goal:(pendingConn&&pendingConn.goal)||''}));
+    const token=await TonyConnect.google(scopes,slug);
+    if(!token) return;                       // redirect flow: finished after reload
+    await postGoogle(slug,token);
+  }catch(e){
+    const code=String((e&&(e.code||e.message))||'Google sign-in failed').replace('auth/','');
+    $('#mErr').textContent=code==='popup-closed-by-user'?'Sign-in was cancelled.':code;
+    $('#mOauth').disabled=false; $('#mOauth').textContent='Continue with Google';
+    sessionStorage.removeItem('tony_pending_conn');
+  }
+}
+async function postGoogle(slug,token){
+  const r=await api('/v1/connections/'+encodeURIComponent(slug)+'/firebase-token?entity_id='+ENTITY,
+    {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({access_token:token})});
+  if(r.connection){ sessionStorage.removeItem('tony_pending_conn'); await afterConnected(slug,r.identity||prettyName(slug)); return true }
+  const msg=(typeof r.detail==='string'?r.detail:'Google sign-in did not complete.');
+  if($('#mErr'))$('#mErr').textContent=msg;
+  if($('#mOauth')){$('#mOauth').disabled=false;$('#mOauth').textContent='Continue with Google'}
+  return false;
+}
 async function openConnect(slug,goal){
   pendingConn={slug,goal};
   const app=await api('/v1/apps/'+encodeURIComponent(slug));
@@ -356,14 +411,19 @@ async function openConnect(slug,goal){
   const isOauth=app.auth&&app.auth.type==='oauth2';
   const needsBase=!!app.needs_base_url, needsToken=app.needs_token!==false;
   const prov=PROVIDERS[app.slug]||PROVIDERS[(app.slug||'').replace(/-/g,'_')];
-  if(prov&&prov.ready&&app.auth&&app.auth.type==='oauth2'){
-    // managed OAuth: one click, straight to the provider, no key form at all
-    const w=window.open('about:blank','tony_oauth','width=540,height=720');
-    const r=await api('/v1/connections/'+encodeURIComponent(app.slug)+'/start?entity_id='+ENTITY+'&redirect_after=/playground',{method:'POST'});
-    if(r.authorization_url){ if(w)w.location=r.authorization_url; else location.href=r.authorization_url; watchConn(app.slug); }
-    else { if(w)w.close(); alert(r.detail||'Could not start sign-in.'); }
-    return;
+  if(isOauth){
+    if(prov&&prov.ready){
+      // managed OAuth: one click, straight to the provider, no key form at all
+      const w=window.open('about:blank','tony_oauth','width=540,height=720');
+      const r=await api('/v1/connections/'+encodeURIComponent(app.slug)+'/start?entity_id='+ENTITY+'&redirect_after=/playground',{method:'POST'});
+      if(r.authorization_url){ if(w)w.location=r.authorization_url; else location.href=r.authorization_url; watchConn(app.slug); }
+      else { if(w)w.close(); alert(r.detail||'Could not start sign-in.'); }
+      return;
+    }
+    if(canGoogle(app)){ openGoogleModal(app,name); return; }
+    openSetupModal(app,name); return;
   }
+  $('#mSave').style.display='';$('#mDocs').textContent='Open the API docs →';
   if(!needsToken&&!needsBase){
     const c=await api('/v1/connections/'+encodeURIComponent(app.slug)+'/start?entity_id='+ENTITY,{method:'POST'});
     if(c.connection||c.mode==='public'){await afterConnected(app.slug,name)}
@@ -388,7 +448,9 @@ function closeConnect(){$('#mask').classList.remove('on');pendingConn=null}
 $('#mX').onclick=closeConnect; $('#mask').addEventListener('click',e=>{if(e.target.id==='mask')closeConnect()});
 $('#mTokLink').onclick=()=>{$('#mTokWrap').style.display='';$('#mTokLink').style.display='none';$('#mTok').focus()};
 $('#mOauth').onclick=async()=>{
-  if(!pendingConn)return; const b=$('#mOauth'); b.disabled=true; b.textContent='Opening…';
+  if(!pendingConn)return;
+  if(pendingConn.mode==='google')return runGoogle(pendingConn.real||pendingConn.slug);
+  const b=$('#mOauth'); b.disabled=true; b.textContent='Opening…';
   const slug=pendingConn.real||pendingConn.slug;
   const w=window.open('about:blank','tony_oauth','width=520,height=700');
   const r=await api('/v1/connections/'+slug+'/start?entity_id='+ENTITY+'&redirect_after=/playground');
@@ -445,12 +507,36 @@ let st; $('#dSearch').addEventListener('input',()=>{clearTimeout(st);st=setTimeo
 
 loadProviders();
 refreshConn();
+(async()=>{ try{
+  if(!window.TonyConnect) return;
+  const t=await TonyConnect.finishRedirect();
+  if(!t) return;
+  const p=JSON.parse(sessionStorage.getItem('tony_pending_conn')||'{}');
+  if(!p.slug) return;
+  const ok=await postGoogle(p.slug,t);
+  if(ok&&p.goal){ busy=false; send(p.goal); }
+}catch(e){} })();
 (async()=>{const h=await api('/health');if(h&&h.apps)$('#appN').textContent=h.apps.toLocaleString()+' apps · '+(h.actions||0).toLocaleString()+' actions'})();
 q.focus();
 """
 
 
+def _firebase_bits() -> tuple[str, str]:
+    import json as _json
+    import os as _os
+    from . import firebase
+
+    cfg = firebase.web_config()
+    script = ""
+    if cfg["api_key"]:
+        script = ('<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>'
+                  '<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>'
+                  '<script src="/static/connect.js"></script>')
+    return _json.dumps(cfg), script
+
+
 def playground_page() -> str:
+    _fb_cfg, _fb_js = _firebase_bits()
     nav = [("play", "Playground", "/playground", True), ("cat", "Catalog", "/#catalog", False),
            ("plug", "Integrations", "/providers", False), ("key", "Connections", "/account", False),
            ("log", "Logs", "/app", False), ("book", "Docs", "/sdk", False)]
@@ -463,7 +549,8 @@ def playground_page() -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Playground · Tony</title><meta name="theme-color" content="#ffffff">
 <link rel="icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<style>{_CSS}</style></head><body>
+<style>{_CSS}</style>{_fb_js}
+<script>window.TONY_FB={_fb_cfg};</script></head><body>
 <div class="app">
  <aside class="side" id="side">
   <div class="env">{logo(30, 's')}<div><b>Tony</b><small>dev environment</small></div></div>

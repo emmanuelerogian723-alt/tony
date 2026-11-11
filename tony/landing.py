@@ -750,9 +750,8 @@ def landing_html(demo_open: bool = True) -> str:
     body = body.replace("__ACTIONS__", f"{action_count:,}")
     body = body.replace("__APPS__", f"{app_count:,}")
 
-    fonts = ("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&"
-             "family=Manrope:wght@400;500;600;700&"
-             "family=IBM+Plex+Mono:wght@400;500&display=swap")
+    fonts = ("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;650;700&"
+             "family=JetBrains+Mono:wght@400;500&display=swap")
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -760,11 +759,12 @@ def landing_html(demo_open: bool = True) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tony &middot; execution layer for AI agents</title>
 <meta name="description" content="{app_count:,} apps and {action_count:,} typed actions behind one API, with encrypted credentials, approval-gated writes and full audit.">
-<meta name="theme-color" content="#040406">
+<meta name="theme-color" content="#000000">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="{fonts}">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/brand/tony-mark.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/brand/tony-180.png">
 <style>{CSS}</style>
 </head>
 <body>
@@ -772,3 +772,334 @@ def landing_html(demo_open: bool = True) -> str:
 {JS}
 </body>
 </html>"""
+
+# ─── rebuilt marketing page ─────────────────────────────────────────────────
+# True black, white type, the console's own mark, and copy that names the real
+# endpoints instead of generic claims. Later bindings override the originals.
+CSS = """
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:#000;color:#fff;font-family:'Inter Tight',system-ui,-apple-system,sans-serif;
+ font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+a{color:inherit;text-decoration:none}
+.wrap{width:100%;max-width:1140px;margin:0 auto;padding:0 24px}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;letter-spacing:.02em;text-transform:uppercase}
+.top{position:sticky;top:0;z-index:50;background:rgba(0,0,0,.82);backdrop-filter:blur(16px);
+ border-bottom:1px solid #161616}
+.top .wrap{display:flex;align-items:center;gap:11px;height:62px}
+.mark{display:flex;align-items:center;gap:10px;font-weight:650;font-size:16px;letter-spacing:-.025em}
+.mark svg{width:26px;height:26px;display:block}
+nav{display:flex;gap:24px;margin-left:26px}
+nav a{font-size:13.5px;color:#9a9a9a;transition:color .18s}
+nav a:hover{color:#fff}
+.grow{flex:1}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:9px;
+ padding:11px 18px;font-size:13.5px;font-weight:550;border:1px solid transparent;transition:.18s;cursor:pointer}
+.btn.sm{padding:8px 14px;font-size:13px}
+.btn.solid{background:#fff;color:#000}
+.btn.solid:hover{background:#e6e6e6}
+.btn.ghost{border-color:#262626;color:#e8e8e8}
+.btn.ghost:hover{border-color:#484848;background:#0b0b0b}
+.btn.wide{width:100%}
+.hero{padding:104px 0 0;position:relative;overflow:hidden}
+.hero:before{content:'';position:absolute;inset:0;background:
+ radial-gradient(680px 300px at 78% 6%,rgba(226,84,43,.12),transparent 70%),
+ radial-gradient(560px 240px at 8% 88%,rgba(255,255,255,.05),transparent 72%);pointer-events:none}
+.hero-grid{display:grid;grid-template-columns:1.06fr .94fr;gap:56px;align-items:start;position:relative}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;padding:6px 11px;border:1px solid #1f1f1f;
+ border-radius:999px;color:#a3a3a3;margin-bottom:26px}
+.eyebrow i{width:5px;height:5px;border-radius:50%;background:#E2542B;box-shadow:0 0 0 3px rgba(226,84,43,.16)}
+h1{margin:0 0 22px;font-size:clamp(38px,4.6vw,60px);line-height:1.03;letter-spacing:-.038em;font-weight:640}
+h1 em{font-style:normal;color:#7d7d7d}
+.lede{margin:0 0 30px;font-size:16.5px;line-height:1.62;color:#a8a8a8;max-width:31em}
+.lede b{color:#fff;font-weight:550}
+.cta{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.hint{color:#6d6d6d;font-size:12.5px}
+.snip{margin-top:30px;border:1px solid #191919;border-radius:12px;background:#050505;overflow:hidden}
+.snip-hd{display:flex;align-items:center;gap:8px;padding:9px 13px;border-bottom:1px solid #141414;color:#6f6f6f}
+.snip-hd span{flex:1}
+.snip-hd button{background:none;border:1px solid #232323;color:#a3a3a3;border-radius:6px;padding:3px 9px;
+ font-size:11px;cursor:pointer;font-family:inherit}
+.snip-hd button:hover{color:#fff;border-color:#3d3d3d}
+pre{margin:0;padding:15px 15px 17px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12.4px;
+ line-height:1.75;color:#d6d6d6;white-space:pre-wrap;overflow-wrap:anywhere}
+pre .c{color:#5e5e5e}
+pre .k{color:#E2542B}
+pre .s{color:#9ee6c7}
+pre .f{color:#fff}
+.card{border:1px solid #191919;border-radius:16px;background:linear-gradient(180deg,#080808,#040404);padding:22px}
+.consent{position:relative}
+.consent-top{display:flex;align-items:center;justify-content:center;gap:13px;margin:4px 0 18px}
+.plate{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;background:#0b0b0b;
+ border:1px solid #232323}
+.plate svg{width:30px;height:30px}
+.pin{width:22px;height:1px;background:#2e2e2e}
+.consent h3{margin:0 0 6px;font-size:15.5px;text-align:center;font-weight:580;letter-spacing:-.015em}
+.consent p{margin:0 0 16px;text-align:center;font-size:12.6px;color:#8b8b8b}
+.scope{display:flex;gap:11px;padding:10px 12px;border:1px solid #1c1c1c;border-radius:10px;margin-bottom:7px}
+.scope b{display:block;font-size:12.6px;font-weight:540}
+.scope span{font-size:11.5px;color:#7c7c7c}
+.scope svg{width:15px;height:15px;flex:none;margin-top:2px;stroke:#E2542B}
+.foot-note{margin-top:13px;text-align:center;font-size:11px;color:#5f5f5f}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #161616;border-bottom:1px solid #161616;
+ margin-top:86px}
+.stats div{padding:26px 20px;border-right:1px solid #161616}
+.stats div:last-child{border-right:0}
+.stats b{display:block;font-size:26px;font-weight:600;letter-spacing:-.03em}
+.stats span{font-size:12px;color:#7a7a7a}
+.sec{padding:96px 0;border-bottom:1px solid #111}
+.sec-hd{max-width:36em;margin-bottom:44px}
+.sec-hd .mono{color:#E2542B;display:block;margin-bottom:14px}
+h2{margin:0 0 14px;font-size:clamp(26px,3vw,34px);letter-spacing:-.032em;font-weight:620;line-height:1.12}
+.sec-hd p{margin:0;color:#979797;font-size:15.2px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.step{border:1px solid #161616;border-radius:14px;padding:22px;background:#040404}
+.step .n{font-family:'JetBrains Mono',monospace;font-size:11px;color:#E2542B;margin-bottom:14px;display:block}
+.step h4{margin:0 0 8px;font-size:15.5px;font-weight:580}
+.step p{margin:0 0 14px;font-size:13.4px;color:#8f8f8f;line-height:1.6}
+.step code{font-family:'JetBrains Mono',monospace;font-size:11.6px;color:#c9c9c9;background:#0b0b0b;
+ border:1px solid #1a1a1a;border-radius:6px;padding:2px 6px}
+.layers{display:grid;grid-template-columns:repeat(2,1fr);gap:0 34px}
+.layer{display:flex;gap:13px;padding:16px 0;border-bottom:1px solid #131313}
+.layer svg{width:17px;height:17px;flex:none;margin-top:3px;stroke:#fff}
+.layer b{display:block;font-size:14px;font-weight:550;margin-bottom:2px}
+.layer span{font-size:13px;color:#8b8b8b}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:46px;align-items:center}
+.tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.tier{border:1px solid #171717;border-radius:16px;padding:24px;background:#040404;position:relative}
+.tier.hot{border-color:#3a3a3a;background:linear-gradient(180deg,#0d0d0d,#050505)}
+.tier .flag{position:absolute;top:-10px;left:24px;background:#fff;color:#000;font-size:10.5px;font-weight:600;
+ padding:3px 9px;border-radius:999px;letter-spacing:.01em}
+.tname{font-size:14px;font-weight:600;margin-bottom:4px}
+.tier .tag{font-size:12.5px;color:#7e7e7e;margin-bottom:18px}
+.amt{display:flex;align-items:baseline;gap:7px;margin-bottom:20px}
+.amt b{font-size:30px;font-weight:600;letter-spacing:-.035em}
+.amt span{font-size:12px;color:#7a7a7a}
+.tier ul{list-style:none;margin:0 0 22px;padding:0}
+.tier li{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:#a5a5a5;padding:5px 0}
+.tier li svg{width:13px;height:13px;flex:none;margin-top:4px;stroke:#fff}
+.close{text-align:center;padding:104px 0}
+.close .mark{justify-content:center;margin-bottom:26px}
+.close h2{margin-bottom:16px}
+.close p{margin:0 auto 30px;color:#939393;max-width:34em;font-size:15px}
+footer{border-top:1px solid #141414;padding:30px 0}
+footer .wrap{display:flex;gap:22px;align-items:center;flex-wrap:wrap;color:#6f6f6f}
+footer a:hover{color:#fff}
+.rv{opacity:0;transform:translateY(14px);transition:opacity .6s cubic-bezier(.2,.7,.2,1),transform .6s cubic-bezier(.2,.7,.2,1)}
+.rv.on{opacity:1;transform:none}
+@media(max-width:900px){
+ .hero-grid,.split{grid-template-columns:1fr;gap:40px}
+ .steps,.tiers{grid-template-columns:1fr}
+ .layers{grid-template-columns:1fr}
+ .stats{grid-template-columns:repeat(2,1fr)}
+ .stats div:nth-child(2){border-right:0}
+ .stats div:nth-child(1),.stats div:nth-child(2){border-bottom:1px solid #161616}
+ nav{display:none}
+ .hero{padding-top:64px}
+ h1{font-size:clamp(32px,8.4vw,44px)}
+ .sec{padding:64px 0}
+ .close{padding:70px 0}
+}
+"""
+
+MARK = ('<svg viewBox="0 0 64 64" fill="none" aria-hidden="true">'
+        '<rect width="64" height="64" rx="15" fill="#0E0E0C" stroke="#232320"/>'
+        '<path d="M11.5 32h6.5" stroke="#F3F0E9" stroke-width="5" stroke-linecap="round"/>'
+        '<circle cx="32" cy="32" r="13" fill="none" stroke="#F3F0E9" stroke-width="5" stroke-dasharray="62 19.7"'
+        ' stroke-linecap="round" transform="rotate(45 32 32)"/>'
+        '<circle cx="33.5" cy="30.5" r="4.6" fill="#E2542B"/></svg>')
+
+BODY = """
+<header class="top"><div class="wrap">
+  <a class="mark" href="/">__MARK__Tony</a>
+  <nav>
+    <a href="#connect">Connect</a>
+    <a href="#security">Security</a>
+    <a href="#pricing">Pricing</a>
+    <a href="/docs">Docs</a>
+  </nav>
+  <span class="grow"></span>
+  <a class="btn ghost sm" href="/account">Sign in</a>
+  <a class="btn solid sm" href="/account">Open console</a>
+</div></header>
+
+<main>
+<section class="hero"><div class="wrap hero-grid">
+  <div>
+    <span class="eyebrow mono"><i></i>Hosted OAuth &middot; __APPS__ apps &middot; __ACTIONS__ actions</span>
+    <h1>Users sign in once.<br><em>Their agent does the rest.</em></h1>
+    <p class="lede">Tony hands your user a link. They approve access on the provider's own page, and Tony keeps the
+      token encrypted, refreshed and scoped. Your agent then calls GitHub, Gmail, Slack or Notion on their behalf,
+      with <b>no API keys in your code</b> and every write on the record.</p>
+    <div class="cta">
+      <a class="btn solid" href="/account">Connect an app</a>
+      <a class="btn ghost" href="#connect">How the flow works</a>
+      <span class="hint">free workspace &middot; no card</span>
+    </div>
+    <div class="snip">
+      <div class="snip-hd mono"><span>create a connection link</span><button data-copy="c1">copy</button></div>
+      <pre id="c1"><span class="c"># returns a single-use URL your user opens</span>
+<span class="f">curl</span> -X POST https://tony-7su0.onrender.com/v1/connect-links \\
+  -H <span class="s">"Authorization: Bearer $TONY_KEY"</span> \\
+  -d <span class="s">'{"app":"github","agent_name":"Mira","tiers":["read","write"]}'</span>
+<span class="k">→</span> { "url": "https://tony-7su0.onrender.com/connect/tcl_..." }</pre>
+    </div>
+  </div>
+
+  <div class="card consent" aria-label="Hosted consent page">
+    <div class="consent-top">
+      <div class="plate">__MARK__</div><div class="pin"></div>
+      <div class="plate"><svg viewBox="0 0 24 24" fill="#F3F0E9"><path d="M12 1.8a10.2 10.2 0 0 0-3.23 19.88c.5.09.68-.22.68-.49v-1.9c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.1-1.47-1.1-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.59.69.49A10.2 10.2 0 0 0 12 1.8"/></svg></div>
+    </div>
+    <h3>Mira wants to connect to your GitHub</h3>
+    <p>You sign in on GitHub's own page. Tony never sees your password.</p>
+    <div class="scope"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 12.5 9.4 18 20 6.6"/></svg>
+      <div><b>View repositories and issues</b><span>read access to your account</span></div></div>
+    <div class="scope"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 12.5 9.4 18 20 6.6"/></svg>
+      <div><b>Open issues and comment</b><span>write access, on the record</span></div></div>
+    <div class="scope"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 12.5 9.4 18 20 6.6"/></svg>
+      <div><b>Read your profile</b><span>needed to attribute the actions</span></div></div>
+    <a class="btn solid wide" style="margin-top:14px" href="/account">Continue to GitHub</a>
+    <div class="foot-note">Secured by Tony &middot; single use &middot; expires in 30 minutes</div>
+  </div>
+</div>
+
+<div class="wrap"><div class="stats">
+  <div><b>__APPS__</b><span>apps in the catalogue</span></div>
+  <div><b>__ACTIONS__</b><span>typed actions</span></div>
+  <div><b>__WRITES__</b><span>gated write actions</span></div>
+  <div><b>PKCE</b><span>where the provider supports it</span></div>
+</div></div>
+</section>
+
+__TICKER__
+
+<section class="sec" id="connect"><div class="wrap">
+  <div class="sec-hd rv">
+    <span class="mono">The flow</span>
+    <h2>Three moving parts, no glue code.</h2>
+    <p>Nothing here is a one-off integration. The same three endpoints cover every provider in the catalogue,
+       because scopes, token exchange and refresh all come from one declarative registry.</p>
+  </div>
+  <div class="steps rv">
+    <div class="step"><span class="n">01 / issue</span>
+      <h4>Create the link</h4>
+      <p>Ask for an app and the tiers you need. Tony mints a signed, single-use URL bound to one workspace.</p>
+      <code>POST /v1/connect-links</code></div>
+    <div class="step"><span class="n">02 / approve</span>
+      <h4>The user consents</h4>
+      <p>They see what is being asked, then sign in at the provider. Authorization code with PKCE, callback
+         verified on Tony, tokens encrypted before they touch the database.</p>
+      <code>GET /connect/tcl_...</code></div>
+    <div class="step"><span class="n">03 / act</span>
+      <h4>Your agent executes</h4>
+      <p>Tokens refresh on the way in. Reads run immediately, writes can wait for a human approval, and the
+         result comes back with a receipt.</p>
+      <code>POST /v1/execute</code></div>
+  </div>
+</div></section>
+
+<section class="sec" id="security"><div class="wrap">
+  <div class="split">
+    <div class="sec-hd rv" style="margin-bottom:0">
+      <span class="mono">Security</span>
+      <h2>Built for a hostile internet.</h2>
+      <p>An agent gateway holds real credentials, so it has to assume someone is probing it. Every request is
+         scored, not just counted: probe paths, scanner agents, endpoint sweeps and repeated rejected keys all
+         raise a decaying score, and a persistent offender earns a timed block that doubles on repeat.</p>
+      <div class="cta" style="margin-top:24px">
+        <a class="btn ghost sm" href="/docs">Read the security notes</a>
+        <span class="hint">blocks self-heal</span>
+      </div>
+    </div>
+    <div class="layers rv">
+      <div class="layer"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M12 2.8 5 6v6c0 4.6 3 8 7 9.2 4-1.2 7-4.6 7-9.2V6l-7-3.2Z"/></svg>
+        <div><b>Behavioural scoring</b><span>bursts, sweeps and scanner signatures, with decay</span></div></div>
+      <div class="layer"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="4" y="10" width="16" height="10" rx="2.4"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10"/></svg>
+        <div><b>Encrypted credentials</b><span>tokens sealed at rest, never returned by the API</span></div></div>
+      <div class="layer"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 12h16M12 4v16"/></svg>
+        <div><b>Scoped agent tokens</b><span>restricted to apps, tiers and an expiry you set</span></div></div>
+      <div class="layer"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M5 12.5 10 17l9-10"/></svg>
+        <div><b>Approval gate</b><span>writes and deletes can wait for a human decision</span></div></div>
+      <div class="layer"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="8.4"/><path d="M12 8v4.4l3 1.8"/></svg>
+        <div><b>Single-use links</b><span>short expiry, bound to one workspace and one entity</span></div></div>
+      <div class="layer"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h7"/></svg>
+        <div><b>Full audit</b><span>every call, argument and veto is recorded</span></div></div>
+    </div>
+  </div>
+</div></section>
+
+<section class="sec"><div class="wrap">
+  <div class="split">
+    <div class="rv">
+      <span class="mono" style="color:#E2542B;display:block;margin-bottom:14px">A real call</span>
+      <h2>Plain HTTP in, a receipt out.</h2>
+      <p style="color:#979797;font-size:15px;margin:0 0 8px">Any language, any model. One action name, validated
+        arguments, and a result the agent can read.</p>
+    </div>
+    <div class="snip rv">
+      <div class="snip-hd mono"><span>execute an authorised action</span><button data-copy="c2">copy</button></div>
+      <pre id="c2"><span class="f">curl</span> -X POST https://tony-7su0.onrender.com/v1/execute \\
+  -H <span class="s">"Authorization: Bearer $TONY_KEY"</span> \\
+  -d <span class="s">'{"action":"github.create_issue",
+      "args":{"repo":"acme/app","title":"Login loop"}}'</span>
+
+<span class="k">→</span> { "ok": true, "status": 201,
+    "data": { "number": 412, "url": "..." },
+    "receipt": { "approval": "granted", "ms": 684 } }</pre>
+    </div>
+  </div>
+</div></section>
+
+<section class="sec" id="pricing"><div class="wrap">
+  <div class="sec-hd rv"><span class="mono">Pricing</span>
+    <h2>Priced per workspace, not per clever idea.</h2>
+    <p>Start free. Pay when an agent starts doing real work.</p></div>
+  <div class="tiers rv">__PRICING__</div>
+</div></section>
+
+<section class="close"><div class="wrap">
+  <div class="mark">__MARK__</div>
+  <h2>Connect your first app in about a minute.</h2>
+  <p>Open the console, mint a link, send it to yourself, and watch the token land encrypted.</p>
+  <div class="cta" style="justify-content:center">
+    <a class="btn solid" href="/account">Open the console</a>
+    <a class="btn ghost" href="/mcp">Install in your client</a>
+  </div>
+</div></section>
+</main>
+
+<footer><div class="wrap">
+  <a class="mark" href="/" style="font-size:14px">__MARK_SM__Tony</a>
+  <span class="grow"></span>
+  <a class="mono" href="/docs">Docs</a>
+  <a class="mono" href="/sdk">SDKs</a>
+  <a class="mono" href="/mcp">MCP</a>
+  <a class="mono" href="/account">Console</a>
+  <span class="mono" style="color:#4b4b4b">v1</span>
+</div></footer>
+"""
+
+BODY = BODY.replace("__MARK__", MARK).replace("__MARK_SM__", MARK)
+
+JS = """
+<script>
+(function(){
+  var io = new IntersectionObserver(function(list){
+    list.forEach(function(en){ if(en.isIntersecting){ en.target.classList.add('on'); io.unobserve(en.target) } });
+  },{threshold:.14});
+  document.querySelectorAll('.rv').forEach(function(e){ io.observe(e) });
+
+  document.querySelectorAll('[data-copy]').forEach(function(b){
+    b.onclick = function(){
+      var t = document.getElementById(b.dataset.copy);
+      if(!t) return;
+      navigator.clipboard.writeText(t.textContent.trim()).then(function(){
+        var o = b.textContent; b.textContent = 'copied';
+        setTimeout(function(){ b.textContent = o }, 1300);
+      }).catch(function(){});
+    };
+  });
+})();
+</script>
+"""

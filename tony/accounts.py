@@ -395,6 +395,19 @@ def list_providers(request: Request) -> dict[str, Any]:
     return {"providers": rows, "ready": sum(1 for r in rows if r["ready"]), "total": len(rows)}
 
 
+_HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+def _check_secret_looks_right(slug: str, secret: str) -> None:
+    """Catch the common mix-up where a public key is pasted instead of a client secret."""
+    if not secret:
+        return
+    if slug in {"discord", "slack", "twitter", "tiktok"} and _HEX64.match(secret):
+        raise HTTPException(400, detail=(
+            "That looks like a public key, not the client secret. "
+            "Open the provider's OAuth page and copy (or reset) the client secret."))
+
+
 @router.post("/providers/{app_slug}")
 def set_provider(app_slug: str, body: ProviderIn, request: Request) -> dict[str, Any]:
     u = require_owner(request)
@@ -408,6 +421,7 @@ def set_provider(app_slug: str, body: ProviderIn, request: Request) -> dict[str,
         raise HTTPException(400, detail="This app does not use OAuth sign-in")
     if not body.client_id.strip():
         raise HTTPException(400, detail="Client id is required")
+    _check_secret_looks_right(app_slug, body.client_secret.strip())
     save_provider(app_slug, body.client_id, body.client_secret, u.id)
     return {"ok": True, "slug": app_slug, "ready": True}
 

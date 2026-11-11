@@ -95,6 +95,30 @@ def current_user(request: Request) -> User | None:
         return s.get(User, row.user_id)
 
 
+def is_instance_owner(user: User) -> bool:
+    """The first account on this deployment owns it, unless TONY_OWNER_EMAIL says otherwise.
+
+    Provider credentials are deployment-wide: one registered OAuth app serves every
+    user. So only the owner may register or replace them, never any signed-in user.
+    """
+    import os as _os
+
+    allow = [e.strip().lower() for e in (_os.getenv("TONY_OWNER_EMAIL") or "").split(",") if e.strip()]
+    if allow:
+        return (user.email or "").lower() in allow
+    with session() as s:
+        first = s.scalar(select(User).order_by(User.created_at.asc()).limit(1))
+        return bool(first is not None and first.id == user.id)
+
+
+def require_owner(request: Request) -> User:
+    user = require_user(request)
+    if not is_instance_owner(user):
+        raise HTTPException(403, detail="Only the workspace owner can register provider credentials. "
+                                        "Set TONY_OWNER_EMAIL to the account that should manage them.")
+    return user
+
+
 def require_user(request: Request) -> User:
     u = current_user(request)
     if u is None:
@@ -351,7 +375,7 @@ class ProviderIn(BaseModel):
 @router.get("/providers")
 def list_providers(request: Request) -> dict[str, Any]:
     """Which OAuth apps are ready, so users can just click Connect."""
-    require_user(request)
+    require_owner(request)
     from .catalog import catalog
     from .oauth import provider_ready
     from . import provider_registry as _pr
@@ -373,7 +397,7 @@ def list_providers(request: Request) -> dict[str, Any]:
 
 @router.post("/providers/{app_slug}")
 def set_provider(app_slug: str, body: ProviderIn, request: Request) -> dict[str, Any]:
-    u = require_user(request)
+    u = require_owner(request)
     from .catalog import catalog
     from .oauth import save_provider
 
@@ -390,7 +414,7 @@ def set_provider(app_slug: str, body: ProviderIn, request: Request) -> dict[str,
 
 @router.delete("/providers/{app_slug}")
 def remove_provider(app_slug: str, request: Request) -> dict[str, Any]:
-    require_user(request)
+    require_owner(request)
     from .oauth import drop_provider
 
     drop_provider(app_slug)

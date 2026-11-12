@@ -161,3 +161,40 @@ def test_read_budget_is_reported(client):
     if r.status_code == 200:
         body = r.json()
         assert "read_pages" in body.get("limits", {}) or "read_pages" in body.get("usage", {})
+
+
+def test_throttled_page_is_requeued_not_failed(client, monkeypatch):
+    """A 429 is the host asking for patience, not a dead URL: the page must come back."""
+    class ThrottleResp:
+        status_code = 429
+        headers = {"retry-after": "0.01"}
+        text = "slow down"
+        content = b"slow down"
+        encoding = "utf-8"
+
+    class FakeClient:
+        async def get(self, url, **kw):
+            return ThrottleResp()
+
+    async def fast_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", fast_sleep)
+    reader._HOST_COOLDOWN.clear()
+
+    jid = reader.create_job("ws", urls=["https://slow.example.com/a"], max_pages=1)
+    page = reader._next_pending(jid, 1)[0]
+    job = {"id": jid, "workspace_id": "ws", "seed_url": "https://slow.example.com/a",
+           "depth": 0, "max_pages": 1, "follow_links": False}
+    out = asyncio.run(reader._fetch_one(FakeClient(), job, page))
+    assert out.get("requeued") == 429
+    again = reader._next_pending(jid, 1)[0]
+    assert again["attempts"] == 1, "the requeue must be counted so it cannot loop forever"
+
+
+def test_throttle_gives_up_only_after_the_retry_budget(client, monkeypatch):
+    page = {"id": "p1", "url": "https://slow.example.com/a", "attempts": reader.THROTTLE_REQUEUES}
+    jid = reader.create_job("ws", urls=["https://slow.example.com/b"], max_pages=1)
+    page["id"] = reader._next_pending(jid, 1)[0]["id"]
+    out = reader._requeue_throttled(page, 429)
+    assert out == {"failed": 429}

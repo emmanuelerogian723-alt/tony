@@ -76,11 +76,13 @@ def _migrate(backend: str) -> None:
     stmts = [
         "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS user_id VARCHAR(32)",
         "ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS new_account BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE read_pages ADD COLUMN IF NOT EXISTS attempts INTEGER DEFAULT 0",
     ]
     if backend != "postgres":
         stmts = [
             "ALTER TABLE api_keys ADD COLUMN user_id VARCHAR(32)",
             "ALTER TABLE auth_sessions ADD COLUMN new_account BOOLEAN DEFAULT 0",
+            "ALTER TABLE read_pages ADD COLUMN attempts INTEGER DEFAULT 0",
         ]
     import logging
 

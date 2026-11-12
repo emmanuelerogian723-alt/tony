@@ -25,6 +25,7 @@ import html
 import json
 import os
 import re
+import time
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from typing import Any, Iterable
@@ -44,6 +45,10 @@ MAX_PAGES_HARD = int(os.getenv("TONY_READ_MAX_PAGES", "20000"))
 DEFAULT_TIMEOUT = float(os.getenv("TONY_READ_TIMEOUT", "20"))
 USER_AGENT = os.getenv("TONY_READ_UA", "TonyReader/1.0 (+https://tony-7su0.onrender.com)")
 WORKERS = int(os.getenv("TONY_READ_WORKERS", "8"))
+THROTTLE_REQUEUES = int(os.getenv("TONY_READ_THROTTLE_REQUEUES", "6"))
+COOLDOWN_MAX = float(os.getenv("TONY_READ_COOLDOWN_MAX", "30"))
+THROTTLE_CODES = {429, 503}
+_HOST_COOLDOWN: dict[str, float] = {}
 
 SKIP_TAGS = {"script", "style", "noscript", "svg", "canvas", "template", "iframe", "form", "nav",
              "footer", "header", "aside", "menu", "button", "select", "option"}
@@ -303,17 +308,61 @@ def _set_status(job_id: str, status: str, **fields: Any) -> None:
         s.flush()
 
 
+def _retry_after(resp: Any) -> float:
+    """Seconds the host asked us to wait, from Retry-After (delta or HTTP date)."""
+    raw = str(resp.headers.get("retry-after") or "").strip()
+    if not raw:
+        return 0.0
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        pass
+    try:
+        from email.utils import parsedate_to_datetime
+
+        when = parsedate_to_datetime(raw)
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        return max(0.0, (when - datetime.now(timezone.utc)).total_seconds())
+    except Exception:  # noqa: BLE001 - a malformed header is not an error
+        return 0.0
+
+
+def _cooldown_left(host: str) -> float:
+    return max(0.0, _HOST_COOLDOWN.get(host, 0.0) - time.monotonic())
+
+
+def _set_cooldown(host: str, seconds: float) -> None:
+    """A 429 is a message from the host: pause every worker pointed at it, not one."""
+    until = time.monotonic() + max(0.0, min(float(seconds), COOLDOWN_MAX))
+    if until > _HOST_COOLDOWN.get(host, 0.0):
+        _HOST_COOLDOWN[host] = until
+
+
+def _requeue_throttled(page: dict[str, Any], status: int) -> dict[str, Any]:
+    """Put a throttled page back in the frontier instead of losing it to a 429."""
+    tries = int(page.get("attempts") or 0) + 1
+    if tries > THROTTLE_REQUEUES:
+        _save_page(page["id"], status="failed", http_status=status,
+                   error=f"HTTP {status} after {tries} throttle retries")
+        return {"failed": status}
+    _save_page(page["id"], status="pending", attempts=tries, http_status=status,
+               error=f"HTTP {status}; requeued ({tries}/{THROTTLE_REQUEUES}) for the host's rate limit")
+    return {"requeued": status}
+
+
 def _next_pending(job_id: str, limit: int = 50) -> list[dict[str, Any]]:
     with session() as s:
         rows = s.scalars(
             select(ReadPage).where(ReadPage.job_id == job_id, ReadPage.status.in_({"pending", "sitemap"}))
-            .order_by(ReadPage.depth.asc(), ReadPage.created_at.asc()).limit(limit)
+            .order_by(ReadPage.attempts.asc(), ReadPage.depth.asc(), ReadPage.created_at.asc()).limit(limit)
         ).all()
         out = []
         for row in rows:
             kind = row.status          # sitemap seeds keep their kind through the claim
             row.status = "claimed"
-            out.append({"id": row.id, "url": row.url, "depth": row.depth, "kind": kind})
+            out.append({"id": row.id, "url": row.url, "depth": row.depth, "kind": kind,
+                        "attempts": row.attempts or 0})
         s.flush()
     return out
 
@@ -339,10 +388,23 @@ def _counts(job_id: str) -> dict[str, int]:
 async def _expand_sitemap(client: httpx.AsyncClient, job: dict[str, Any], url: str, job_id: str) -> list[tuple[str, int]]:
     """Read a sitemap (or sitemap index) and return its page URLs."""
     found: list[tuple[str, int]] = []
+    host = urlsplit(url).netloc.lower()
     try:
-        async with GOVERNOR.slot(urlsplit(url).netloc, job["workspace_id"]):
-            resp = await client.get(url, headers={"user-agent": USER_AGENT})
-        if resp.status_code >= 400 or len(resp.text) > 5 * 1024 * 1024:
+        resp = None
+        for attempt in range(3):
+            cooling = _cooldown_left(host)
+            if cooling > 0:
+                await asyncio.sleep(cooling)
+            async with GOVERNOR.slot(urlsplit(url).netloc, job["workspace_id"]):
+                resp = await client.get(url, headers={"user-agent": USER_AGENT})
+            if resp.status_code in THROTTLE_CODES:
+                wait = _retry_after(resp) or (2.0 * (2 ** attempt))
+                _set_cooldown(host, wait)
+                if attempt < 2:
+                    await asyncio.sleep(min(wait, COOLDOWN_MAX))
+                    continue
+            break
+        if resp is None or resp.status_code >= 400 or len(resp.text) > 5 * 1024 * 1024:
             return found
         body = resp.text
         locs = re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", body, re.I)
@@ -384,15 +446,28 @@ async def _fetch_one(client: httpx.AsyncClient, job: dict[str, Any], page: dict[
                    title="", content="", word_count=0, content_hash=_hash(url))
         return {"skipped": "robots"}
 
+    host = parts.netloc.lower()
     last_error = ""
     for attempt in range(3):
+        # Another worker may have just been throttled by this same host: wait it out
+        # here (we hold no loop slot while sleeping) instead of adding to the pile.
+        cooling = _cooldown_left(host)
+        if cooling > 0:
+            await asyncio.sleep(cooling)
         try:
             async with GOVERNOR.slot(parts.netloc, job["workspace_id"]):
                 if delay:
                     await asyncio.sleep(min(delay, 3.0))
                 resp = await client.get(url, headers={"user-agent": USER_AGENT,
                                                       "accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5"})
-            if resp.status_code in {429, 500, 502, 503, 504} and attempt < 2:
+            if resp.status_code in THROTTLE_CODES:
+                wait = _retry_after(resp) or (2.0 * (2 ** attempt))
+                _set_cooldown(host, wait)
+                if attempt < 2:
+                    await asyncio.sleep(min(wait, COOLDOWN_MAX))
+                    continue
+                return _requeue_throttled(page, resp.status_code)
+            if resp.status_code in {500, 502, 504} and attempt < 2:
                 await asyncio.sleep(1.5 * (attempt + 1))
                 continue
             if resp.status_code >= 400:
@@ -474,9 +549,13 @@ async def run_job(job_id: str) -> None:
                     break
                 results = await asyncio.gather(*[_fetch_one(client, meta, page) for page in batch],
                                                return_exceptions=True)
+                answered = [r for r in results if isinstance(r, dict)]
                 for res in results:
                     if isinstance(res, Exception):
                         continue
+                if answered and all(r.get("requeued") for r in answered):
+                    # the whole batch is waiting on the same host limit
+                    await asyncio.sleep(2.0)
                 counts = _counts(job_id)
                 done = counts.get("done", 0) + counts.get("duplicate", 0)
                 if _total(job_id) >= meta["max_pages"] and not _next_pending(job_id, 1):

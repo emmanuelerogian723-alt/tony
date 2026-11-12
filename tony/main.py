@@ -95,11 +95,13 @@ async def lifespan(app: FastAPI):
     from .syncs import runner as _sync_runner
     app.state.workers = [asyncio.create_task(_flow_runner()), asyncio.create_task(_sync_runner())]
     # Reader jobs are rows, not memory: a redeploy resumes where it stopped.
+    # The loop is passed explicitly because enqueue() needs a running event loop.
     try:
         from . import reader as _reader
-        import threading as _threading
 
-        _threading.Thread(target=_reader.resume_unfinished, daemon=True).start()
+        _loop = asyncio.get_running_loop()
+        _reader.resume_unfinished(_loop)
+        app.state.reader_watch = asyncio.create_task(_reader.watch_stuck())
     except Exception as exc:  # never block startup on the reader
         log.warning("reader resume skipped: %s", exc)
     if settings.self_url and settings.ping_seconds > 0:

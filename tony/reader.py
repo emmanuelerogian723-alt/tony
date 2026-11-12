@@ -26,7 +26,7 @@ import json
 import os
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from typing import Any, Iterable
 from urllib.parse import urljoin, urlsplit, urlunsplit
@@ -250,7 +250,7 @@ def create_job(workspace: str, *, urls: list[str] | None = None, site: str = "",
     targets = [tidy_url(u) for u in (urls or []) if tidy_url(u)]
     seed = tidy_url(site or (targets[0] if targets else ""))
     if not targets and not seed and sitemap:
-        seed = ""
+        seed = tidy_url(sitemap)
     max_pages = max(1, min(int(max_pages or 50), MAX_PAGES_HARD))
     if not targets and not seed and not sitemap:
         raise ValueError("Give urls, a site or a sitemap")
@@ -526,6 +526,16 @@ def _total(job_id: str) -> int:
 
 
 async def run_job(job_id: str) -> None:
+    if job_id in _ACTIVE:
+        return
+    _ACTIVE.add(job_id)
+    try:
+        await _run_job(job_id)
+    finally:
+        _ACTIVE.discard(job_id)
+
+
+async def _run_job(job_id: str) -> None:
     job = _job_row(job_id)
     if job is None:
         return
@@ -576,19 +586,72 @@ async def run_job(job_id: str) -> None:
         _set_status(job_id, "failed", error=f"{type(exc).__name__}: {exc}"[:400])
 
 
-def resume_unfinished() -> None:
-    """On boot, pick up jobs a restart interrupted."""
+# Jobs this process is currently crawling, so the watchdog never double-runs one.
+_ACTIVE: set[str] = set()
+
+
+def resume_unfinished(loop: Any = None) -> None:
+    """On boot, pick up jobs a restart interrupted.
+
+    The loop must be passed by the caller. A previous version ran this on a worker
+    thread, where ``asyncio.get_running_loop()`` raises, so ``enqueue`` returned
+    silently and every interrupted job stayed "running" forever.
+    """
+    import logging
+
+    log = logging.getLogger("tony")
     try:
         with session() as s:
             rows = s.scalars(select(ReadJob).where(ReadJob.status.in_({"queued", "running"}))).all()
             ids = [r.id for r in rows]
         for job_id in ids:
-            enqueue(job_id)
+            if loop is not None:
+                asyncio.run_coroutine_threadsafe(run_job(job_id), loop)
+            else:
+                enqueue(job_id)
         if ids:
-            import logging
-            logging.getLogger("tony").info("reader resumed %d job(s)", len(ids))
-    except Exception:
-        pass
+            log.info("reader resumed %d job(s)", len(ids))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("reader resume failed: %s", exc)
+
+
+def _stale(job: Any, cutoff: datetime) -> bool:
+    """True when the job has written nothing since the cutoff.
+
+    SQLite hands back naive datetimes while Postgres returns aware ones, so compare
+    them in one frame of reference instead of trusting the driver.
+    """
+    seen = job.updated_at or job.created_at
+    if seen is None:
+        return True
+    if seen.tzinfo is None:
+        seen = seen.replace(tzinfo=timezone.utc)
+    return seen < cutoff
+
+
+async def watch_stuck(interval: float = 120.0, stale_seconds: float = 300.0, once: bool = False) -> None:
+    """Re-run jobs whose worker died without writing a terminal state.
+
+    A process kill mid-crawl leaves a job "running" with an idle page frontier. Rows
+    make the work resumable, so the only thing missing was something to notice.
+    """
+    import logging
+
+    log = logging.getLogger("tony")
+    while True:
+        try:
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=stale_seconds)
+            with session() as s:
+                rows = s.scalars(select(ReadJob).where(ReadJob.status == "running")).all()
+                ids = [r.id for r in rows if r.id not in _ACTIVE and _stale(r, cutoff)]
+            for job_id in ids:
+                log.info("reader re-running stalled job %s", job_id)
+                enqueue(job_id)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("reader watchdog: %s", exc)
+        if once:
+            return
+        await asyncio.sleep(interval)
 
 
 # ── reads for the API ─────────────────────────────────────────────────────

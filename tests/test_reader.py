@@ -269,3 +269,71 @@ def test_brief_drops_site_furniture_repeated_on_every_page():
     assert "skip to main content" not in haystack
     assert "live previews for every docs" not in haystack
     assert len(brief["points"]) >= 3
+
+
+def test_resume_unfinished_schedules_on_the_server_loop():
+    """Boot recovery must actually start the crawler, not silently drop the job."""
+    import asyncio
+    from tony.db import session
+    from tony.models import ReadJob
+    from tony import reader
+
+    with session() as s:
+        job = ReadJob(workspace_id="ws_resume", status="running", max_pages=10, seed_url="https://ex.example.com/")
+        s.add(job)
+        s.flush()
+        job_id = job.id
+
+    started: list[str] = []
+
+    async def fake_run(jid: str) -> None:
+        started.append(jid)
+
+    original = reader.run_job
+    reader.run_job = fake_run
+    try:
+        async def boot() -> None:
+            loop = asyncio.get_running_loop()
+            reader.resume_unfinished(loop)
+            await asyncio.sleep(0.25)
+
+        asyncio.run(boot())
+    finally:
+        reader.run_job = original
+
+    assert job_id in started
+
+
+def test_watchdog_reruns_a_job_whose_worker_died():
+    """A job left 'running' with no worker is resumed, not abandoned."""
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+    from tony.db import session
+    from tony.models import ReadJob
+    from tony import reader
+
+    with session() as s:
+        job = ReadJob(workspace_id="ws_watch", status="running", max_pages=10, seed_url="https://ex.example.com/")
+        s.add(job)
+        s.flush()
+        job_id = job.id
+        job.updated_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        s.flush()
+
+    started: list[str] = []
+
+    async def fake_run(jid: str) -> None:
+        started.append(jid)
+
+    original = reader.run_job
+    reader.run_job = fake_run
+    try:
+        async def boot() -> None:
+            await reader.watch_stuck(once=True, stale_seconds=120)
+            await asyncio.sleep(0.2)
+
+        asyncio.run(boot())
+    finally:
+        reader.run_job = original
+
+    assert job_id in started

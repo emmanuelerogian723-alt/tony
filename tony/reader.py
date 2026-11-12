@@ -270,7 +270,8 @@ def create_job(workspace: str, *, urls: list[str] | None = None, site: str = "",
     if not targets and sitemap:
         _add_page(job_id, tidy_url(sitemap), 0, status="sitemap")
     elif not targets and seed:
-        _add_page(job_id, seed, 0, status="sitemap")
+        # a site seed is a normal page; only a sitemap URL seeds an expansion
+        _add_page(job_id, seed, 0, status="pending")
     return job_id
 
 

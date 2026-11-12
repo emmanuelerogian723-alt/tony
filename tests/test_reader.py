@@ -121,3 +121,43 @@ def test_sitemap_seed_keeps_kind_and_expands(monkeypatch):
            "depth": 1, "max_pages": 10, "follow_links": True}
     out = asyncio.run(reader._expand_sitemap(FakeClient(), job, page["url"], jid))
     assert [u for u, _ in out] == ["https://a.example.com/one", "https://a.example.com/two"]
+
+
+def test_site_seed_is_a_page_not_a_sitemap(client):
+    """A site crawl must fetch its seed as HTML, not try to expand it as XML."""
+    jid = reader.create_job("ws", site="https://site.example.com", max_pages=4)
+    page = reader._next_pending(jid, 1)[0]
+    assert page["url"] == "https://site.example.com/"
+    assert page["kind"] == "pending"
+
+
+def test_brief_compresses_and_cites_sources():
+    from tony.db import session
+    from tony.models import ReadJob, ReadPage
+    from tony import summarise
+
+    body = ("The registry publishes zone data every day. Registry operators must sign the root zone. "
+            "Zone signing protects the delegation chain. " * 12)
+    with session() as s:
+        job = ReadJob(workspace_id="ws_brief", status="done", seed_url="https://ex.example.com/", max_pages=5)
+        s.add(job); s.flush()
+        jid = job.id
+        for i in range(3):
+            s.add(ReadPage(job_id=jid, url=f"https://ex.example.com/{i}", status="done",
+                           title=f"Page {i}", content=body, word_count=len(body.split())))
+        s.flush()
+    brief = summarise.build_brief(jid, "ws_brief", max_points=4)
+    assert brief["pages_used"] == 3
+    assert brief["points"] and brief["sources"]
+    assert brief["compression"] > 5
+    assert brief["themes"] and brief["themes"][0]["pages"] == 3  # identical content collapses
+    md = summarise.brief_markdown(brief)
+    assert "## Key points" in md and "https://ex.example.com/0" in md
+
+
+def test_read_budget_is_reported(client):
+    r = client.get("/v1/billing/me")
+    assert r.status_code in (200, 401)
+    if r.status_code == 200:
+        body = r.json()
+        assert "read_pages" in body.get("limits", {}) or "read_pages" in body.get("usage", {})

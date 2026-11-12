@@ -21,7 +21,8 @@ from sqlalchemy import select
 from . import __version__
 from . import agenttokens
 from .auth import rate_limit, workspace_from_request
-from .billing import check_capacity, check_run, enforce_session, rate_for, resolve_session, touch_session
+from .billing import (check_capacity, check_run, enforce_session, rate_for, read_budget_left,
+                      read_page_limit, resolve_session, touch_session)
 from .catalog import catalog
 from .config import settings
 from .db import session
@@ -804,6 +805,12 @@ async def read_create(body: ReadIn, request: Request) -> dict[str, Any]:
     ws, _ = workspace_from_request(request)
     rate_limit(f"ws:{ws}", rate_for(ws))
     max_pages = max(1, min(int(body.max_pages or 50), 20000))
+    remaining = read_budget_left(ws)
+    if remaining <= 0:
+        raise HTTPException(402, detail=(
+            f"This workspace has used its {read_page_limit(ws):,} read pages for the month. "
+            "Upgrade the plan or wait for the period to reset."))
+    max_pages = min(max_pages, remaining)
     try:
         job_id = reader.create_job(
             ws, urls=body.urls, site=body.site, sitemap=body.sitemap, depth=body.depth,
@@ -895,6 +902,21 @@ def read_pages(job_id: str, request: Request, offset: int = 0, limit: int = 50,
             await asyncio.sleep(0.8)
 
     return StreamingResponse(events(), media_type="application/x-ndjson")
+
+
+@router.post("/read/{job_id}/summarise")
+def read_summarise(job_id: str, request: Request, max_points: int = 12, markdown: bool = False) -> dict[str, Any]:
+    """Map-reduce the whole job into a brief: themes, key points, sources, compression."""
+    from . import summarise
+
+    ws, _ = workspace_from_request(request)
+    try:
+        brief = summarise.build_brief(job_id, ws, max_points=max(3, min(int(max_points), 40)))
+    except KeyError:
+        raise HTTPException(404, detail="Unknown read job")
+    if markdown:
+        brief["markdown"] = summarise.brief_markdown(brief)
+    return brief
 
 
 @router.get("/governor")

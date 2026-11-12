@@ -49,6 +49,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "tagline": "Build the whole thing, ship it, then grow into a paid plan.",
         "price_ngn": 0,
         "price_usd": 0,
+        "read_pages": 3_000,
         "runs": 5_000,
         "connected_accounts": 15,
         "entities": 5,
@@ -77,6 +78,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "tagline": "For a product in production with real users on it.",
         "price_ngn": 7_500,
         "price_usd": 5,
+        "read_pages": 100_000,
         "runs": 150_000,
         "connected_accounts": 250,
         "entities": 100,
@@ -105,6 +107,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "tagline": "For teams running automations for other people.",
         "price_ngn": 25_000,
         "price_usd": 20,
+        "read_pages": 1_000_000,
         "runs": 1_000_000,
         "connected_accounts": 2_000,
         "entities": 1_000,
@@ -230,8 +233,13 @@ def usage_for(ws: str) -> dict[str, int]:
     with session() as s:
         runs = s.scalar(select(func.count(ActionRun.id)).where(
             ActionRun.workspace_id == ws, ActionRun.created_at >= start)) or 0
+        from .models import ReadJob
+
+        read_pages = s.scalar(select(func.coalesce(func.sum(ReadJob.fetched), 0)).where(
+            ReadJob.workspace_id == ws, ReadJob.created_at >= start)) or 0
         return {
             "runs": int(runs),
+            "read_pages": int(read_pages),
             "connected_accounts": int(s.scalar(select(func.count(ConnectedAccount.id)).where(
                 ConnectedAccount.workspace_id == ws,
                 ConnectedAccount.status == "active")) or 0),
@@ -274,7 +282,7 @@ def summary(ws: str) -> dict[str, Any]:
         "cancel_at_period_end": bool(sub and sub.cancel_at_period_end),
         "usage": usage,
         "limits": limits,
-        "remaining": {k: max(0, limits[k] - usage[k]) for k in usage},
+        "remaining": {k: max(0, limits.get(k, 10**9) - usage[k]) for k in usage},
         "user": {"email": user.email, "id": user.id} if user else None,
         "upgrade_url": "/app",
     }
@@ -314,6 +322,15 @@ def check_capacity(ws: str, kind: str) -> None:
     used = usage_for(ws).get(kind, 0)
     if used >= limit:
         raise _upgrade_error(plan, kind, used, limit)
+
+
+def read_page_limit(ws: str) -> int:
+    plan_id, _sub, _user = plan_id_for_workspace(ws)
+    return int(PLANS.get(plan_id, PLANS["free"]).get("read_pages", 3000))
+
+
+def read_budget_left(ws: str) -> int:
+    return max(0, read_page_limit(ws) - int(usage_for(ws).get("read_pages", 0)))
 
 
 def rate_for(ws: str) -> int:

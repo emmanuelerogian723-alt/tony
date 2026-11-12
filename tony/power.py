@@ -698,20 +698,29 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
         spec = next((x for x in specs if x.slug == first["app"]), specs[0])
         items = _items_of(first)
         raw = _raw_items(first)
-        value, id_key = None, ""
+        values: list[Any] = []
         if items:
             id_key = next((k for k in ("id", "key", "uuid", "number") if items[0].get(k) is not None), "")
-            value = items[0].get(id_key) if id_key else None
+            if id_key:
+                values = [i.get(id_key) for i in items if i.get(id_key) not in (None, "")]
         elif raw and isinstance(raw[0], (int, str, float)):
-            value = raw[0]
-        if value not in (None, ""):
+            values = list(raw)
+        values = [v for v in values if v not in (None, "")][:5]
+        if values:
             follow = next((a for a in spec.actions
                            if a.tier == "read" and a.slug != first["action"]
                            and len(a.required or []) == 1
                            and "random" not in (a.url or "")), None)
             if follow is not None:
-                steps.append(await _run_one(ws, entity, spec.slug, follow.slug,
-                                            {follow.required[0]: value}, body.dry_run))
+                # A ranked id list is a step, not an answer: fetch detail for each id so
+                # the reply can name every item instead of printing bare numbers.
+                for value in values:
+                    if any(st.get("action") == follow.slug and
+                           json.dumps(st.get("args") or {}) != "{}" and
+                           str(value) in json.dumps(st.get("args") or {}, default=str) for st in steps[1:]):
+                        continue
+                    steps.append(await _run_one(ws, entity, spec.slug, follow.slug,
+                                                {follow.required[0]: value}, body.dry_run))
 
     # 3c. answer from the full evidence trail, not from a half-finished plan
     if not answer and engine == "llm" and steps:

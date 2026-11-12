@@ -151,12 +151,20 @@ def inspect(request: Request) -> None:
     # Reading is not abuse: an app screen legitimately fires a dozen GETs at once,
     # and a headless browser rendering it looks identical to a user. Writes earn
     # sweep and burst points; a scripted client only reading gets a light nudge.
+    # Connecting several apps in a row looks like a sweep but is normal signup
+    # behaviour, and a caller presenting a credential is an authenticated
+    # developer, not an anonymous scanner. Those paths need a much higher bar.
+    connect_flow = path.startswith("/v1/connections/") or path.startswith("/v1/account/providers")
+    authenticated = bool(request.headers.get("x-api-key") or request.headers.get("authorization"))
     if is_write:
-        if SOFT_UA.search(ua) and distinct >= 8:
+        if SOFT_UA.search(ua) and distinct >= 8 and not connect_flow:
             points += 20; reasons.append("scripted_sweep")  # a script walking many routes
-        if len(window) >= 18 and distinct >= 15:
+        sweep_bar = 40 if (connect_flow or authenticated) else 18
+        sweep_distinct = 30 if (connect_flow or authenticated) else 15
+        if len(window) >= sweep_bar and distinct >= sweep_distinct:
             points += 30; reasons.append("endpoint_sweep")  # walking many routes fast
-        if len(window) >= 30:
+        burst_bar = 60 if (connect_flow or authenticated) else 30
+        if len(window) >= burst_bar:
             points += 12; reasons.append("burst")
     elif SOFT_UA.search(ua) and distinct >= 8:
         points += 4; reasons.append("scripted_reads")

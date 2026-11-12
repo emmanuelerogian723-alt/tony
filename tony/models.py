@@ -384,6 +384,50 @@ class SecurityEvent(Base):
     blocked: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class ReadJob(Base):
+    """A read-at-scale job: URLs, a sitemap, or a whole site to a given depth."""
+    __tablename__ = "read_jobs"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    workspace_id: Mapped[str] = mapped_column(String(32), index=True)
+    entity_id: Mapped[str] = mapped_column(String(160), default="default")
+    status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
+    seed_url: Mapped[str] = mapped_column(Text, default="")
+    sitemap_url: Mapped[str] = mapped_column(Text, default="")
+    depth: Mapped[int] = mapped_column(Integer, default=1)
+    max_pages: Mapped[int] = mapped_column(Integer, default=50)
+    follow_links: Mapped[bool] = mapped_column(Boolean, default=True)
+    render: Mapped[bool] = mapped_column(Boolean, default=False)
+    fetched: Mapped[int] = mapped_column(Integer, default=0)
+    failed: Mapped[int] = mapped_column(Integer, default=0)
+    bytes_in: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str] = mapped_column(Text, default="")
+    options_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ReadPage(Base):
+    """One URL in a read job. The rows are the queue, so a restart resumes."""
+    __tablename__ = "read_pages"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    job_id: Mapped[str] = mapped_column(String(32), index=True)
+    url: Mapped[str] = mapped_column(Text)
+    depth: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    http_status: Mapped[int] = mapped_column(Integer, default=0)
+    title: Mapped[str] = mapped_column(Text, default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    content: Mapped[str] = mapped_column(Text, default="")
+    content_hash: Mapped[str] = mapped_column(String(40), default="", index=True)
+    word_count: Mapped[int] = mapped_column(Integer, default=0)
+    links_json: Mapped[str] = mapped_column(Text, default="[]")
+    risk_score: Mapped[int] = mapped_column(Integer, default=0)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class BlockedSubject(Base):
     """An ip, key or workspace that is shut out until the block expires."""
     __tablename__ = "blocked_subjects"

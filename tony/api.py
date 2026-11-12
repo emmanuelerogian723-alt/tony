@@ -5,6 +5,8 @@ import asyncio
 
 import json
 import time
+
+import httpx
 import os
 import re
 import secrets
@@ -12,7 +14,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -775,6 +777,253 @@ async def approve_run(run_id: str, request: Request) -> dict[str, Any]:
     body = ExecuteIn(action=payload.get("action", ""), entity_id=entity,
                      args=payload.get("args", {}), approved=True)
     return await execute_action(body, request)
+
+
+# ── Read Anything: urls / site / sitemap at scale ─────────────────────────
+
+class ReadIn(BaseModel):
+    urls: list[str] = Field(default_factory=list)
+    site: str = ""
+    sitemap: str = ""
+    depth: int = 1
+    max_pages: int = 50
+    entity_id: str = "default"
+    follow_links: bool = True
+    render: bool = False
+
+
+@router.post("/read")
+async def read_create(body: ReadIn, request: Request) -> dict[str, Any]:
+    """Queue a read job: specific URLs, a sitemap, or a site crawled to `depth`.
+
+    Returns immediately with a job id. Poll `GET /v1/read/{id}` for progress or
+    stream the pages as they land with `GET /v1/read/{id}/pages?stream=1`.
+    """
+    from . import reader
+
+    ws, _ = workspace_from_request(request)
+    rate_limit(f"ws:{ws}", rate_for(ws))
+    max_pages = max(1, min(int(body.max_pages or 50), 20000))
+    try:
+        job_id = reader.create_job(
+            ws, urls=body.urls, site=body.site, sitemap=body.sitemap, depth=body.depth,
+            max_pages=max_pages, entity_id=body.entity_id,
+            follow_links=body.follow_links, render=body.render)
+    except ValueError as exc:
+        raise HTTPException(400, detail=str(exc))
+    reader.enqueue(job_id)
+    state = reader.job_state(job_id, ws) or {}
+    return {"ok": True, "job_id": job_id, "status": state.get("status", "queued"),
+            "max_pages": max_pages, "stream": f"/v1/read/{job_id}/pages?stream=1",
+            "poll": f"/v1/read/{job_id}"}
+
+
+@router.get("/read")
+def read_jobs(request: Request, limit: int = 20) -> dict[str, Any]:
+    from . import reader
+
+    ws, _ = workspace_from_request(request)
+    from .models import ReadJob
+    with session() as s:
+        rows = s.scalars(select(ReadJob).where(ReadJob.workspace_id == ws)
+                         .order_by(ReadJob.created_at.desc()).limit(min(limit, 100))).all()
+        return {"jobs": [{"job_id": r.id, "status": r.status, "seed": r.seed_url,
+                          "max_pages": r.max_pages, "fetched": r.fetched,
+                          "created_at": r.created_at.isoformat() if r.created_at else ""} for r in rows]}
+
+
+@router.get("/read/{job_id}")
+def read_status(job_id: str, request: Request) -> dict[str, Any]:
+    from . import reader
+
+    ws, _ = workspace_from_request(request)
+    state = reader.job_state(job_id, ws)
+    if state is None:
+        raise HTTPException(404, detail="Unknown read job")
+    return state
+
+
+@router.post("/read/{job_id}/cancel")
+def read_cancel(job_id: str, request: Request) -> dict[str, Any]:
+    from . import reader
+    from .models import ReadJob
+
+    ws, _ = workspace_from_request(request)
+    with session() as s:
+        job = s.scalar(select(ReadJob).where(ReadJob.id == job_id, ReadJob.workspace_id == ws))
+        if job is None:
+            raise HTTPException(404, detail="Unknown read job")
+        job.status = "cancelled"
+        s.flush()
+    return {"ok": True, "job_id": job_id, "status": "cancelled"}
+
+
+@router.get("/read/{job_id}/pages")
+def read_pages(job_id: str, request: Request, offset: int = 0, limit: int = 50,
+               content: bool = True, status: str = "", stream: bool = False):
+    """Pages of a read job. `stream=1` emits NDJSON as pages finish."""
+    from . import reader
+
+    ws, _ = workspace_from_request(request)
+    if not stream:
+        try:
+            return reader.job_pages(job_id, ws, offset=offset, limit=limit,
+                                    include_content=content, status=status)
+        except KeyError:
+            raise HTTPException(404, detail="Unknown read job")
+
+    if reader.job_state(job_id, ws) is None:
+        raise HTTPException(404, detail="Unknown read job")
+
+    async def events():
+        cursor = offset
+        idle = 0
+        while True:
+            chunk = reader.job_pages(job_id, ws, offset=cursor, limit=limit,
+                                     include_content=content, status=status)
+            for page in chunk["pages"]:
+                cursor += 1
+                yield json.dumps(page, ensure_ascii=False) + "\n"
+            state = reader.job_state(job_id, ws) or {}
+            if state.get("status") in {"done", "failed", "cancelled"} and not chunk["pages"]:
+                yield json.dumps({"event": "finished", "state": state}, ensure_ascii=False) + "\n"
+                return
+            idle = 0 if chunk["pages"] else idle + 1
+            if idle > 600:
+                yield json.dumps({"event": "timeout", "state": state}, ensure_ascii=False) + "\n"
+                return
+            await asyncio.sleep(0.8)
+
+    return StreamingResponse(events(), media_type="application/x-ndjson")
+
+
+@router.get("/governor")
+def governor_stats() -> dict[str, Any]:
+    """Live politeness budget: how hard Tony is willing to fetch."""
+    from .governor import GOVERNOR
+    return GOVERNOR.snapshot()
+
+
+# ── Hands: raw passthrough and governed fan-out ───────────────────────────
+
+class ProxyIn(BaseModel):
+    method: str = "GET"
+    path: str = "/"
+    query: dict[str, Any] = Field(default_factory=dict)
+    body: Any = None
+    headers: dict[str, str] = Field(default_factory=dict)
+    entity_id: str = "default"
+    max_chars: int = 200000
+
+
+@router.post("/proxy/{app_slug}")
+async def proxy(app_slug: str, body: ProxyIn, request: Request) -> dict[str, Any]:
+    """Call any endpoint of a connected app, including ones not in the catalogue.
+
+    The catalogue covers 48k actions; a real app has endpoints nobody wrapped.
+    This passes the request through with the connection's credentials, the SSRF
+    guard, redirect re-validation and the injection firewall still applied.
+    """
+    from . import firewall
+    from .executor import _guarded_request, redact_url
+
+    ws, _ = workspace_from_request(request)
+    spec = catalog.get(app_slug)
+    if spec is None:
+        raise HTTPException(404, detail=f"Unknown app '{app_slug}'")
+    if not (spec.base_url or "").startswith("http"):
+        raise HTTPException(400, detail=f"{spec.name} has no base URL to proxy to")
+    entity = _entity(ws, body.entity_id)
+    creds = credentials_for(ws, entity, spec)
+    if spec.auth.type != "none" and creds is None:
+        raise HTTPException(409, detail=f"No {spec.name} account connected. Connect it first, then retry.")
+    rate_limit(f"ws:{ws}", rate_for(ws))
+
+    path = body.path if body.path.startswith("/") else "/" + body.path
+    url = (spec.base_url or "").rstrip("/") + path
+    headers = {"User-Agent": "TonyProxy/1.0", "Accept": "application/json"}
+    headers.update(spec.default_headers or {})
+    headers.update({k: v for k, v in (body.headers or {}).items()
+                    if k.lower() not in {"authorization", "host", "cookie", "content-length"}})
+    query = dict(body.query or {})
+    from .executor import apply_auth
+    apply_auth(spec, headers, query, creds)
+
+    method = (body.method or "GET").upper()
+    if method not in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"}:
+        raise HTTPException(400, detail="Unsupported method")
+    started = time.time()
+    try:
+        async with httpx.AsyncClient(timeout=settings.http_timeout) as client:
+            resp = await _guarded_request(client, method, url, headers=headers,
+                                          params=query or None,
+                                          json_body=body.body if method not in {"GET", "HEAD"} else None)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(502, detail=f"{spec.name} request failed: {type(exc).__name__}: {exc}"[:300])
+    latency = int((time.time() - started) * 1000)
+    text = resp.text or ""
+    trimmed = text[: max(0, min(body.max_chars, 400000))]
+    verdict = firewall.scan(trimmed[:40000]) if "json" in resp.headers.get("content-type", "") and trimmed else {"score": 0, "flags": []}
+    payload: Any
+    try:
+        payload = json.loads(trimmed)
+    except ValueError:
+        payload = {"text": trimmed}
+    return {
+        "ok": resp.status_code < 400,
+        "status": resp.status_code,
+        "latency_ms": latency,
+        "app": spec.slug,
+        "method": method,
+        "url": redact_url(url),
+        "chars": len(text),
+        "truncated": len(text) > len(trimmed),
+        "neutralised": bool(verdict.get("score", 0)),
+        "data": payload,
+    }
+
+
+class FanoutIn(BaseModel):
+    calls: list[dict[str, Any]] = Field(default_factory=list)
+    concurrency: int = 6
+    entity_id: str = "default"
+    stop_on_error: bool = False
+
+
+@router.post("/fanout")
+async def fanout(body: FanoutIn, request: Request) -> dict[str, Any]:
+    """Run up to 200 actions in parallel, governed per host and per workspace.
+
+    `POST /v1/batch` stays sequential and cheap; this is the bulk path for
+    enrichment jobs. Concurrency is capped by the governor, not by the caller.
+    """
+    if not body.calls:
+        raise HTTPException(400, detail="Send at least one call")
+    if len(body.calls) > 200:
+        raise HTTPException(400, detail="Fan-out is capped at 200 calls per request. Use /v1/read or split the job.")
+    limit = max(1, min(int(body.concurrency or 6), 24))
+    sem = asyncio.Semaphore(limit)
+    started = time.time()
+
+    async def one(call: dict[str, Any]) -> dict[str, Any]:
+        payload = ExecuteIn(action=call.get("action", ""), entity_id=call.get("entity_id", body.entity_id),
+                            args=call.get("args") or {}, approved=bool(call.get("approved")),
+                            dry_run=bool(call.get("dry_run")), source="fanout")
+        async with sem:
+            try:
+                out = await execute_action(payload, request)
+                return {"action": payload.action, "ok": bool(out.get("ok")), "result": out}
+            except HTTPException as exc:
+                return {"action": payload.action, "ok": False, "status_code": exc.status_code,
+                        "error": exc.detail}
+            except Exception as exc:  # noqa: BLE001
+                return {"action": payload.action, "ok": False, "error": str(exc)[:300]}
+
+    results = await asyncio.gather(*[one(c) for c in body.calls])
+    return {"results": results, "count": len(results),
+            "succeeded": sum(1 for r in results if r["ok"]),
+            "concurrency": limit,
+            "elapsed_ms": int((time.time() - started) * 1000)}
 
 
 @router.get("/runs")

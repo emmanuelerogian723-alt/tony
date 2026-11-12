@@ -94,6 +94,14 @@ async def lifespan(app: FastAPI):
     from .flows import runner as _flow_runner
     from .syncs import runner as _sync_runner
     app.state.workers = [asyncio.create_task(_flow_runner()), asyncio.create_task(_sync_runner())]
+    # Reader jobs are rows, not memory: a redeploy resumes where it stopped.
+    try:
+        from . import reader as _reader
+        import threading as _threading
+
+        _threading.Thread(target=_reader.resume_unfinished, daemon=True).start()
+    except Exception as exc:  # never block startup on the reader
+        log.warning("reader resume skipped: %s", exc)
     if settings.self_url and settings.ping_seconds > 0:
         _tasks = getattr(app.state, "tasks", [])
         _tasks.append(asyncio.create_task(self_ping(settings.self_url, settings.ping_seconds)))

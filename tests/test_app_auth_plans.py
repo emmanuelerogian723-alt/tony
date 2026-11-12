@@ -47,7 +47,8 @@ def test_dynamic_registration_uses_declared_endpoint(client, monkeypatch):
 
     spec = __import__("tony.catalog", fromlist=["catalog"]).catalog.get("notion-mcp")
     assert spec and spec.auth.registration_url.startswith("https://mcp.notion.com")
-    cid, secret = __import__("asyncio").get_event_loop().run_until_complete(oauth.dynamic_client(spec))
+    import asyncio
+    cid, secret = asyncio.run(oauth.dynamic_client(spec))
     assert cid == "dcr_client_123" and secret == "dcr_secret_456"
     assert called["url"] == spec.auth.registration_url, "must use the declared endpoint, not discovery"
     assert called["payload"]["redirect_uris"]

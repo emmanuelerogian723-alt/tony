@@ -129,6 +129,16 @@ def apply(spec: Any) -> bool:
     if not auth.pkce:
         auth.pkce = True
         changed = True
+    for key, value in (p.get("authorize_params") or {}).items():
+        if key not in {"response_type", "client_id", "redirect_uri", "state", "code_challenge",
+                       "code_challenge_method"} and key not in auth.authorize_params:
+            auth.authorize_params[key] = value
+            changed = True
+    if not getattr(auth, "registration_params", None):
+        try:
+            auth.registration_params = dict(p.get("registration_params") or {})
+        except Exception:
+            pass
     base = p.get("base_url") or p.get("mcp_url") or ""
     if base and not getattr(spec, "base_url", ""):
         spec.base_url = base

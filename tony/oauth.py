@@ -163,19 +163,39 @@ async def dynamic_client(spec: AppSpec, scopes: list[str] | None = None) -> tupl
         return await _register_client(spec, reg_endpoint, scopes)
 
 
+async def _auth_method(spec: AppSpec) -> str:
+    """Pick a client-auth method the provider advertises.
+
+    Public clients (``none``) are the right choice for first-party MCP servers:
+    PKCE protects the exchange and nothing secret is stored. Falls back to the
+    confidential methods when the provider requires one.
+    """
+    try:
+        meta = (await _fetch_meta(_well_known(spec.auth.authorize_url or ""))).json()
+    except Exception:
+        return "client_secret_post"
+    supported = [m for m in (meta.get("token_endpoint_auth_methods_supported") or []) if m]
+    for preferred in ("none", "client_secret_basic", "client_secret_post"):
+        if preferred in supported:
+            return preferred
+    return "client_secret_post"
+
+
 async def _register_client(spec: AppSpec, reg_endpoint: str,
                            scopes: list[str] | None = None) -> tuple[str, str]:
     """RFC 7591 registration: ask the provider to register Tony as a client."""
+    method = await _auth_method(spec)
     payload: dict[str, Any] = {
         "client_name": "Tony",
         "client_uri": settings.base_url,
         "redirect_uris": [redirect_uri(spec)],
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
-        "token_endpoint_auth_method": "client_secret_post",
+        "token_endpoint_auth_method": method,
     }
+    payload.update(getattr(spec.auth, "registration_params", {}) or {})
     use_scopes = scopes or spec.auth.scopes
-    if use_scopes:
+    if use_scopes and "scope" not in payload:
         payload["scope"] = " ".join(use_scopes)
     reg = await _post_registration(reg_endpoint, payload)
     if reg.status_code >= 400:
@@ -272,14 +292,19 @@ async def complete_oauth(state: str, code: str) -> ConnectedAccount:
             "code": code,
             "redirect_uri": redirect_uri(spec),
             "client_id": cid,
-            "client_secret": secret,
             **(spec.auth.token_params or {}),
         }
+        if secret:
+            payload["client_secret"] = secret
         if pending.code_verifier:
             payload["code_verifier"] = pending.code_verifier
         headers = {"Accept": "application/json"}
         async with httpx.AsyncClient(timeout=25) as client:
             resp = await client.post(spec.auth.token_url, data=payload, headers=headers)
+            if resp.status_code in {400, 401} and secret:
+                # Provider wants HTTP Basic instead of body credentials.
+                resp = await client.post(spec.auth.token_url, data=payload,
+                                         headers=headers, auth=(cid, secret))
         if resp.status_code >= 400:
             raise OAuthError(f"Token exchange failed ({resp.status_code}): {resp.text[:200]}")
         try:

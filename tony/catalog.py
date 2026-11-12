@@ -59,6 +59,7 @@ class AuthSpec:
     client_id_env: str = ""
     client_secret_env: str = ""
     registration_url: str = ""              # RFC 7591 dynamic client registration
+    registration_params: dict = field(default_factory=dict)
     pkce: bool = False
     authorize_params: dict[str, str] = field(default_factory=dict)
     token_params: dict[str, str] = field(default_factory=dict)

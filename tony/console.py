@@ -295,6 +295,140 @@ pre.out{margin:0;padding:13px;border-radius:10px;background:#151412;color:#EDE8D
 .plan .cur{position:absolute;right:12px;top:12px}
 .ses{display:flex;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .ses:last-child{border-bottom:none}
+
+/* ── silk & sky: the console palette ───────────────────────
+   Milky white paper, cool as enamel, with fine sky-blue rays
+   laid over it like silk. Hairlines instead of heavy borders,
+   one accent that means "do the thing", and numbers that read
+   first at a glance. */
+:root{
+  --paper:#EDF5FB; --card:#FBFDFF; --card-2:#F2F9FE;
+  --ink:#08192B; --ink-2:#2B4557; --mut:#5E7A8C;
+  --line:rgba(14,86,140,.14); --line-2:rgba(14,86,140,.26);
+  --accent:#1E90DE; --accent-2:#0B6FB6; --accent-deep:#075A96;
+  --accent-soft:#E2F2FD; --sky-milk:#D8ECF9;
+  --ok:#0C7D5B; --ok-soft:#E1F5EE; --warn:#9A6108; --bad:#A8331F;
+  --r:10px; --r-lg:14px; --r-xl:20px;
+  --shadow:0 1px 2px rgba(9,45,74,.05), 0 10px 24px -18px rgba(9,45,74,.35);
+  --shadow-lift:0 2px 4px rgba(9,45,74,.06), 0 22px 40px -26px rgba(9,45,74,.45);
+}
+html{background:#E7F1F9}
+body{background:
+  radial-gradient(120% 80% at 88% -14%, #FFFFFF 0%, rgba(255,255,255,0) 55%),
+  radial-gradient(90% 70% at 100% 0%, rgba(126,203,244,.35), rgba(126,203,244,0) 60%),
+  linear-gradient(178deg,#F8FCFF 0%,#EDF5FB 46%,#E6F0F9 100%);
+  background-attachment:fixed;color:var(--ink)}
+body:before{opacity:1;mix-blend-mode:normal;
+  background:
+    repeating-conic-gradient(from 198deg at 82% -8%,
+      rgba(30,144,222,.13) 0deg 1.3deg, rgba(30,144,222,0) 1.3deg 6.4deg),
+    repeating-conic-gradient(from 18deg at 6% 4%,
+      rgba(11,111,182,.07) 0deg 1.1deg, rgba(11,111,182,0) 1.1deg 8deg);
+  -webkit-mask-image:linear-gradient(180deg,#000 0%,rgba(0,0,0,.55) 42%,rgba(0,0,0,0) 82%);
+  mask-image:linear-gradient(180deg,#000 0%,rgba(0,0,0,.55) 42%,rgba(0,0,0,0) 82%)}
+body:after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+  background:repeating-linear-gradient(114deg,
+    rgba(255,255,255,.85) 0 1px, rgba(255,255,255,0) 1px 7px);
+  mix-blend-mode:screen}
+::selection{background:var(--accent);color:#fff}
+
+/* rail */
+@media(min-width:920px){
+  .rail{border-right:1px solid var(--line);background:
+      linear-gradient(180deg,rgba(251,253,255,.9),rgba(238,246,252,.78));
+    backdrop-filter:saturate(140%) blur(18px)}
+}
+.brand b{font-family:var(--sans);font-weight:600;letter-spacing:-.03em;font-size:18px}
+.brand i{color:var(--accent-2);border-color:var(--line-2);background:#fff}
+.nav{border-radius:9px;font-weight:500;color:var(--ink-2);letter-spacing:-.01em}
+.nav:hover{background:rgba(30,144,222,.08)}
+.nav.on{background:linear-gradient(180deg,var(--accent) 0%,var(--accent-2) 100%);color:#fff;
+  box-shadow:0 1px 0 rgba(255,255,255,.5) inset, 0 8px 18px -10px rgba(11,111,182,.7)}
+.who:hover{background:rgba(30,144,222,.08)}
+
+/* top bar: milky glass */
+.top{background:rgba(248,252,255,.82);border-bottom:1px solid var(--line);
+  backdrop-filter:saturate(150%) blur(20px)}
+.tabbar{background:rgba(250,253,255,.94);border-top:1px solid var(--line)}
+.tab.on{color:var(--accent-deep);background:rgba(30,144,222,.1)}
+
+/* headings */
+h1{font-family:var(--sans);font-weight:600;letter-spacing:-.035em;font-size:clamp(23px,3.4vw,31px)}
+h2,h3{font-family:var(--sans);font-weight:600;letter-spacing:-.025em}
+.hd h1{position:relative;display:inline-block}
+.hd h1:after{content:"";position:absolute;left:0;right:-6px;bottom:-7px;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,var(--accent),rgba(30,144,222,0))}
+.hd p{color:var(--mut);max-width:62ch}
+.lbl{font-family:var(--sans);text-transform:uppercase;letter-spacing:.13em;font-size:10.5px;color:var(--mut);font-weight:600}
+
+/* cards: milky enamel with a hairline of sky */
+.card{background:linear-gradient(180deg,#FFFFFF 0%,var(--card) 62%,var(--card-2) 100%);
+  border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+  transition:box-shadow .22s ease,border-color .22s ease,transform .22s ease}
+.card:hover{border-color:var(--line-2);box-shadow:var(--shadow-lift)}
+.card.pad{padding:18px}
+.divider{background:linear-gradient(90deg,var(--line),rgba(14,86,140,.02));height:1px;margin:14px 0}
+
+/* stats */
+.stat{position:relative;background:linear-gradient(180deg,#fff,var(--card-2));border:1px solid var(--line);
+  border-radius:12px;padding:16px 16px 14px;overflow:hidden;box-shadow:var(--shadow)}
+.stat:before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;
+  background:linear-gradient(180deg,var(--accent),rgba(30,144,222,0))}
+.stat b{font-family:var(--sans);font-weight:600;font-size:27px;letter-spacing:-.04em;
+  color:var(--ink);font-variant-numeric:tabular-nums}
+.stat span{display:block;margin-top:3px;color:var(--mut);font-size:11px;text-transform:uppercase;
+  letter-spacing:.12em;font-weight:600}
+
+/* buttons */
+.btn{border-radius:9px;font-weight:600;letter-spacing:-.01em;background:#fff;color:var(--ink);
+  border:1px solid var(--line-2);box-shadow:0 1px 2px rgba(9,45,74,.05)}
+.btn:hover{background:#fff;border-color:var(--accent);color:var(--accent-deep)}
+.btn.acc{background:linear-gradient(180deg,#3FA6EA 0%,var(--accent) 45%,var(--accent-2) 100%);
+  border:1px solid var(--accent-deep);color:#fff;
+  box-shadow:0 1px 0 rgba(255,255,255,.55) inset, 0 10px 22px -12px rgba(11,111,182,.85)}
+.btn.acc:hover{transform:translateY(-1px);color:#fff;
+  box-shadow:0 1px 0 rgba(255,255,255,.6) inset, 0 16px 30px -14px rgba(11,111,182,.9)}
+.btn.ghost{background:transparent;border-color:var(--line-2);color:var(--ink-2);box-shadow:none}
+.btn.ghost:hover{border-color:var(--accent);color:var(--accent-deep);background:rgba(30,144,222,.06)}
+
+/* inputs */
+.inp{border-radius:9px;border:1px solid var(--line-2);background:#fff}
+.inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(30,144,222,.16)}
+.field label{text-transform:uppercase;letter-spacing:.1em;font-size:10.5px;font-weight:600;color:var(--mut)}
+.opt{border-radius:8px;background:#fff;border:1px solid var(--line);color:var(--ink-2);font-weight:500}
+.opt.on{background:linear-gradient(180deg,var(--accent),var(--accent-2));border-color:var(--accent-deep);color:#fff}
+.seg{border-radius:9px;background:var(--card-2);border:1px solid var(--line)}
+.seg button{border-radius:7px;font-weight:600}
+.seg button.on{background:#fff;color:var(--accent-deep);box-shadow:0 1px 3px rgba(9,45,74,.12)}
+.tag,.chip{border-radius:6px;border:1px solid var(--line);background:rgba(255,255,255,.8);color:var(--ink-2)}
+.code,.mono,pre.out{font-family:var(--mono)}
+pre.out{background:linear-gradient(180deg,#0A2130,#08192B);border:1px solid rgba(30,144,222,.35);
+  border-radius:10px;color:#DCEEFB;padding:14px;overflow:auto;font-size:12.5px;line-height:1.55}
+.hero{background:linear-gradient(135deg,#FFFFFF 0%,#EAF6FF 46%,#D9EDFB 100%);
+  border:1px solid var(--line);border-radius:18px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
+.hero:after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-conic-gradient(from 200deg at 92% -20%,
+    rgba(30,144,222,.16) 0deg 1.1deg, rgba(30,144,222,0) 1.1deg 5.2deg);
+  mask-image:radial-gradient(65% 90% at 95% 0%,#000,transparent 70%)}
+.hero .amt{font-family:var(--sans);font-weight:600;letter-spacing:-.045em;color:var(--ink)}
+.ec-bar i{background:linear-gradient(90deg,var(--accent),#7ECBF4);border-radius:2px}
+.pk{border-radius:10px;border:1px solid var(--line);background:#fff}
+.empty{color:var(--mut)}
+a{color:var(--accent-deep)}
+.ask-fab{background:linear-gradient(180deg,var(--accent),var(--accent-2));border:none;color:#fff;
+  box-shadow:0 14px 30px -14px rgba(11,111,182,.9)}
+.ask-fab:hover{box-shadow:0 20px 40px -16px rgba(11,111,182,1)}
+.ask{border-radius:16px;border:1px solid var(--line-2);background:linear-gradient(180deg,#fff,#F4FAFE);
+  box-shadow:0 40px 80px -40px rgba(8,25,43,.5)}
+.ask-msg.me{background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff}
+.ask-in button{background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff}
+.auth-l h1{letter-spacing:-.04em}
+.auth:before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-conic-gradient(from 205deg at 12% -10%,
+    rgba(30,144,222,.14) 0deg 1.2deg, rgba(30,144,222,0) 1.2deg 6deg);
+  mask-image:linear-gradient(180deg,#000,transparent 78%)}
+#auth{background:transparent}
+
 """
 
 CONSOLE_JS = r"""
@@ -441,6 +575,7 @@ const NAV = [['overview','Overview','M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5'],
              ['agent','Agent','M12 3v3m0 12v3M3 12h3m12 0h3M12 8.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z'],
              ['apps','Apps','M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v6H4zM13 14h7v6h-7z'],
              ['connections','Connections','M9 15l6-6M7.5 4.5 6 6a4 4 0 105.7 5.7M16.5 19.5 18 18a4 4 0 10-5.7-5.7'],
+             ['reads','Reads','M2 12s3.7-7 10-7 10 7 10 7-3.7 7-10 7-10-7-10-7zM12 9.6a2.4 2.4 0 100 4.8 2.4 2.4 0 000-4.8z'],
              ['runs','Activity','M3 12h4l2.5-7 4 14L16 12h5'],
              ['keys','API keys','M14 7a4 4 0 10-3.5 4L4 17.5V21h3.5l6.5-6.5A4 4 0 0014 7z'],
              ['sessions','Sessions','M12 3a9 9 0 100 18 9 9 0 000-18zm0 4v5l3.5 2'],
@@ -474,6 +609,7 @@ function go(page){
   window.scrollTo({top:0, behavior:'instant'});
   if(page==='apps'){ if(!S.loaded.apps){ S.loaded.apps=1; loadApps(true) } else { renderApps() } }
   if(page==='connections'){ loadConns() }
+  if(page==='reads'){ loadReads() }
   if(page==='runs'){ loadRuns() }
   if(page==='keys'){ loadKeys() }
   if(page==='profile'){ renderProfile() }
@@ -919,6 +1055,95 @@ async function loadConns(){
   }catch(e){ el('conn-list').innerHTML='<div class="empty">'+esc(e.message)+'</div>' }
 }
 
+/* ── reads ──────────────────────────────────────────────── */
+const READ_STATUS = {queued:'queued', running:'reading', done:'done', failed:'failed', cancelled:'cancelled'};
+function readPill(st){
+  const map = {done:'ok', running:'', queued:'', failed:'bad', cancelled:''};
+  const cls = map[st] || '';
+  return '<span class="tiny '+cls+'" style="font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;'+
+    'text-transform:uppercase;padding:2px 7px;border-radius:5px;border:1px solid var(--line-2)">'+(READ_STATUS[st]||st)+'</span>';
+}
+async function loadReads(){
+  try{
+    const d = await api('/v1/read?limit=24');
+    const jobs = d.jobs||[];
+    el('read-stats').innerHTML =
+      '<div class="stat"><b>'+n(jobs.length)+'</b><span>jobs</span></div>'+
+      '<div class="stat"><b>'+n(jobs.reduce((s,j)=>s+(j.fetched||0),0))+'</b><span>pages read</span></div>'+
+      '<div class="stat"><b>'+n(jobs.filter(j=>j.status==='running').length)+'</b><span>in flight</span></div>'+
+      '<div class="stat"><b>'+n(jobs.reduce((s,j)=>s+(j.max_pages||0),0))+'</b><span>budget asked</span></div>';
+    el('read-jobs').innerHTML = jobs.length ? jobs.map(j=>
+      '<div class="pk" style="display:flex;gap:10px;align-items:center;padding:11px 13px;margin-bottom:7px;cursor:pointer" data-j="'+esc(j.job_id)+'">'+
+        '<div style="min-width:0;flex:1"><div style="font-size:13.5px;font-weight:540;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(j.seed||'urls')+'</div>'+
+        '<div class="tiny muted">'+n(j.fetched||0)+' / '+n(j.max_pages||0)+' pages · '+esc((j.created_at||'').slice(0,16).replace('T',' '))+'</div></div>'+
+        readPill(j.status)+'</div>').join('')
+      : '<div class="empty">Nothing read yet. Paste a site above and hit Read it.</div>';
+    el('read-jobs').querySelectorAll('[data-j]').forEach(row=>row.onclick=()=>openRead(row.dataset.j));
+  }catch(e){ el('read-jobs').innerHTML='<div class="empty">'+esc(e.message)+'</div>' }
+}
+async function startRead(){
+  const site = (el('read-site').value||'').trim();
+  if(!site){ toast('Paste a site first'); return }
+  const depth = parseInt(el('read-depth').value||'1',10);
+  const max_pages = Math.max(1, Math.min(20000, parseInt(el('read-max').value||'40',10)));
+  try{
+    const body = site.includes('/sitemap') ? {sitemap:site, max_pages} : {site, depth, max_pages};
+    const d = await api('/v1/read', {method:'POST', body});
+    toast('Reading ' + site);
+    loadReads(); openRead(d.job_id);
+  }catch(e){ toast(e.message) }
+}
+async function openRead(id){
+  el('read-detail').style.display='block';
+  const box = el('read-detail-body');
+  const draw = async () => {
+    const st = await api('/v1/read/'+encodeURIComponent(id));
+    const pct = st.max_pages ? Math.min(100, Math.round(100*(st.done+st.duplicate)/Math.max(1,st.pages_known||1))) : 0;
+    box.innerHTML =
+      '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">'+
+        '<div style="min-width:0"><div class="lbl">Read job</div>'+
+        '<div style="font-size:16px;font-weight:560;letter-spacing:-.02em;overflow:hidden;text-overflow:ellipsis">'+esc(st.seed||st.sitemap||'urls')+'</div></div>'+
+        '<div class="row" style="gap:8px">'+readPill(st.status)+
+        '<button class="btn ghost sm" onclick="briefRead(\''+esc(id)+'\')">Summarise</button></div>'+
+      '</div>'+
+      '<div class="ec-bar" style="height:4px;background:rgba(14,86,140,.1);border-radius:2px;margin:14px 0 8px"><i style="width:'+pct+'%"></i></div>'+
+      '<div class="grid g4" style="grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">'+
+        '<div class="stat"><b>'+n(st.done)+'</b><span>pages</span></div>'+
+        '<div class="stat"><b>'+n(st.duplicate||0)+'</b><span>duplicates</span></div>'+
+        '<div class="stat"><b>'+n(st.failed||0)+'</b><span>failed</span></div>'+
+        '<div class="stat"><b>'+n(st.pending||0)+'</b><span>queued</span></div>'+
+      '</div>'+
+      '<div id="read-brief"></div><div id="read-pages" class="tiny muted">Loading pages…</div>';
+    const pg = await api('/v1/read/'+encodeURIComponent(id)+'/pages?limit=6&content=false');
+    el('read-pages').innerHTML = (pg.pages||[]).length ? (pg.pages||[]).map(p=>
+      '<div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)">'+
+      '<div style="min-width:0;flex:1"><div style="color:var(--ink);font-size:13px;font-weight:520;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.title||p.url)+'</div>'+
+      '<div class="tiny muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.url)+'</div></div>'+
+      '<div class="tiny mono muted">'+n(p.word_count||0)+'w'+(p.risk_score?' · flagged':'')+'</div></div>').join('')
+      : '<div class="empty" style="padding:8px 0">No pages stored yet.</div>';
+    if(st.status==='running'||st.status==='queued'){ setTimeout(draw, 2500) }
+  };
+  try{ await draw() }catch(e){ box.innerHTML='<div class="empty">'+esc(e.message)+'</div>' }
+}
+async function briefRead(id){
+  const slot = el('read-brief');
+  if(!slot) return;
+  slot.innerHTML = '<div class="tiny muted" style="padding:10px 0">Compressing…</div>';
+  try{
+    const b = await api('/v1/read/'+encodeURIComponent(id)+'/summarise?max_points=8', {method:'POST'});
+    slot.innerHTML =
+      '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:linear-gradient(180deg,#fff,#F1F9FF);margin-bottom:12px">'+
+      '<div class="lbl">Brief</div>'+
+      '<div style="font-size:13.5px;margin:6px 0 10px;color:var(--ink-2)">'+esc(b.brief||'')+'</div>'+
+      (b.themes||[]).slice(0,5).map(t=>'<span class="tag" style="display:inline-block;margin:0 6px 6px 0;padding:3px 8px;font-size:11.5px">'+esc(t.theme)+' · '+t.pages+'</span>').join('')+
+      (b.points||[]).slice(0,8).map(p=>'<div style="display:flex;gap:8px;padding:7px 0;border-top:1px solid var(--line)">'+
+        '<span style="color:var(--accent);font-weight:700">·</span><div><div style="font-size:13px;color:var(--ink)">'+esc(p.point)+'</div>'+
+        '<div class="tiny muted mono" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:64ch">'+esc(p.source)+'</div></div></div>').join('')+
+      '<div class="tiny muted" style="margin-top:10px">'+n(b.words_in||0)+' words in · '+n(b.words_out||0)+' out · '+b.compression+'× smaller</div>'+
+      '</div>';
+  }catch(e){ slot.innerHTML='<div class="empty">'+esc(e.message)+'</div>' }
+}
+
 /* ── activity ───────────────────────────────────────────── */
 async function loadRuns(){
   try{
@@ -1220,7 +1445,7 @@ def console_html(user: Any = None) -> str:
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#F4EFE7">
+<meta name="theme-color" content="#EDF5FB">
 <title>Tony — console</title>
 <link rel="icon" href="/static/brand/tony-mark.svg">
 <link rel="apple-touch-icon" href="/static/brand/tony-mark-192.png">
@@ -1329,6 +1554,32 @@ def console_html(user: Any = None) -> str:
         <div class="hd"><div><h1>Activity</h1><p>Every call Tony made for this workspace, newest first.</p></div></div>
         <div class="grid g4" id="run-stats" style="margin-bottom:16px;grid-template-columns:repeat(3,1fr)"></div>
         <div class="card pad"><div id="run-list"></div></div>
+      </section>
+
+      <!-- reads -->
+      <section class="pg" id="p-reads">
+        <div class="hd"><div><h1>Reads</h1><p>Point Tony at a site, a sitemap or a list of URLs. Pages land as rows, dedupe by content hash, get scanned for injection, and compress into one brief.</p></div></div>
+        <div class="grid g4" id="read-stats" style="margin-bottom:16px;grid-template-columns:repeat(4,1fr)"></div>
+        <div class="card pad" style="margin-bottom:14px">
+          <div class="row wrap" style="gap:10px;align-items:flex-end">
+            <div class="field" style="flex:2;min-width:200px;margin:0"><label>Site or sitemap</label>
+              <input class="inp" id="read-site" placeholder="https://www.python.org" autocomplete="off"></div>
+            <div class="field" style="width:104px;margin:0"><label>Depth</label>
+              <select class="inp" id="read-depth"><option>0</option><option selected>1</option><option>2</option></select></div>
+            <div class="field" style="width:124px;margin:0"><label>Max pages</label>
+              <input class="inp" id="read-max" type="number" min="1" max="20000" value="40"></div>
+            <button class="btn acc" onclick="startRead()">Read it</button>
+          </div>
+          <p class="tiny muted" style="margin:10px 0 0">Add <code class="mono">/sitemap.xml</code> to crawl the whole site. Politeness, robots.txt and the page cap are always enforced.</p>
+        </div>
+        <div class="grid" style="grid-template-columns:1fr;gap:14px">
+          <div class="card pad">
+            <div class="row" style="justify-content:space-between;margin-bottom:8px"><b style="font-size:14px">Jobs</b>
+              <button class="btn ghost sm" onclick="loadReads()">Refresh</button></div>
+            <div id="read-jobs"></div>
+          </div>
+          <div class="card pad" id="read-detail" style="display:none"><div id="read-detail-body"></div></div>
+        </div>
       </section>
 
       <!-- keys -->

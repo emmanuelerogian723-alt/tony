@@ -65,10 +65,31 @@ def _clean(text: str, limit: int = POINT_CHARS) -> str:
 
 def _chrome_sentence(sentence: str) -> bool:
     """Reject navigation and link lists that survive extraction."""
+    low = sentence.strip().lower()
+    if low.startswith(("skip to", "jump to", "read the docs", "posted by", "posted on")):
+        return True
     if sentence.count("|") >= 2 or "›" in sentence or "»" in sentence:
         return True
     letters = sum(1 for c in sentence if c.isalpha() or c.isspace())
     return letters / max(1, len(sentence)) < 0.72
+
+
+def _fingerprint(sentence: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", sentence.lower()))[:140]
+
+
+def _boilerplate(pages: list[dict[str, Any]]) -> set[str]:
+    """Sentences repeated across many pages are the site's furniture, not its content.
+
+    A sponsor strip or "skip to main content" appears on every page of a site, so it
+    wins every frequency contest unless it is identified and removed first.
+    """
+    seen: Counter[str] = Counter()
+    for page in pages:
+        prints = {_fingerprint(s) for s in _sentences(page["content"][:20000], limit=60)}
+        seen.update(prints)
+    floor = max(3, int(0.12 * len(pages)))
+    return {fp for fp, n in seen.items() if n >= floor}
 
 
 def _sentences(text: str, limit: int = 220) -> list[str]:
@@ -100,10 +121,14 @@ def _top_terms(text: str, idf: dict[str, float], k: int = 25) -> list[str]:
     return [t for t, _ in sorted(scored.items(), key=lambda kv: kv[1], reverse=True)[:k]]
 
 
-def _bigrams(text: str, k: int = 12) -> list[str]:
-    words = _terms(text)
+def _bigrams(text: str, idf: dict[str, float], df_ratio: dict[str, float], k: int = 12) -> list[str]:
+    """Phrases ranked by rarity, so a site-wide slogan never becomes a theme."""
+    words = [w for w in _terms(text) if df_ratio.get(w, 0.0) <= 0.5]
     pairs = [f"{a} {b}" for a, b in zip(words, words[1:]) if len(a) > 3 and len(b) > 3]
-    return [p for p, _ in Counter(pairs).most_common(k)]
+    counts = Counter(pairs)
+    scored = {p: n * (idf.get(p.split()[0], 1.0) + idf.get(p.split()[1], 1.0)) / 2
+              for p, n in counts.items()}
+    return [p for p, _ in sorted(scored.items(), key=lambda kv: kv[1], reverse=True)[:k]]
 
 
 def _cluster(pages: list[dict[str, Any]], threshold: float = 0.42) -> list[dict[str, Any]]:
@@ -130,7 +155,7 @@ def _theme_label(cluster: dict[str, Any]) -> str:
     pairs: Counter[str] = Counter()
     for page in cluster["pages"][:12]:
         pairs.update(set(page.get("bigrams") or []))
-    repeated = [p for p, n in pairs.most_common(6) if n >= 2]
+    repeated = [p for p, n in pairs.most_common(8) if n >= 2]
     if repeated:
         return ", ".join(repeated[:2])
     singles = [t for t, n in Counter(
@@ -166,17 +191,20 @@ def build_brief(job_id: str, workspace: str, max_points: int = 12, max_sentences
     for page in sample:
         df.update(set(_terms(page["content"][:20000])))
     idf = {term: math.log(1 + total_docs / (1 + n)) for term, n in df.items()}
+    df_ratio = {term: n / total_docs for term, n in df.items()}
 
-    # the words that recur across many pages are the subject matter, so they get a nudge
-    boost = {t: 1.0 for t, _ in Counter(
-        t for page in sample for t in set(_terms(page["content"][:20000]))).most_common(40)}
+    # Words that recur, but not on nearly every page: subject matter rather than
+    # site furniture. Anything above half the pages is treated as chrome.
+    boost = {t: 1.0 for t, n in df.items() if 1 < n <= max(2, 0.35 * total_docs)}
 
+    furniture = _boilerplate(pages_in)
     for page in pages_in:
         body = page["content"][:20000]
         page["top_terms"] = _top_terms(body, idf)
-        page["bigrams"] = _bigrams(body)
-        best = _score_sentences(_sentences(body), idf, boost)[:max(1, max_sentences)]
-        page["summary"] = _clean(" ".join(s for _, _, s in best)) or _clean(body, 200)
+        page["bigrams"] = _bigrams(body, idf, df_ratio)
+        usable = [s for s in _sentences(body) if _fingerprint(s) not in furniture]
+        best = _score_sentences(usable, idf, boost)[:max(1, max_sentences)]
+        page["summary"] = _clean(" ".join(s for _, _, s in best)) or ""
 
     clusters = _cluster(pages_in)
     points: list[dict[str, Any]] = []
@@ -194,6 +222,9 @@ def build_brief(job_id: str, workspace: str, max_points: int = 12, max_sentences
     if not points:
         points = [{"point": p["summary"], "source": p["url"], "title": _clean(p["title"], 120), "theme": ""}
                   for p in pages_in[:max_points] if p["summary"]]
+    if not points:
+        points = [{"point": _clean(p["title"], 90), "source": p["url"],
+                   "title": _clean(p["title"], 120), "theme": ""} for p in pages_in[:max_points]]
 
     words = sum(p["words"] for p in pages_in)
     flagged = [p for p in pages_in if p["risk"]]

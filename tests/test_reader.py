@@ -234,3 +234,38 @@ def test_brief_themes_ignore_dates_and_keep_points_short():
     for point in brief["points"]:
         assert len(point["point"]) <= 262, point["point"]
         assert point["point"].count(". ") <= 1, point["point"]
+
+
+def test_brief_drops_site_furniture_repeated_on_every_page():
+    """A sponsor strip on every page must never become a theme or a key point."""
+    sponsor = ("Skip to main content Read the Docs supports Django and hosts documentation for open "
+               "and closed source projects. Get live previews for every docs pull request. ")
+    bodies = [
+        sponsor + "The security team shipped patched releases closing a session fixation hole in the "
+                  "password reset flow. Administrators should upgrade immediately.",
+        sponsor + "Contributor outreach grew as the community team opened mentoring cohorts for first "
+                  "time contributors across three regional conferences.",
+        sponsor + "The foundation announced funding for the fellowship programme, which pays a full time "
+                  "fellow to manage releases and security reports for the framework.",
+        sponsor + "Release notes describe a new database backend option and a faster migration planner "
+                  "for large projects with many tables.",
+    ]
+    from tony.db import session
+    from tony.models import ReadJob, ReadPage
+    from tony import summarise
+
+    with session() as s:
+        job = ReadJob(workspace_id="ws_brief3", status="done", seed_url="https://ex.example.com/", max_pages=6)
+        s.add(job)
+        s.flush()
+        jid = job.id
+        for i, body in enumerate(bodies):
+            s.add(ReadPage(job_id=jid, url=f"https://ex.example.com/{i}", status="done",
+                           title=f"Post {i}", content=body, word_count=len(body.split())))
+        s.flush()
+
+    brief = summarise.build_brief(jid, "ws_brief3", max_points=6)
+    haystack = " ".join([t["theme"] for t in brief["themes"]] + [p["point"] for p in brief["points"]]).lower()
+    assert "skip to main content" not in haystack
+    assert "live previews for every docs" not in haystack
+    assert len(brief["points"]) >= 3

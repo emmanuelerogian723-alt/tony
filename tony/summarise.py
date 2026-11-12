@@ -192,7 +192,7 @@ def build_brief(job_id: str, workspace: str, max_points: int = 12, max_sentences
             "url": r.url, "title": r.title or r.url, "content": r.content or "",
             "words": r.word_count, "risk": r.risk_score, "http": r.http_status,
         } for r in rows]
-        seed = job.seed_url or (pages_in[0]["url"] if pages_in else "")
+        seed = job.seed_url or job.sitemap_url or (pages_in[0]["url"] if pages_in else "")
 
     if not pages_in:
         return {"job_id": job_id, "pages_used": 0, "words_in": 0, "words_out": 0, "compression": 0,
@@ -230,7 +230,14 @@ def build_brief(job_id: str, workspace: str, max_points: int = 12, max_sentences
     clusters = _cluster(pages_in)
     points: list[dict[str, Any]] = []
     themes: list[dict[str, Any]] = []
-    for cluster in clusters[: max(3, max_points // 2)]:
+
+    # A theme is a subject several pages share. Listing one theme per page turns the
+    # brief into a table of contents, which is the thing a brief exists to replace.
+    for cluster in clusters:
+        if len(cluster["pages"]) < 2:
+            continue
+        if len(themes) >= 8:
+            break
         head = cluster["pages"][0]
         label = _theme_label(cluster)
         themes.append({"theme": label, "pages": len(cluster["pages"]),
@@ -240,6 +247,14 @@ def build_brief(job_id: str, workspace: str, max_points: int = 12, max_sentences
             if len(points) < max_points and page["summary"]:
                 points.append({"point": page["summary"], "source": page["url"],
                                "title": _clean(page["title"], 120), "theme": label})
+
+    # Unrelated pages still deserve their best sentence; fill the remainder in order.
+    for page in pages_in:
+        if len(points) >= max_points:
+            break
+        if page["summary"] and all(page["url"] != p["source"] for p in points):
+            points.append({"point": page["summary"], "source": page["url"],
+                           "title": _clean(page["title"], 120), "theme": ""})
     if not points:
         points = [{"point": p["summary"], "source": p["url"], "title": _clean(p["title"], 120), "theme": ""}
                   for p in pages_in[:max_points] if p["summary"]]
@@ -252,10 +267,12 @@ def build_brief(job_id: str, workspace: str, max_points: int = 12, max_sentences
     words_out = sum(len(p["point"].split()) for p in points)
     brief_lines = [
         f"Read {len(pages_in)} page(s) from {seed or 'the submitted URLs'}, {words:,} words in total.",
-        f"{len(clusters)} distinct theme(s) after collapsing duplicate content.",
+        f"{len(themes)} recurring theme(s) after collapsing duplicate content.",
     ]
     if themes:
         brief_lines.append("Subjects: " + "; ".join(f"{t['theme']} ({t['pages']})" for t in themes[:6]) + ".")
+    else:
+        brief_lines.append("These pages share no recurring subject; each key point below stands alone.")
     if flagged:
         brief_lines.append(f"{len(flagged)} page(s) carried prompt-injection patterns and were neutralised before use.")
     brief_lines.append("Key points follow, each tied to its source.")

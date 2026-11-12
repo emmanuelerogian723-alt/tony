@@ -337,3 +337,32 @@ def test_watchdog_reruns_a_job_whose_worker_died():
         reader.run_job = original
 
     assert job_id in started
+
+
+def test_brief_does_not_list_a_theme_per_page():
+    """Unrelated pages are not themes; the brief stays a summary, not an index."""
+    from tony.db import session
+    from tony.models import ReadJob, ReadPage
+    from tony import summarise
+
+    topics = [
+        ("rust asgi server benchmark", "granian", "Granian is a Rust WSGI server that competes with gunicorn for production Python deployments."),
+        ("community mentorship programme", "mentoring", "The community team opened mentoring cohorts so first time contributors get a reviewer."),
+        ("conference travel funding", "travel", "Travel grants cover flights and hotels for speakers who could not otherwise attend."),
+        ("release candidate testing", "release", "Release candidates are published so projects can test the upgrade before the final tag."),
+    ]
+    with session() as s:
+        job = ReadJob(workspace_id="ws_themes", status="done", seed_url="https://ex.example.com/", max_pages=8)
+        s.add(job)
+        s.flush()
+        for i, (topic, word, sentence) in enumerate(topics):
+            body = f"{sentence} The {topic} effort was discussed at length by the working group."
+            s.add(ReadPage(job_id=job.id, url=f"https://ex.example.com/{i}", status="done",
+                           title=topic, content=body, word_count=len(body.split())))
+        s.flush()
+        jid = job.id
+
+    brief = summarise.build_brief(jid, "ws_themes", max_points=4)
+    assert brief["themes"] == [], brief["themes"]
+    assert len(brief["points"]) >= 3
+    assert "share no recurring subject" in brief["brief"]

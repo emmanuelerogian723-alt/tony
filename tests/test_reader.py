@@ -198,3 +198,39 @@ def test_throttle_gives_up_only_after_the_retry_budget(client, monkeypatch):
     page["id"] = reader._next_pending(jid, 1)[0]["id"]
     out = reader._requeue_throttled(page, 429)
     assert out == {"failed": 429}
+
+
+def test_brief_themes_ignore_dates_and_keep_points_short():
+    """A weblog archive must not theme itself around month names, and a point is one sentence."""
+    from tony.db import session
+    from tony.models import ReadJob, ReadPage
+    from tony import summarise
+
+    bodies = [
+        "September 3, 2026 posted by Sarah. The Django Security Team shipped patched releases for the "
+        "authentication backend, closing a session fixation hole in the password reset flow. "
+        "Administrators should upgrade immediately to protect user accounts.",
+        "September 18, 2026 posted by Tim. Contributor outreach grew sharply this quarter as the "
+        "community team opened mentoring cohorts for first time contributors. New mentors joined "
+        "from three regional conferences and the programme now covers twelve time zones.",
+        "September 29, 2026 posted by Natalia. The foundation announced funding for the fellowship "
+        "programme, which pays a full time fellow to manage releases, security reports and community "
+        "support for the framework. Sponsors renewed their commitments for another year.",
+    ]
+    with session() as s:
+        job = ReadJob(workspace_id="ws_brief2", status="done", seed_url="https://ex.example.com/", max_pages=5)
+        s.add(job)
+        s.flush()
+        jid = job.id
+        for i, body in enumerate(bodies):
+            s.add(ReadPage(job_id=jid, url=f"https://ex.example.com/{i}", status="done",
+                           title=f"Post {i}", content=body, word_count=len(body.split())))
+        s.flush()
+
+    brief = summarise.build_brief(jid, "ws_brief2", max_points=6)
+    labels = " ".join(t["theme"].lower() for t in brief["themes"])
+    assert "september" not in labels, labels
+    assert "posted" not in labels, labels
+    for point in brief["points"]:
+        assert len(point["point"]) <= 262, point["point"]
+        assert point["point"].count(". ") <= 1, point["point"]

@@ -10,6 +10,11 @@ vocabulary so eight copies of the same press release collapse into one theme, an
 the brief carries the sources and the counts a reviewer needs to trust it. That
 keeps cost at zero per job and makes the output reproducible, which matters when
 the thing you are summarising is untrusted text off the open web.
+
+Two details decide whether a brief is useful or noise, and both are handled here:
+dates and site chrome ("posted", "september") are stripped from keywords so a
+weblog archive does not theme itself around month names, and each key point is one
+cleaned sentence, not a paragraph, so the answer stays skimmable.
 """
 from __future__ import annotations
 
@@ -25,17 +30,50 @@ from .models import ReadJob, ReadPage
 
 STOP = set("""a an the and or but if then than that this these those of to in on for with from by as at is are was were be been being it its
 """.split())
+
+# Months and weekdays are dates, not subjects.
+CALENDAR = set("""january february march april may june july august september october november december
+jan feb mar apr jun jul aug sep sept oct nov dec monday tuesday wednesday thursday friday saturday sunday
+""".split())
+
+# Front-end chrome that leaks into extracted text on almost every site.
+CHROME = set("""posted comments comment read more share subscribe newsletter sign signin login logout register
+privacy cookie cookies terms contact about home search menu skip previous next view all rights reserved
+page pages blog post posts article articles author published updated tag tags category categories follow
+""".split())
+
+NOISE = STOP | CALENDAR | CHROME
+YEAR = re.compile(r"^(19|20)\d{2}$")
 WORD = re.compile(r"[a-z0-9][a-z0-9'’-]{2,}")
 SENT_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'“])")
 
+POINT_CHARS = 260
+ANALYSIS_PAGES = 400
+
 
 def _terms(text: str) -> list[str]:
-    return [w for w in WORD.findall(text.lower()) if w not in STOP]
+    return [w for w in WORD.findall((text or "").lower())
+            if w not in NOISE and not YEAR.match(w) and not w.isdigit()]
+
+
+def _clean(text: str, limit: int = POINT_CHARS) -> str:
+    text = " ".join((text or "").split())
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0].rstrip(" ,;:-") + "…"
+
+
+def _chrome_sentence(sentence: str) -> bool:
+    """Reject navigation and link lists that survive extraction."""
+    if sentence.count("|") >= 2 or "›" in sentence or "»" in sentence:
+        return True
+    letters = sum(1 for c in sentence if c.isalpha() or c.isspace())
+    return letters / max(1, len(sentence)) < 0.72
 
 
 def _sentences(text: str, limit: int = 220) -> list[str]:
     parts = [s.strip() for s in SENT_SPLIT.split(text or "") if 40 <= len(s.strip()) <= 400]
-    return parts[:limit]
+    return [s for s in parts if not _chrome_sentence(s)][:limit]
 
 
 def _score_sentences(sentences: list[str], idf: dict[str, float], boost: dict[str, float]) -> list[tuple[float, int, str]]:
@@ -55,11 +93,17 @@ def _score_sentences(sentences: list[str], idf: dict[str, float], boost: dict[st
     return scored
 
 
-def _keywords(texts: list[str], k: int = 12) -> list[tuple[str, int]]:
-    counts: Counter[str] = Counter()
-    for text in texts:
-        counts.update(set(_terms(text)))
-    return counts.most_common(k)
+def _top_terms(text: str, idf: dict[str, float], k: int = 25) -> list[str]:
+    """Keywords weighted by rarity across the job, so 'september' cannot win."""
+    counts = Counter(_terms(text))
+    scored = {t: n * idf.get(t, 1.0) for t, n in counts.items()}
+    return [t for t, _ in sorted(scored.items(), key=lambda kv: kv[1], reverse=True)[:k]]
+
+
+def _bigrams(text: str, k: int = 12) -> list[str]:
+    words = _terms(text)
+    pairs = [f"{a} {b}" for a, b in zip(words, words[1:]) if len(a) > 3 and len(b) > 3]
+    return [p for p, _ in Counter(pairs).most_common(k)]
 
 
 def _cluster(pages: list[dict[str, Any]], threshold: float = 0.42) -> list[dict[str, Any]]:
@@ -81,6 +125,22 @@ def _cluster(pages: list[dict[str, Any]], threshold: float = 0.42) -> list[dict[
     return clusters
 
 
+def _theme_label(cluster: dict[str, Any]) -> str:
+    """A phrase two or more of its pages share beats a bag of single words."""
+    pairs: Counter[str] = Counter()
+    for page in cluster["pages"][:12]:
+        pairs.update(set(page.get("bigrams") or []))
+    repeated = [p for p, n in pairs.most_common(6) if n >= 2]
+    if repeated:
+        return ", ".join(repeated[:2])
+    singles = [t for t, n in Counter(
+        [t for p in cluster["pages"][:12] for t in p["top_terms"][:8]]).most_common(4) if n >= 2]
+    if singles:
+        return ", ".join(singles[:3])
+    head = cluster["pages"][0]
+    return _clean(head["title"], 70) or head["url"]
+
+
 def build_brief(job_id: str, workspace: str, max_points: int = 12, max_sentences: int = 3) -> dict[str, Any]:
     """Compress a finished read job into a brief with themes, points and sources."""
     with session() as s:
@@ -93,7 +153,6 @@ def build_brief(job_id: str, workspace: str, max_points: int = 12, max_sentences
             "url": r.url, "title": r.title or r.url, "content": r.content or "",
             "words": r.word_count, "risk": r.risk_score, "http": r.http_status,
         } for r in rows]
-        total_known = s.scalar(select(ReadPage.id).where(ReadPage.job_id == job_id).limit(1))
         seed = job.seed_url or (pages_in[0]["url"] if pages_in else "")
 
     if not pages_in:
@@ -101,44 +160,44 @@ def build_brief(job_id: str, workspace: str, max_points: int = 12, max_sentences
                 "brief": "No readable text was stored for this job.", "themes": [], "points": [],
                 "sources": [], "flagged_pages": 0, "has_more_pages": False}
 
-    corpus_text = "\n".join(p["content"][:20000] for p in pages_in[:400])
-    counts = Counter(_terms(corpus_text))
-    total_docs = max(1, len(pages_in))
+    sample = pages_in[:ANALYSIS_PAGES]
+    total_docs = max(1, len(sample))
     df: Counter[str] = Counter()
-    for page in pages_in[:400]:
+    for page in sample:
         df.update(set(_terms(page["content"][:20000])))
     idf = {term: math.log(1 + total_docs / (1 + n)) for term, n in df.items()}
 
     # the words that recur across many pages are the subject matter, so they get a nudge
-    global_top = [t for t, _ in counts.most_common(40)]
-    boost = {t: 1.0 for t in global_top}
+    boost = {t: 1.0 for t, _ in Counter(
+        t for page in sample for t in set(_terms(page["content"][:20000]))).most_common(40)}
 
     for page in pages_in:
-        sents = _sentences(page["content"])
-        page["top_terms"] = [t for t, _ in Counter(_terms(page["content"][:20000])).most_common(25)]
-        best = _score_sentences(sents, idf, boost)[:max_sentences]
-        page["summary"] = " ".join(s for _, _, s in best)[:700] or (page["content"][:280] if page["content"] else "")
+        body = page["content"][:20000]
+        page["top_terms"] = _top_terms(body, idf)
+        page["bigrams"] = _bigrams(body)
+        best = _score_sentences(_sentences(body), idf, boost)[:max(1, max_sentences)]
+        page["summary"] = _clean(" ".join(s for _, _, s in best)) or _clean(body, 200)
 
     clusters = _cluster(pages_in)
     points: list[dict[str, Any]] = []
     themes: list[dict[str, Any]] = []
     for cluster in clusters[: max(3, max_points // 2)]:
         head = cluster["pages"][0]
-        label = ", ".join(t for t, _ in Counter(
-            [t for p in cluster["pages"][:12] for t in p["top_terms"][:8]]).most_common(4))
-        themes.append({"theme": label or head["title"][:60], "pages": len(cluster["pages"]),
+        label = _theme_label(cluster)
+        themes.append({"theme": label, "pages": len(cluster["pages"]),
                        "words": sum(p["words"] for p in cluster["pages"]),
                        "sample": head["url"]})
         for page in cluster["pages"][:2]:
             if len(points) < max_points and page["summary"]:
                 points.append({"point": page["summary"], "source": page["url"],
-                               "title": page["title"][:120], "theme": label})
+                               "title": _clean(page["title"], 120), "theme": label})
     if not points:
-        points = [{"point": p["summary"], "source": p["url"], "title": p["title"][:120], "theme": ""}
+        points = [{"point": p["summary"], "source": p["url"], "title": _clean(p["title"], 120), "theme": ""}
                   for p in pages_in[:max_points] if p["summary"]]
 
     words = sum(p["words"] for p in pages_in)
     flagged = [p for p in pages_in if p["risk"]]
+    words_out = sum(len(p["point"].split()) for p in points)
     brief_lines = [
         f"Read {len(pages_in)} page(s) from {seed or 'the submitted URLs'}, {words:,} words in total.",
         f"{len(clusters)} distinct theme(s) after collapsing duplicate content.",
@@ -154,14 +213,14 @@ def build_brief(job_id: str, workspace: str, max_points: int = 12, max_sentences
         "seed": seed,
         "pages_used": len(pages_in),
         "words_in": words,
-        "words_out": sum(len(p["point"].split()) for p in points),
-        "compression": round(words / max(1, sum(len(p["point"].split()) for p in points)), 1),
+        "words_out": words_out,
+        "compression": round(words / max(1, words_out), 1),
         "themes": themes,
         "points": points,
-        "sources": [{"url": p["url"], "title": p["title"][:120], "words": p["words"]} for p in pages_in[:80]],
+        "sources": [{"url": p["url"], "title": _clean(p["title"], 120), "words": p["words"]} for p in pages_in[:80]],
         "flagged_pages": len(flagged),
         "brief": "\n".join(brief_lines),
-        "has_more_pages": bool(total_known),
+        "has_more_pages": len(pages_in) > ANALYSIS_PAGES,
     }
 
 

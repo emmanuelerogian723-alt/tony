@@ -164,7 +164,7 @@ class AgentIn(BaseModel):
     goal: str
     apps: list[str] = Field(default_factory=list)
     entity_id: str = "default"
-    max_steps: int = 4
+    max_steps: int = 6
     approve_writes: bool = False
     dry_run: bool = False
     history: list[dict[str, str]] = Field(default_factory=list)
@@ -291,7 +291,12 @@ INTENT_ALIASES: dict[str, tuple[str, ...]] = {
     "spreadsheet": ("google_sheets",), "sheet": ("google_sheets",), "sheets": ("google_sheets",),
     "drive": ("google_drive",), "files": ("google_drive", "dropbox"),
     "stock": ("alpha_vantage", "finnhub"), "stocks": ("alpha_vantage", "finnhub"),
-    "weather": ("openweathermap",), "paper": ("arxiv",), "papers": ("arxiv",),
+    "weather": ("open_meteo", "openweathermap"), "temperature": ("open_meteo",),
+    "forecast": ("open_meteo", "openweathermap"),
+    "currency": ("exchangerate", "exchangerate-api"), "convert": ("exchangerate",),
+    "exchange": ("exchangerate",), "rate": ("exchangerate", "exchangerate-api"),
+    "naira": ("exchangerate",), "usd": ("exchangerate",), "dollar": ("exchangerate",),
+    "paper": ("arxiv",), "papers": ("arxiv",),
     "tweet": ("x",), "tweets": ("x",), "notion": ("notion",), "page": ("notion",),
     "payment": ("stripe", "flutterwave"), "payments": ("stripe", "flutterwave"),
     "invoice": ("stripe",), "customers": ("stripe",), "ticket": ("linear",),
@@ -329,6 +334,8 @@ def _score_app(goal: str, spec: Any) -> float:
         elif w in cat:
             score += 2
     hits = 0
+    if getattr(getattr(spec, "auth", None), "type", "") == "none":
+        score += 8            # works immediately: no key, no connect step
     for a in spec.actions[:400]:
         hay = f"{a.slug} {a.name}".lower()
         if any(w in hay for w in words):

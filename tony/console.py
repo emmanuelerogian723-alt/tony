@@ -670,7 +670,8 @@ async function runAgent(){
 async function boot(){
   renderWho(); buildNav(); checkBillingReturn();
   const h = (location.hash||'#overview').slice(1);
-  go(['overview','agent','apps','connections','runs','keys','sessions','billing','install','profile'].includes(h) ? h : 'overview');
+  const pages = NAV.map(n=>n[0]);
+  go(pages.includes(h) ? h : 'overview');
 }
 function renderWho(){
   const u = S.user || {};

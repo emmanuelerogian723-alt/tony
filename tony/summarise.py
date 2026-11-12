@@ -74,22 +74,36 @@ def _chrome_sentence(sentence: str) -> bool:
     return letters / max(1, len(sentence)) < 0.72
 
 
-def _fingerprint(sentence: str) -> str:
-    return " ".join(re.findall(r"[a-z0-9]+", sentence.lower()))[:140]
+SHINGLE = 5
 
 
-def _boilerplate(pages: list[dict[str, Any]]) -> set[str]:
-    """Sentences repeated across many pages are the site's furniture, not its content.
+def _shingles(text: str, k: int = SHINGLE) -> set[str]:
+    words = re.findall(r"[a-z0-9]+", (text or "").lower())
+    if len(words) < k:
+        return {" ".join(words)} if words else set()
+    return {" ".join(words[i:i + k]) for i in range(len(words) - k + 1)}
 
-    A sponsor strip or "skip to main content" appears on every page of a site, so it
-    wins every frequency contest unless it is identified and removed first.
+
+def _furniture(pages: list[dict[str, Any]], k: int = SHINGLE) -> set[str]:
+    """Word runs repeated across many pages are the site's furniture, not its content.
+
+    A sponsor strip, a nav menu or "skip to main content" appears on every page, so it
+    wins every frequency contest unless it is identified and removed first. Word
+    shingles are used rather than whole sentences because extraction stitches nav text
+    onto real sentences, so the same furniture rarely repeats as an identical string.
     """
     seen: Counter[str] = Counter()
     for page in pages:
-        prints = {_fingerprint(s) for s in _sentences(page["content"][:20000], limit=60)}
-        seen.update(prints)
+        seen.update(_shingles(page["content"][:20000], k))
     floor = max(3, int(0.12 * len(pages)))
-    return {fp for fp, n in seen.items() if n >= floor}
+    return {sh for sh, n in seen.items() if n >= floor}
+
+
+def _is_furniture(sentence: str, furniture: set[str]) -> bool:
+    sh = _shingles(sentence)
+    if not sh:
+        return False
+    return sum(1 for s in sh if s in furniture) / len(sh) >= 0.5
 
 
 def _sentences(text: str, limit: int = 220) -> list[str]:
@@ -186,10 +200,20 @@ def build_brief(job_id: str, workspace: str, max_points: int = 12, max_sentences
                 "sources": [], "flagged_pages": 0, "has_more_pages": False}
 
     sample = pages_in[:ANALYSIS_PAGES]
+    furniture = _furniture(sample)
+
+    # Keep each page's real prose, dropping the site-wide furniture first, so the term
+    # statistics describe the subject rather than the navigation.
+    for page in pages_in:
+        body = page["content"][:20000]
+        usable = [s for s in _sentences(body) if not _is_furniture(s, furniture)]
+        page["usable"] = usable
+        page["clean"] = " ".join(usable) or body
+
     total_docs = max(1, len(sample))
     df: Counter[str] = Counter()
     for page in sample:
-        df.update(set(_terms(page["content"][:20000])))
+        df.update(set(_terms(page["clean"][:20000])))
     idf = {term: math.log(1 + total_docs / (1 + n)) for term, n in df.items()}
     df_ratio = {term: n / total_docs for term, n in df.items()}
 
@@ -197,13 +221,10 @@ def build_brief(job_id: str, workspace: str, max_points: int = 12, max_sentences
     # site furniture. Anything above half the pages is treated as chrome.
     boost = {t: 1.0 for t, n in df.items() if 1 < n <= max(2, 0.35 * total_docs)}
 
-    furniture = _boilerplate(pages_in)
     for page in pages_in:
-        body = page["content"][:20000]
-        page["top_terms"] = _top_terms(body, idf)
-        page["bigrams"] = _bigrams(body, idf, df_ratio)
-        usable = [s for s in _sentences(body) if _fingerprint(s) not in furniture]
-        best = _score_sentences(usable, idf, boost)[:max(1, max_sentences)]
+        page["top_terms"] = _top_terms(page["clean"], idf)
+        page["bigrams"] = _bigrams(page["clean"], idf, df_ratio)
+        best = _score_sentences(page["usable"], idf, boost)[:max(1, max_sentences)]
         page["summary"] = _clean(" ".join(s for _, _, s in best)) or ""
 
     clusters = _cluster(pages_in)

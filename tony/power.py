@@ -171,6 +171,9 @@ class AgentIn(BaseModel):
 
 
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
+# Groq's free tier rate-limits per model, and a retired model is a 404 rather than an
+# error the caller can see. A ladder of live models turns both into a fall-through.
+DEFAULT_GROQ_LADDER = ("openai/gpt-oss-20b", "qwen/qwen3.8-27b", "openai/gpt-oss-120b")
 DEFAULT_OPENROUTER_MODEL = "openai/gpt-4o-mini"
 
 
@@ -180,12 +183,16 @@ def _llm_targets(fast: bool = False) -> list[tuple[str, str, dict[str, str]]]:
     silently dropping to the deterministic path."""
     out: list[tuple[str, str, dict[str, str]]] = []
     groq = os.getenv("GROQ_API_KEY", "").strip()
-    fast_model = os.getenv("TONY_FAST_MODEL", "llama-3.1-8b-instant")
+    fast_model = os.getenv("TONY_FAST_MODEL", DEFAULT_GROQ_LADDER[0])
     if groq:
         models = [m.strip() for m in (os.getenv("TONY_GROQ_MODELS") or "").split(",") if m.strip()]
+        if not models:
+            models = list(DEFAULT_GROQ_LADDER)
+            agent_model = os.getenv("TONY_AGENT_MODEL", "").strip()
+            if agent_model and agent_model not in models:
+                models.append(agent_model)
         if fast:
-            models = [fast_model] + models
-        models = models or [os.getenv("TONY_AGENT_MODEL", DEFAULT_GROQ_MODEL), DEFAULT_GROQ_MODEL]
+            models = [fast_model] + [m for m in models if m != fast_model]
         for model in models:
             out.append(("https://api.groq.com/openai/v1/chat/completions", model,
                         {"Authorization": f"Bearer {groq}"}))
@@ -213,6 +220,26 @@ def _llm_target() -> tuple[str, str, dict[str, str]] | None:
     return chain[0] if chain else None
 
 
+def _retry_after_seconds(resp: Any) -> float | None:
+    """The provider's own advice on when to come back, in seconds."""
+    raw = (resp.headers.get("retry-after") or "").strip()
+    if raw:
+        try:
+            return float(raw)
+        except ValueError:
+            pass
+    try:
+        body = resp.json()
+    except Exception:
+        return None
+    text = str(body.get("error", {}).get("message", "")) if isinstance(body, dict) else ""
+    m = re.search(r"try again in ([0-9.]+)\s*(ms|s)", text, re.I)
+    if not m:
+        return None
+    value = float(m.group(1))
+    return value / 1000 if m.group(2).lower() == "ms" else value
+
+
 async def _chat(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None,
                 temperature: float = 0.2, fast: bool = False) -> dict[str, Any] | None:
     """Ask the model with the whole configured chain. A retired model, a rate limit
@@ -228,7 +255,14 @@ async def _chat(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | No
             payload["tool_choice"] = "auto"
         try:
             async with httpx.AsyncClient(timeout=45) as c:
-                r = await c.post(url, json=payload, headers={**hdr, "Content-Type": "application/json"})
+                for attempt in range(2):
+                    r = await c.post(url, json=payload, headers={**hdr, "Content-Type": "application/json"})
+                    if r.status_code == 429 and attempt == 0:
+                        wait = _retry_after_seconds(r)
+                        if wait is not None and wait <= 3.0:
+                            await asyncio.sleep(wait)
+                            continue
+                    break
                 if r.status_code >= 400:
                     continue
                 return r.json()["choices"][0]["message"]
@@ -587,7 +621,7 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
             taken += 1
             if taken >= 8:
                 break
-    belt = belt[:24]
+    belt = belt[:12]
 
     # 3. run the loop
     engine = "heuristic"

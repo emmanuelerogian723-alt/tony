@@ -6,8 +6,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
-from . import shield
-from .accounts import require_user
+from . import agenttokens, shield
+from .auth import workspace_from_request
 from .db import session
 from .models import BlockedSubject
 
@@ -16,13 +16,13 @@ router = APIRouter(prefix="/v1/security", tags=["security"])
 
 @router.get("/events")
 def events(request: Request, limit: int = 50) -> dict[str, Any]:
-    require_user(request)
+    workspace_from_request(request)          # API key or console session, same rule as /v1/execute
     return {"events": shield.recent_events(min(max(limit, 1), 200))}
 
 
 @router.get("/blocked")
 def blocked(request: Request) -> dict[str, Any]:
-    require_user(request)
+    workspace_from_request(request)
     with session() as s:
         rows = s.scalars(select(BlockedSubject).order_by(BlockedSubject.created_at.desc()).limit(100)).all()
         return {"blocked": [{"subject": r.subject, "reason": r.reason,
@@ -31,7 +31,7 @@ def blocked(request: Request) -> dict[str, Any]:
 
 @router.delete("/blocked/{subject}")
 def unblock(subject: str, request: Request) -> dict[str, Any]:
-    require_user(request)
+    workspace_from_request(request)
     with session() as s:
         row = s.scalar(select(BlockedSubject).where(BlockedSubject.subject == subject))
         if row is None:
@@ -43,8 +43,15 @@ def unblock(subject: str, request: Request) -> dict[str, Any]:
 
 @router.get("/posture")
 def posture(request: Request) -> dict[str, Any]:
-    require_user(request)
-    return {"layers": [
+    """Readable with the same credential that runs actions: an API key, an agent
+    token or a console session. It used to demand a browser cookie, which made a
+    perfectly valid key look broken on exactly the endpoint that proves safety."""
+    ws, is_demo = workspace_from_request(request)
+    scope = getattr(request.state, "agent_scope", None)
+    return {"workspace": ws, "demo": is_demo,
+            "credential": "agent_token" if scope else "api_key_or_session",
+            "scope": agenttokens.describe(scope) if scope else "full workspace",
+            "layers": [
         {"name": "Behavioural scoring", "detail": "probe paths, scanner agents, endpoint sweeps, bursts"},
         {"name": "Credential-stuffing guard", "detail": "repeated rejected keys raise a decaying score"},
         {"name": "Timed blocks", "detail": "10 minutes first, doubling on repeat, self-healing"},

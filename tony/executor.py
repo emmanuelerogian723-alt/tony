@@ -605,7 +605,9 @@ async def execute(
     dry_run: bool = False,
 ) -> ExecResult:
     started = time.perf_counter()
-    cleaned = validate_args(action, args)
+    from . import naming
+
+    cleaned = validate_args(action, naming.normalize_args(action, args))
 
     # Fan-out search: three keyless sources, merged, no single point of failure.
     if str((action.response or {}).get("transform") or "") == "search":

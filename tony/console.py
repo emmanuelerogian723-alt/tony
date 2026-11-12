@@ -732,10 +732,11 @@ function renderCats(cats){
 }
 function iconHTML(a, size){
   const s = size||30;
+  // Always the local icon route. A third-party logo URL is one more thing that
+  // can 403 or 404, and the route already ends in a letter tile.
   const mono = '<span class="mono-b" style="width:'+s+'px;height:'+s+'px;font-size:'+Math.round(s*0.37)+'px;background:hsl('+hue(a.slug)+',45%,38%)">'+esc(initials(a.name))+'</span>';
-  if(!a.logo) return '<span class="ico" style="width:'+s+'px;height:'+s+'px">'+mono+'</span>';
   return '<span class="ico" style="width:'+s+'px;height:'+s+'px">'+mono+
-    '<img src="'+esc(a.logo)+'" alt="" loading="lazy" decoding="async" onload="this.previousElementSibling.style.display=\'none\'" onerror="this.remove()"></span>';
+    '<img src="/v1/icon/'+encodeURIComponent(a.slug)+'" alt="" loading="lazy" decoding="async" onload="this.previousElementSibling.style.display=\'none\'" onerror="this.remove()"></span>';
 }
 function renderApps(){
   const grid = el('app-grid');

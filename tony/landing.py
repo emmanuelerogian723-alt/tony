@@ -588,7 +588,7 @@ BODY = """
       <li><b>Integration health intelligence.</b> Broken APIs, expired permissions and schema drift surface before
         your users hit them.</li>
       <li><b>Authentication coverage.</b> OAuth 2.0, API keys, bearer tokens, basic auth and custom configurations,
-        in one model.</li>
+        in one model. __AUTH_TRUTH__</li>
     </ol>
     <div class="authstrip mono"><span>OAuth 2.0</span><span>API keys</span><span>Bearer tokens</span>
       <span>Basic auth</span><span>Custom schemes</span></div>
@@ -757,6 +757,19 @@ def landing_html(demo_open: bool = True) -> str:
     body = body.replace("__WRITES__", f"{writes:,}")
     body = body.replace("__ACTIONS__", f"{action_count:,}")
     body = body.replace("__APPS__", f"{app_count:,}")
+    # Say what the numbers actually are, instead of letting "hosted OAuth" imply
+    # every app signs in with one click.
+    try:
+        from . import appauth
+
+        raw = appauth._data()
+        cov = dict(raw.get("coverage") or {})
+        managed = len(__import__("tony.provider_registry", fromlist=["PROVIDERS"]).PROVIDERS)
+        truth = (f"Today that is {managed} one-click providers, {cov.get('oauth_byo', 0):,} that need an owner "
+                 f"to register a client once, {cov.get('key', 0):,} key-based and {cov.get('public', 0):,} public.")
+    except Exception:  # noqa: BLE001 - a marketing page must not fail on stats
+        truth = "OAuth where Tony holds credentials, keys everywhere else, all encrypted at rest."
+    body = body.replace("__AUTH_TRUTH__", truth)
 
     fonts = ("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;650;700&"
              "family=JetBrains+Mono:wght@400;500&display=swap")
@@ -936,7 +949,7 @@ BODY = """
 <main>
 <section class="hero"><div class="wrap hero-grid">
   <div>
-    <span class="eyebrow mono"><i></i>Hosted OAuth &middot; __APPS__ apps &middot; __ACTIONS__ actions</span>
+    <span class="eyebrow mono"><i></i>One connect flow &middot; __APPS__ apps &middot; __ACTIONS__ actions</span>
     <h1>Users sign in once.<br><em>Their agent does the rest.</em></h1>
     <p class="lede">Tony hands your user a link. They approve access on the provider's own page, and Tony keeps the
       token encrypted, refreshed and scoped. Your agent then calls GitHub, Gmail, Slack or Notion on their behalf,
@@ -1191,7 +1204,7 @@ BODY = """
 <section class="hero"><div class="wrap hero-grid">
   <div>
     <span class="eyebrow mono"><svg viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11L9.5 22 19 10.2h-6.4L13 2Z"/></svg>
-      Hosted OAuth &middot; __APPS__ apps &middot; __ACTIONS__ actions</span>
+      One connect flow &middot; __APPS__ apps &middot; __ACTIONS__ actions</span>
     <h1>Users sign in once.<br><em>Their agent does the rest.</em></h1>
     <p class="lede">Tony hands your user a link. They approve on the provider's own page, and Tony keeps the token
       encrypted, refreshed and scoped. Your agent then works inside GitHub, Gmail, Slack or Notion on their behalf,

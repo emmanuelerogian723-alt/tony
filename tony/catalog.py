@@ -582,29 +582,49 @@ class Catalog:
         return text
 
     def find_action(self, name: str) -> tuple[AppSpec, ActionSpec] | None:
-        """Resolve 'app.action', 'app__action', 'app_action' or a bare action slug."""
+        """Resolve 'app.action', 'app__action', 'app_action' or a bare action slug.
+
+        A named app is authoritative. If the caller says ``httpbin.api_request``
+        and httpbin does not exist, the answer is "no such app", never the
+        ``api_request`` that happens to live on airtable: silently running a
+        different app's action is how a request ends up in the wrong account.
+        """
+        from . import naming
+
         name = name.strip()
         if not name:
             return None
         for sep in (".", "__"):
             if sep in name:
                 head, _, tail = name.partition(sep)
-                app = self.get(head)
-                if app:
-                    act = app.action(tail)
-                    if act:
-                        return app, act
+                app = self.resolve(head) or self.get(head)
+                if app is not None:
+                    slug = naming.canonical(app, tail)
+                    return (app, app.action(slug)) if slug else None
+                if sep == ".":
+                    # dotted means the caller named an app; do not fall through
+                    return None
         for app in self.apps.values():
             act = app.action(name)
             if act:
                 return app, act
-        # prefixed underscore form: github_list_repos
-        for app in self.apps.values():
+        # prefixed underscore form: github_list_repos (longest slug wins)
+        for app in sorted(self.apps.values(), key=lambda a: -len(a.slug)):
             if name.startswith(app.slug + "_"):
                 act = app.action(name[len(app.slug) + 1:])
                 if act:
                     return app, act
         return None
+
+    def action_for(self, app_slug: str, spoken: str) -> ActionSpec | None:
+        """Alias-aware action lookup inside one app, for /v1/execute and friends."""
+        from . import naming
+
+        app = self.resolve(app_slug) or self.get(app_slug)
+        if app is None:
+            return None
+        slug = naming.canonical(app, spoken)
+        return app.action(slug) if slug else None
 
     def stats(self) -> dict[str, Any]:
         by_tier: dict[str, int] = {}
@@ -614,13 +634,30 @@ class Catalog:
             actions += len(a.actions)
             by_tier[a.tier] = by_tier.get(a.tier, 0) + 1
             by_source[a.source] = by_source.get(a.source, 0) + 1
+        total = len(self.apps)
+        directory = by_tier.get("directory", 0)
+        callable_apps = total - directory
+        iot = by_source.get("homeassistant", 0)
+        headline = {
+            "catalogue": total,
+            "callable": callable_apps,
+            "directory": directory,
+            "curated": by_source.get("curated", 0),
+            "note": (f"{callable_apps:,} apps can be called today (curated, OpenAPI and proxy tiers). "
+                     f"The remaining {directory:,} are directory listings that connect with a user key or "
+                     f"base URL, {iot:,} of them Home Assistant IoT brands with no public API of their own."),
+        }
         return {
-            "apps": len(self.apps),
+            "apps": total,
             "actions": actions,
+            "callable_apps": callable_apps,
+            "directory_apps": directory,
+            "curated_apps": by_source.get("curated", 0),
             "categories": len({a.category for a in self.apps.values()}),
             "duplicates_hidden_in_browse": len(getattr(self, "shadowed", ())),
             "by_tier": by_tier,
             "by_source": by_source,
+            "headline": headline,
         }
 
     def categories(self) -> list[str]:

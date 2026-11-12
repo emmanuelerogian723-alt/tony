@@ -135,14 +135,50 @@ def meta() -> dict[str, Any]:
 
 @router.get("/apps")
 def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "", source: str = "",
-              with_actions: bool = False, limit: int = 60, offset: int = 0,
-              dedupe: bool = False) -> dict[str, Any]:
-    """Paginated catalogue search. `limit=0` returns everything (use with care)."""
+              auth: str = "", strategy: str = "", with_actions: bool = False,
+              limit: int = 60, offset: int = 0, dedupe: bool = False) -> dict[str, Any]:
+    """Paginated catalogue search. `limit=0` returns everything (use with care).
+
+    Filters work three ways: named parameters (``auth=none``, ``strategy=key``),
+    or the same thing typed into ``q`` (``q=auth:none``), which is what people
+    and models try first. The assistant used to recommend that prefix form while
+    the endpoint ignored it, so the answer is now the one the docs describe.
+    """
+    from . import appauth
+
     search = (search or q).strip()
+    for prefix in ("auth", "strategy", "tier", "source"):
+        if search.lower().startswith(prefix + ":"):
+            value = search.split(":", 1)[1].strip()
+            if prefix == "auth":
+                auth = auth or value
+            elif prefix == "strategy":
+                strategy = strategy or value
+            elif prefix == "tier":
+                tier = tier or value
+            else:
+                source = source or value
+            search = ""
+            break
+
     matched = catalog.search(search, category, tier=tier, source=source, dedupe=dedupe)
+    auth_want = (auth or "").strip().lower()
+    strat_want = (strategy or "").strip().lower()
+    if auth_want or strat_want:
+        kept = []
+        for a in matched:
+            plan = appauth.plan(a.slug) or {}
+            row_auth = (getattr(a.auth, "type", "") or "none").lower()
+            row_strategy = str(plan.get("strategy") or ("key" if row_auth != "none" else "public")).lower()
+            if auth_want and auth_want not in {row_auth, row_strategy}:
+                continue
+            if strat_want and strat_want != row_strategy:
+                continue
+            kept.append(a)
+        matched = kept
+
     total = len(matched)
     window = matched[offset: offset + limit] if limit else matched[offset:]
-    from . import appauth
 
     items = []
     for a in window:
@@ -187,11 +223,52 @@ def get_app(slug: str) -> dict[str, Any]:
 
 @router.get("/coverage")
 def auth_coverage() -> dict[str, Any]:
-    """How every app in the catalogue actually gets connected, plus its read/write surface."""
+    """How every app in the catalogue actually gets connected.
+
+    Two numbers used to disagree: the catalogue said 7,924 apps and this endpoint
+    said 7,857, because it counted only the apps the auth registry had written a
+    plan for. The total is the catalogue now, and the registry subset is named.
+    The claim is spelled out too: one-click OAuth is real for the providers Tony
+    holds credentials for, everything else is a key or an owner-registered client.
+    """
     from . import appauth
 
     data = appauth.coverage()
-    data["managed_providers"] = len(__import__("tony.provider_registry", fromlist=["PROVIDERS"]).PROVIDERS)
+    raw = appauth._data()
+    registry_cov = dict(raw.get("coverage") or {})
+    managed = __import__("tony.provider_registry", fromlist=["PROVIDERS"]).PROVIDERS
+    catalog_total = len(catalog.apps)
+
+    # Count every app in the catalogue under exactly one strategy, so the split
+    # always adds up to the headline instead of stopping at the registry subset.
+    cov: dict[str, int] = {}
+    for spec in catalog.apps.values():
+        plan = appauth.plan(spec.slug) or {}
+        strategy = str(plan.get("strategy")
+                       or ("public" if getattr(spec.auth, "type", "none") == "none" else "key"))
+        cov[strategy] = cov.get(strategy, 0) + 1
+    registered = sum(registry_cov.values())
+    data.update({
+        "apps_total": catalog_total,
+        "coverage": cov,
+        "catalog_apps": catalog_total,
+        "registry_apps": registered,
+        "registry_coverage": registry_cov,
+        "unregistered_apps": max(0, catalog_total - registered),
+        "managed_providers": len(managed),
+        "oauth_one_click": len(managed),
+        "oauth_byo": cov.get("oauth_byo", 0),
+        "oauth_dcr": cov.get("oauth_dcr", 0),
+        "mcp_dcr": cov.get("mcp_dcr", 0),
+        "api_key": cov.get("key", 0),
+        "public": cov.get("public", 0),
+        "claim": (
+            f"{len(managed) + cov.get('oauth_ready', 0) + cov.get('oauth_dcr', 0)} apps sign in with one click "
+            f"because Tony holds the OAuth client. {cov.get('oauth_byo', 0)} need an owner to register one client "
+            f"id and secret once. {cov.get('mcp_dcr', 0)} authorise through the vendor's own MCP server. "
+            f"{cov.get('key', 0)} take a key the user supplies, and {cov.get('public', 0)} need no sign-in at all."
+        ),
+    })
     return data
 
 
@@ -221,8 +298,10 @@ def app_auth(slug: str, access: str = "read") -> dict[str, Any]:
 
 
 @router.get("/actions")
-def list_actions(search: str = "", app: str = "", tier: str = "", limit: int = 50,
+def list_actions(search: str = "", q: str = "", app: str = "", tier: str = "", limit: int = 50,
                  offset: int = 0, ranked: bool = True) -> dict[str, Any]:
+    """Action search. ``q`` and ``search`` are the same thing here, as on /v1/apps."""
+    search = (search or q or "").strip()
     # natural-language search: rank ACTIONS by meaning, not substring luck
     if search and ranked:
         from .toolsearch import search_actions
@@ -492,6 +571,7 @@ def connection_events(request: Request, limit: int = 50, app: str = "") -> dict[
 # ── execution ─────────────────────────────────────────────────────────────
 class ExecuteIn(BaseModel):
     action: str
+    app: str = ""            # optional: {"app": "gmail", "action": "fetch_emails"} works too
     entity_id: str = "default"
     args: dict[str, Any] = Field(default_factory=dict)
     approved: bool = False
@@ -563,6 +643,8 @@ def _effective_verb(action: Any, args: dict[str, Any] | None) -> str:
 @router.post("/execute")
 async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
     ws, _ = workspace_from_request(request)
+    if body.app and "." not in body.action and not body.action.startswith("custom."):
+        body.action = f"{body.app.strip()}.{body.action.strip()}"
     if body.action.startswith("custom."):
         return await _execute_custom(body, request, ws)
     resolved = catalog.find_action(body.action)
@@ -593,7 +675,15 @@ async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
             # into approvals and the run log, and it is rebuilt deterministically
             typed_plan = plan
     if not resolved:
-        raise HTTPException(404, detail=f"Unknown action '{body.action}'. Try app.action, e.g. github.list_repos")
+        from . import naming
+
+        head, _, tail = body.action.partition(".")
+        named = catalog.resolve(head) or catalog.get(head) if head else None
+        if named is not None:
+            raise HTTPException(404, detail=naming.explain(named, tail))
+        raise HTTPException(404, detail=(
+            f"Unknown action '{body.action}': there is no app '{head}' in the catalogue. "
+            "Send app.action, e.g. github.list_repos, or app plus action."))
     spec, action = resolved
     scope = getattr(request.state, "agent_scope", None)
     if not agenttokens.allows(scope, spec.slug, action.tier):
@@ -784,6 +874,8 @@ async def approve_run(run_id: str, request: Request) -> dict[str, Any]:
 
 class ReadIn(BaseModel):
     urls: list[str] = Field(default_factory=list)
+    url: str = ""            # single-page form, matching the console field
+    seed: str = ""           # the word the rest of the API uses for "where to start"
     site: str = ""
     sitemap: str = ""
     depth: int = 1
@@ -811,6 +903,16 @@ async def read_create(body: ReadIn, request: Request) -> dict[str, Any]:
             f"This workspace has used its {read_page_limit(ws):,} read pages for the month. "
             "Upgrade the plan or wait for the period to reset."))
     max_pages = min(max_pages, remaining)
+    # One URL is the most common call by far, so it is accepted under every name
+    # it is written with: url, seed, site or a one-item urls list.
+    single = (body.url or body.seed or "").strip()
+    if single and not body.urls:
+        body.urls = [single]
+    elif single and single not in body.urls:
+        body.urls = [single, *body.urls]
+    if body.urls and not body.site and not body.sitemap and body.depth > 1:
+        body.site = body.urls[0]
+        body.urls = []
     try:
         job_id = reader.create_job(
             ws, urls=body.urls, site=body.site, sitemap=body.sitemap, depth=body.depth,

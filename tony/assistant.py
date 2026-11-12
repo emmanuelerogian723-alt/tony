@@ -270,9 +270,14 @@ def _render_answer(topic: str, ws: str) -> str:
     if "{catalogue}" in text:
         apps = len(catalog.apps)
         actions = sum(len(a.actions) for a in catalog.apps.values())
+        stats = catalog.stats()
         text = (f"{apps:,} apps and {actions:,} typed actions right now, across curated, OpenAPI, proxy and "
-                "directory layers. Search them from the landing page or `GET /v1/apps?q=`; each app tells you "
-                "which layer it sits in, so a failure is never a mystery.")
+                f"directory layers. {stats['callable_apps']:,} of them can be called today. "
+                "Search them from the landing page or `GET /v1/apps?q=`; each app tells you which layer it sits "
+                "in, so a failure is never a mystery.\n\n"
+                "Filters that actually work: `/v1/apps?auth=none` (or `?q=auth:none`), `?strategy=key`, "
+                "`?tier=proxy`, `?source=openapi`, `?category=Developer`. `/v1/actions?q=send+email` ranks "
+                "actions across every app.")
     return text
 
 
@@ -356,7 +361,10 @@ async def ask(body: AskIn, request: Request) -> dict[str, Any]:
             "No curated entry matched this question, so answer from your own knowledge as Tony's assistant. "
             "Be concrete, and say plainly when you are unsure. Runtime facts you may rely on: 7,923 apps and "
             "40,692 typed actions; POST /v1/agent to plan and execute; POST /v1/execute for a single action; "
-            "GET /v1/tools for tool schemas; /mcp for MCP clients; POST /v1/agent-tokens gives an AI its own "
+            "GET /v1/tools for tool schemas, paged with offset/total so every action is reachable; "
+            "GET /v1/apps?auth=none or ?q=auth:none to list apps that need no credential (q= and the named "
+            "parameter are the same filter); GET /v1/actions?q= to rank actions rather than apps; "
+            "/mcp for MCP clients; POST /v1/agent-tokens gives an AI its own "
             "token with named apps, tiers (read/write/destructive) and ttl_days, sent as Bearer tony_at_... and "
             "enforced on every call; "
             "with app names, tiers and expiry; authenticator two-factor and Firebase sign-in on accounts; "

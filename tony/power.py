@@ -72,19 +72,36 @@ def _tool_name(app_slug: str, action_slug: str) -> str:
 
 
 def _tool_schema(app_slug: str, action: Any) -> dict[str, Any]:
+    """A schema a model can fill in without knowing the vendor's vocabulary.
+
+    ``srsearch`` becomes ``query`` and ``maxResults`` becomes ``limit``; the
+    original name travels in x-tony, and the executor accepts either, so nothing
+    that already works breaks.
+    """
+    from . import naming
+
     props: dict[str, Any] = {}
+    renamed: dict[str, str] = {}
     for name, spec in (action.params or {}).items():
-        props[name] = {"type": _json_type(spec), "description": (spec or {}).get("description", "") if isinstance(spec, dict) else ""}
+        friendly = naming.friendly_param(name)
+        renamed[name] = friendly
+        source = spec if isinstance(spec, dict) else {}
+        desc = source.get("description", "")
+        if friendly != name:
+            desc = (desc + f" (provider parameter: {name})").strip()
+        props[friendly] = {"type": _json_type(spec), "description": desc[:300]}
+    required = [renamed.get(r, r) for r in (action.required or [])]
     return {
         "name": _tool_name(app_slug, action.slug),
         "description": f"[{app_slug}] {action.name}: {action.description}".strip()[:900],
         "parameters": {
             "type": "object",
             "properties": props,
-            "required": list(action.required or []),
+            "required": required,
             "additionalProperties": True,
         },
-        "x-tony": {"app": app_slug, "action": action.slug, "tier": action.tier, "action_name": action.name},
+        "x-tony": {"app": app_slug, "action": action.slug, "tier": action.tier,
+                   "action_name": action.name, "param_map": renamed},
     }
 
 
@@ -115,48 +132,95 @@ def connected_tools(request: Request, include_writes: bool = False, fmt: str = "
             ConnectedAccount.workspace_id == ws, ConnectedAccount.status == "active")).all()})
     if not live:
         return {"tools": [], "apps": [], "note": "No live connections yet. Mint a connect link first."}
-    out = tools(apps=",".join(live), include_writes=include_writes, fmt=fmt, format=format, limit=limit)
+    out = tools(request, apps=",".join(live), include_writes=include_writes,
+                fmt=fmt, format=format, limit=limit)
     out["apps"] = live
     return out
 
 
 @router.get("/tools")
-def tools(apps: str = "", app: str = "", q: str = "", include_writes: bool = False,
-          fmt: str = "", format: str = "openai", limit: int = 2000) -> dict[str, Any]:
-    """Tool definitions your model can call. Tony executes them for you."""
-    format = fmt or format
-    limit = max(1, min(limit, 5000))
-    names = [a for a in apps.split(",") if a.strip()]
+def tools(request: Request, apps: str = "", app: str = "", q: str = "", include_writes: bool = False,
+          fmt: str = "", format: str = "openai", limit: int = 2000, offset: int = 0) -> dict[str, Any]:
+    """Tool definitions your model can call, page by page over the whole catalogue.
+
+    The first page used to be the whole story: a hard 2,000-tool ceiling across
+    48,000 actions, so an agent never saw most of the catalogue and had no way to
+    ask for the rest. Every response now carries ``total`` and ``next_offset``,
+    and ``q`` ranks actions, so coverage is a paging loop, not a lottery.
+    """
+    format = (fmt or format or "openai").lower()
+    limit = max(1, min(int(limit or 2000), 2000))
+    offset = max(0, int(offset or 0))
+
+    wanted_apps: list[str] = []
+    for raw in [a for a in (apps or "").split(",") if a.strip()]:
+        spec = catalog.resolve(raw.strip()) or catalog.get(raw.strip())
+        if spec:
+            wanted_apps.append(spec.slug)
     if app:
-        names.append(app)
-    specs = _pick_apps(names, limit=500)
-    if not specs and q:
-        from .search import find_apps
+        spec = catalog.resolve(app.strip()) or catalog.get(app.strip())
+        if spec and spec.slug not in wanted_apps:
+            wanted_apps.append(spec.slug)
 
-        specs = [catalog.get(hit["slug"]) for hit in find_apps(q, limit=8)]
+    query = (q or "").strip().lower()
+
+    def _rank(spec: Any) -> tuple[int, str]:
+        order = {"actions": 0, "proxy": 1, "directory": 2}
+        return (order.get(spec.tier, 3), spec.slug)
+
+    if wanted_apps:
+        specs = [catalog.resolve(s) or catalog.get(s) for s in wanted_apps]
         specs = [s for s in specs if s]
-    if not specs:
-        specs = list(catalog.apps.values())[:400]
+    elif query:
+        from .search import find_apps
+        specs = [catalog.resolve(hit["slug"]) or catalog.get(hit["slug"]) for hit in find_apps(query, limit=40)]
+        specs = [s for s in specs if s]
+    else:
+        specs = sorted(catalog.apps.values(), key=_rank)
 
-    tools = []
+    matched: list[tuple[str, Any]] = []
     for spec in specs:
         for action in spec.actions:
             if action.tier != "read" and not include_writes:
                 continue
-            tools.append(_tool_schema(spec.slug, action))
-            if len(tools) >= limit:
-                break
-        if len(tools) >= limit:
-            break
+            if query and not wanted_apps:
+                hay = f"{spec.slug} {spec.name} {action.slug} {action.name} {action.description}".lower()
+                if not all(word in hay for word in query.split()):
+                    continue
+            matched.append((spec.slug, action))
 
-    if format == "anthropic":
-        shaped = [{"name": t["name"], "description": t["description"], "input_schema": t["parameters"]} for t in tools]
-    elif format == "mcp":
-        shaped = [{"name": t["name"], "description": t["description"], "inputSchema": t["parameters"]} for t in tools]
-    else:
-        shaped = [{"type": "function", "function": t} for t in tools]
-    return {"format": format, "count": len(shaped), "tools": shaped,
-            "note": "Send the call back to POST /v1/agent with the same goal, or run it with POST /v1/execute."}
+    total = len(matched)
+    window = matched[offset: offset + limit]
+    shaped_tools = []
+    for app_slug, action in window:
+        t = _tool_schema(app_slug, action)
+        if format == "anthropic":
+            shaped_tools.append({"name": t["name"], "description": t["description"], "input_schema": t["parameters"]})
+        elif format == "mcp":
+            shaped_tools.append({"name": t["name"], "description": t["description"], "inputSchema": t["parameters"]})
+        else:
+            shaped_tools.append({"type": "function", "function": t})
+
+    seen: list[str] = []
+    for app_slug, _action in window:
+        if app_slug not in seen:
+            seen.append(app_slug)
+    next_offset = offset + len(window)
+    return {
+        "format": format,
+        "count": len(shaped_tools),
+        "tools": shaped_tools,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": next_offset < total,
+        "next_offset": next_offset if next_offset < total else None,
+        "apps_in_page": seen,
+        "apps_total": len(catalog.apps),
+        "actions_total": sum(len(a.actions) for a in catalog.apps.values()),
+        "note": ("Walk offsets until has_more is false to see every tool. "
+                 "Send the call back to POST /v1/execute, or POST /v1/agent with the same goal."),
+    }
 
 
 # ── agent runtime ─────────────────────────────────────────────────────────

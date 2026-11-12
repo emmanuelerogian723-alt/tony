@@ -95,7 +95,16 @@ def scan(text: str) -> dict[str, Any]:
             score += 30
             break
 
-    return {"safe": score < 25, "score": min(score, 100), "findings": findings}
+    # Weak signals must corroborate. A docs page that merely mentions "system
+    # prompt" or "you are now a" is not an attack: judging on the summed score
+    # flagged 55 of 56 ordinary Base44 documentation pages. A real injection
+    # carries at least one strong finding (an override, an exfiltration target,
+    # a role marker), so that is the bar, and weak signals only add weight.
+    strong = [f for f in findings if f["weight"] >= 30]
+    weak_score = sum(f["weight"] for f in findings if f["weight"] < 30)
+    safe = not strong and weak_score < 35
+    return {"safe": safe, "score": min(score, 100), "findings": findings,
+            "strong_findings": len(strong), "weak_score": weak_score}
 
 
 def neutralise(text: str) -> str:

@@ -375,66 +375,76 @@ def icon_url(spec: Any) -> str:
 
 @router.get("/v1/icon/{slug}")
 def app_icon(slug: str) -> Any:
-    """Always answer with image bytes, never a redirect.
+    """Always answer with image bytes, never a redirect and never an empty tile.
 
-    A 302 to a third-party favicon service is what made icons look broken: some
-    clients do not follow redirects, Google rate-limits the service, and every
-    <img> paid a second round trip. Now Tony serves the bytes itself: a local
-    brand SVG, a cached copy, or one fetch that is cached on disk for a day.
-    The letter tile is the floor, so an icon is never missing.
+    Order: a local brand mark on a dark tile, a cached copy, then the mirrors and
+    favicon services, then a deterministic letter tile. ``cdn.simpleicons.org``
+    is deliberately not called first: it answers 403 to datacenter IPs, which is
+    why whole shelves of the catalogue were blank.
     """
-    import time as _time
-
     from pathlib import Path as _P
 
-    icon_path = _P(__file__).parent / "static" / "brand" / "icons"
+    from . import icons as _icons
+
     spec = catalog.catalog.resolve(slug) or catalog.catalog.get(slug)
     name = getattr(spec, "name", slug.replace("_", " ").replace("-", " ").title())
     cache_dir = settings_data_dir() / "icons"
     cache_dir.mkdir(parents=True, exist_ok=True)
     safe = _re.sub(r"[^a-z0-9_.-]", "", (slug or "").lower())[:60] or "app"
+    week = {"Cache-Control": "public, max-age=604800"}
 
-    # 1. a real local brand mark, shipped with Tony
-    for cand in (slug, slug.replace("_", "").replace("-", ""), getattr(spec, "slug", "")):
-        if cand and (icon_path / f"{cand}.svg").exists():
-            return _Response((icon_path / f"{cand}.svg").read_bytes(), media_type="image/svg+xml",
-                             headers={"Cache-Control": "public, max-age=604800"})
+    # 1. a real local brand mark, on a tile it can actually be seen against
+    local = _icons.local_mark(slug)
+    if local is not None:
+        try:
+            return _Response(_icons.wrap_mark(local.read_text(errors="ignore"), slug),
+                             media_type="image/svg+xml", headers=week)
+        except Exception:  # noqa: BLE001 - fall through to the network
+            pass
 
     # 2. anything already fetched
     for ext, media in (("png", "image/png"), ("jpg", "image/jpeg"), ("svg", "image/svg+xml")):
         cached = cache_dir / f"{safe}.{ext}"
         if cached.exists() and cached.stat().st_size > 0:
-            return _Response(cached.read_bytes(), media_type=media,
-                             headers={"Cache-Control": "public, max-age=604800"})
+            return _Response(cached.read_bytes(), media_type=media, headers=week)
 
-    # 3. fetch once, cache for a week. Short timeout: an icon is never worth a stall.
-    url = icon_url(spec) if spec else ""
-    if url.startswith("http"):
+    # 3. fetch once, cache for a week, short timeout: an icon is never worth a stall
+    import httpx as _httpx
+
+    for url in _icons.remote_candidates(spec, slug):
         try:
-            import httpx as _httpx
-
             with _httpx.Client(timeout=4.0, follow_redirects=True) as client:
-                r = client.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; TonyIcons/1.0)"})
+                r = client.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; TonyIcons/1.0)",
+                                             "Accept": "image/svg+xml,image/png,image/*;q=0.8"})
             ctype = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
-            if r.status_code == 200 and ctype.startswith("image/") and 0 < len(r.content) <= 300_000:
-                ext = {"image/png": "png", "image/jpeg": "jpg", "image/svg+xml": "svg"}.get(ctype, "png")
-                try:
-                    (cache_dir / f"{safe}.{ext}").write_bytes(r.content)
-                except Exception:  # noqa: BLE001 - read-only disk must not break the icon
-                    pass
-                return _Response(r.content, media_type=ctype,
-                                 headers={"Cache-Control": "public, max-age=604800"})
+            if r.status_code != 200 or not ctype.startswith("image/") or not 0 < len(r.content) <= 300_000:
+                continue
+            if ctype == "image/svg+xml":
+                if b"<svg" not in r.content[:400]:
+                    continue
+                payload = _icons.wrap_mark(r.content.decode("utf-8", "ignore"), slug)
+                clean_type = "image/svg+xml"
+            else:
+                payload, clean_type = r.content, ctype
+            ext = {"image/png": "png", "image/jpeg": "jpg", "image/svg+xml": "svg"}.get(clean_type, "png")
+            try:
+                (cache_dir / f"{safe}.{ext}").write_bytes(payload)
+            except Exception:  # noqa: BLE001 - a read-only disk must not break the icon
+                pass
+            return _Response(payload, media_type=clean_type, headers=week)
         except Exception:  # noqa: BLE001
-            pass
+            continue
 
     # 4. the floor: a clean, deterministic letter tile
-    return _Response(_initial_tile(name, slug), media_type="image/svg+xml",
+    return _Response(_icons.letter_tile(name, slug), media_type="image/svg+xml",
                      headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.get("/v1/icon-tile/{slug}")
 def app_icon_tile(slug: str) -> Any:
+    from . import icons as _icons
+
     spec = catalog.catalog.resolve(slug) or catalog.catalog.get(slug)
     name = getattr(spec, "name", slug.replace("_", " ").replace("-", " ").title())
-    return _Response(_initial_tile(name, slug), media_type="image/svg+xml",
+    return _Response(_icons.letter_tile(name, slug), media_type="image/svg+xml",
                      headers={"Cache-Control": "public, max-age=86400"})

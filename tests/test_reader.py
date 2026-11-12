@@ -95,3 +95,29 @@ def test_fanout_caps_and_reports(client):
 def test_proxy_requires_known_app(client):
     r = client.post("/v1/proxy/not-a-real-app", json={"path": "/x"})
     assert r.status_code == 404
+
+
+def test_sitemap_seed_keeps_kind_and_expands(monkeypatch):
+    """A sitemap seed must keep its kind through the claim, then expand into pages."""
+    xml = ("<?xml version='1.0'?><urlset>"
+           "<url><loc>https://a.example.com/one</loc></url>"
+           "<url><loc>https://a.example.com/two</loc></url></urlset>")
+
+    class FakeResp:
+        status_code = 200
+        text = xml
+        content = xml.encode()
+        headers = {"content-type": "application/xml"}
+        encoding = "utf-8"
+
+    class FakeClient:
+        async def get(self, url, **kw):
+            return FakeResp()
+
+    jid = reader.create_job("ws", sitemap="https://a.example.com/sitemap.xml", max_pages=10)
+    page = reader._next_pending(jid, 1)[0]
+    assert page["kind"] == "sitemap"
+    job = {"id": jid, "workspace_id": "ws", "seed_url": "https://a.example.com",
+           "depth": 1, "max_pages": 10, "follow_links": True}
+    out = asyncio.run(reader._expand_sitemap(FakeClient(), job, page["url"], jid))
+    assert [u for u, _ in out] == ["https://a.example.com/one", "https://a.example.com/two"]

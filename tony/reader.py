@@ -310,8 +310,9 @@ def _next_pending(job_id: str, limit: int = 50) -> list[dict[str, Any]]:
         ).all()
         out = []
         for row in rows:
+            kind = row.status          # sitemap seeds keep their kind through the claim
             row.status = "claimed"
-            out.append({"id": row.id, "url": row.url, "depth": row.depth, "kind": row.status})
+            out.append({"id": row.id, "url": row.url, "depth": row.depth, "kind": kind})
         s.flush()
     return out
 

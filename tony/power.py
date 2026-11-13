@@ -701,7 +701,8 @@ def _items_of(step: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _headline(item: dict[str, Any]) -> str:
-    for key in ("title", "name", "description", "login", "full_name", "subject", "text"):
+    for key in ("title", "story_title", "headline", "name", "description", "summary",
+                "subject", "text", "login", "full_name"):
         if item.get(key):
             return str(item[key])[:140]
     return ""
@@ -726,26 +727,59 @@ def _flat(d: Any, prefix: str = "", out: list[str] | None = None, depth: int = 0
     return out
 
 
+_NOISE = {
+    "result", "success", "status", "ok", "provider", "documentation", "message", "error",
+    "latitude", "longitude", "timezone", "timezone_abbreviation", "utc_offset_seconds",
+    "generationtime_ms", "elevation", "request", "meta", "links", "pagination", "count",
+    "total", "page", "per_page", "next", "previous", "as", "type",
+}
+_CURRENCY_ORDER = ("NGN", "USD", "EUR", "GBP", "GHS", "KES", "ZAR")
+
+
+def _pairs(d: dict[str, Any], depth: int = 0) -> list[str]:
+    """The few values in a response a person would actually want to read."""
+    out: list[str] = []
+    ordered = list(d.items())
+    if any(k.upper() in _CURRENCY_ORDER for k in d):
+        ordered.sort(key=lambda kv: _CURRENCY_ORDER.index(kv[0].upper())
+                     if kv[0].upper() in _CURRENCY_ORDER else 99)
+    else:   # a timestamp is context, never the answer
+        ordered.sort(key=lambda kv: kv[0].lower() == "time")
+    for key, value in ordered:
+        if key.lower() in _NOISE or key.lower().endswith("_units"):
+            continue
+        if isinstance(value, dict) and depth < 2:
+            out.extend(_pairs(value, depth + 1))
+        elif isinstance(value, (str, int, float)) and value not in ("", None):
+            out.append(f"{key} {str(value)[:60]}")
+        if len(out) >= 4:
+            break
+    return out
+
+
 def _app_line(slug: str, step: dict[str, Any]) -> list[str]:
     """One app's contribution to a multi-app answer: a name and a real value."""
     items = _items_of(step)
     raw = _raw_items(step)
-    inner = (step.get("data") or {})
-    if isinstance(inner, dict) and isinstance(inner.get("data"), dict):
-        inner = inner["data"]
+    inner: Any = step.get("data") or {}
+    for _ in range(2):
+        if isinstance(inner, dict) and isinstance(inner.get("data"), (dict, list)):
+            inner = inner["data"]
+
     if items:
         head = _headline(items[0])
-        return [f"• {slug}: {head}" if head else f"• {slug}: {len(items)} result(s)"]
-    if raw and isinstance(raw[0], (int, str, float)):
-        return [f"• {slug}: {len(raw)} item(s), first {raw[0]}"[:200]]
+        more = f" (+{len(items) - 1} more)" if len(items) > 1 else ""
+        return [f"{slug}: {head}{more}" if head else f"{slug}: {len(items)} result(s)"]
     if isinstance(inner, dict):
-        for key, value in inner.items():
-            if isinstance(value, (str, int, float)) and value not in ("", None):
-                return [f"• {slug}: {key} {str(value)[:80]}"]
         head = _headline(inner)
         if head:
-            return [f"• {slug}: {head}"]
-    return [f"• {slug}: {step.get('action')} ran in {step.get('latency_ms', 0)} ms"]
+            return [f"{slug}: {head}"]
+        pairs = _pairs(inner)
+        if pairs:
+            return [f"{slug}: " + "; ".join(pairs[:3])]
+    if raw and isinstance(raw[0], (int, float, str)):
+        return [f"{slug}: {len(raw)} item(s), first {raw[0]}"]
+    return [f"{slug}: {step.get('action')} ran in {step.get('latency_ms', 0)} ms"]
 
 
 def _summarise(goal: str, steps: list[dict[str, Any]]) -> str:

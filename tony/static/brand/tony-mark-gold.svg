@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Tony mark (gold)</title>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F2D06B"/><stop offset=".55" stop-color="#D4AF37"/>
+      <stop offset="1" stop-color="#A67C12"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="288" fill="#0A0A0C"/>
+  <path d="M256 704V320l256 256 256-256v384" fill="none" stroke="url(#g)" stroke-width="77"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

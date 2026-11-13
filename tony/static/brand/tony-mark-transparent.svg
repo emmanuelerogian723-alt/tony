@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Tony mark (transparent)</title>
+  <path d="M184 512h104" stroke="#F3F0E9" stroke-width="80" stroke-linecap="round"/>
+  <circle cx="512" cy="512" r="208" fill="none" stroke="#F3F0E9" stroke-width="80"
+          stroke-dasharray="992 316" stroke-linecap="round" transform="rotate(45 512 512)"/>
+  <circle cx="536" cy="488" r="74" fill="#E2542B"/>
+</svg>

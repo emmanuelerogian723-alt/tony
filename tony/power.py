@@ -884,7 +884,14 @@ async def _direct_answer(goal: str, history: list[dict[str, str]] | None = None)
 async def agent(body: AgentIn, request: Request) -> dict[str, Any]:
     """Give Tony a goal. It plans, calls real apps, and answers with receipts."""
     ws, _ = workspace_from_request(request)
-    return await run_agent(ws, body)
+    result = await run_agent(ws, body)
+    # a connect link is clicked by a human in a chat window, so it must be absolute
+    base = str(request.base_url).rstrip("/")
+    for entry in result.get("needs_connection") or []:
+        url = entry.get("connect_url") or ""
+        if url.startswith("/") and base:
+            entry["connect_url"] = base + url
+    return result
 
 
 async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:

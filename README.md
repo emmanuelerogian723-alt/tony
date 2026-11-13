@@ -59,7 +59,9 @@ the OAuth apps to their own client IDs. Tony takes the opposite position:
 - **Triggers**: poll any action, webhook your server (HMAC-signed) when the result changes.
 - **Response budgeting**: path extraction, item caps and byte limits keep payloads small
   enough for a context window — with a `truncated` flag instead of silent loss.
-- **SSRF guard** on every outbound request, hashed API keys, per-workspace isolation.
+- **SSRF guard** on every outbound request (including every read-job page and followed link),
+  hashed API keys that can be scoped to named apps and to reads only, per-workspace isolation,
+  HSTS/CSP on every response and visible `X-RateLimit-*` budget headers.
 
 ## Quickstart
 

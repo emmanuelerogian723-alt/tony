@@ -68,6 +68,19 @@ Lists connected accounts — never returns secret values, only scopes, labels an
 ### `DELETE /v1/connections/{app}?entity_id=user_42`
 Revokes and deletes the stored credentials.
 
+## Keys
+
+### `POST /v1/account/keys`
+```json
+{"name": "ci", "apps": ["github", "linear"], "read_only": true}
+```
+`apps` blank means the whole catalogue. `read_only` refuses `write` and `destructive` actions.
+The plaintext key appears once, in this response.
+
+### `PATCH /v1/account/keys/{key_id}`
+Change `name`, `apps` or `read_only` on an existing key. No new secret is issued, so a leaked
+scope can be narrowed in place.
+
 ## Execution
 
 ### `POST /v1/execute`

@@ -185,3 +185,14 @@ def test_account_config_does_not_advertise_dead_signin(client):
     assert "auth0" in body
     if body["auth0"] is False:
         assert client.get("/v1/account/auth0/login").status_code == 404
+
+
+def test_auth_and_tier_filters_accept_the_words_people_type(client):
+    """The assistant told testers to call /v1/apps?q=auth:none. That must be true."""
+    assert client.get("/v1/apps?q=auth:none").json()["total"] > 0
+    assert client.get("/v1/apps?auth=oauth").json()["total"] > 0
+    assert client.get("/v1/apps?q=auth:key").json()["total"] > 0
+    assert client.get("/v1/apps?q=tier:curated").status_code == 200      # alias for actions
+    assert client.get("/v1/apps?tier=proxy").status_code == 200
+    assert client.get("/v1/apps?auth=nonsense").status_code == 400
+    assert client.get("/v1/apps?q=tier:nonsense").status_code == 400

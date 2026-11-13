@@ -157,7 +157,16 @@ def meta() -> dict[str, Any]:
 
 
 MAX_PAGE = 500
-_APP_TIERS = {"actions", "proxy", "directory"}
+_APP_TIERS = {"actions", "proxy", "directory", "homeassistant"}
+
+# How people (and models) name the sign-in styles versus what the catalogue
+# stores. "oauth" means oauth2, "key" is the whole family of user-supplied keys.
+_AUTH_GROUPS: dict[str, set[str]] = {
+    "none": {"none"}, "public": {"none"}, "keyless": {"none"},
+    "key": {"api_key", "bearer", "basic", "path"},
+    "api_key": {"api_key"}, "apikey": {"api_key"}, "bearer": {"bearer"},
+    "basic": {"basic"}, "oauth": {"oauth2"}, "oauth2": {"oauth2"},
+}
 
 
 @router.get("/apps")
@@ -178,18 +187,6 @@ def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "",
     """
     from . import appauth
 
-    if offset < 0:
-        raise HTTPException(400, detail="offset must be zero or greater")
-    if limit < 0:
-        raise HTTPException(400, detail="limit must be zero or greater (0 means the first page)")
-    tier_want = (tier or "").strip().lower()
-    if tier_want and tier_want not in _APP_TIERS:
-        raise HTTPException(400, detail=f"Unknown tier '{tier}'. Use one of: {', '.join(sorted(_APP_TIERS))}")
-    # A 5.7MB page is not a feature. Anything above the cap is clamped, and the
-    # response says so instead of silently truncating or melting the client.
-    capped = limit == 0 or limit > MAX_PAGE
-    page_limit = MAX_PAGE if capped else limit
-
     search = (search or q).strip()
     for prefix in ("auth", "strategy", "tier", "source"):
         if search.lower().startswith(prefix + ":"):
@@ -204,6 +201,23 @@ def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "",
                 source = source or value
             search = ""
             break
+
+    if offset < 0:
+        raise HTTPException(400, detail="offset must be zero or greater")
+    if limit < 0:
+        raise HTTPException(400, detail="limit must be zero or greater (0 means the first page)")
+    tier_want = (tier or "").strip().lower()
+    # Old names for the same shelves: imported OpenAPI apps are the "curated"
+    # tier, and everything else that is not a listing proxies a real host.
+    tier_want = {"curated": "actions", "openapi": "actions", "rest": "proxy",
+                 "listing": "directory", "iot": "homeassistant"}.get(tier_want, tier_want)
+    if tier_want and tier_want not in _APP_TIERS:
+        raise HTTPException(400, detail=(f"Unknown tier '{tier}'. Use one of: {', '.join(sorted(_APP_TIERS))}"
+                                         f", or an alias: curated, openapi, rest, listing, iot"))
+    # A 5.7MB page is not a feature. Anything above the cap is clamped, and the
+    # response says so instead of silently truncating or melting the client.
+    capped = limit == 0 or limit > MAX_PAGE
+    page_limit = MAX_PAGE if capped else limit
 
     matched = catalog.search(search, category, tier=tier, source=source, dedupe=dedupe)
     if not include_hidden:
@@ -221,13 +235,19 @@ def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "",
             matched = [a for a in matched if a.slug not in hidden]
     auth_want = (auth or "").strip().lower()
     strat_want = (strategy or "").strip().lower()
-    if auth_want or strat_want:
+    auth_set: set[str] = set()
+    if auth_want:
+        auth_set = _AUTH_GROUPS.get(auth_want, set())
+        if not auth_set and auth_want not in {s.lower() for s in appauth.STRATEGY_LABEL}:
+            raise HTTPException(400, detail=(f"Unknown auth '{auth}'. Use one of: "
+                                             f"{', '.join(sorted(_AUTH_GROUPS))}, or a strategy name"))
+    if auth_set or strat_want:
         kept = []
         for a in matched:
             plan = appauth.plan(a.slug) or {}
             row_auth = (getattr(a.auth, "type", "") or "none").lower()
             row_strategy = str(plan.get("strategy") or ("key" if row_auth != "none" else "public")).lower()
-            if auth_want and auth_want not in {row_auth, row_strategy}:
+            if auth_set and row_auth not in auth_set and auth_want not in {row_strategy, "public" if row_auth == "none" else ""}:
                 continue
             if strat_want and strat_want != row_strategy:
                 continue

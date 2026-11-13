@@ -275,7 +275,8 @@ def _render_answer(topic: str, ws: str) -> str:
                 f"directory layers. {stats['callable_apps']:,} of them can be called today. "
                 "Search them from the landing page or `GET /v1/apps?q=`; each app tells you which layer it sits "
                 "in, so a failure is never a mystery.\n\n"
-                "Filters that actually work: `/v1/apps?auth=none` (or `?q=auth:none`), `?strategy=key`, "
+                "Filters that actually work: `/v1/apps?auth=none|key|oauth` (or `?q=auth:none`), "
+                "`?strategy=key|oauth_byo|public`, `?tier=actions|proxy|directory`, "
                 "`?tier=proxy`, `?source=openapi`, `?category=Developer`. `/v1/actions?q=send+email` ranks "
                 "actions across every app.")
     return text

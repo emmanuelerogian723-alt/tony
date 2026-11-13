@@ -31,7 +31,9 @@ def test_stats_and_apps(client):
     stats = client.get("/v1/stats").json()
     assert stats["apps"] >= 40 and stats["actions"] >= 100
     apps = client.get("/v1/apps").json()
-    assert apps["total"] == stats["apps"]
+    # Browse hides duplicate imports and junk names; the catalogue headline still
+    # counts everything, and /v1/apps/{slug} still resolves hidden slugs.
+    assert apps["total"] == stats["browsable_apps"] <= stats["apps"]
     assert "Developer" in apps["categories"]
 
 

@@ -129,7 +129,29 @@ async def check_all(request: Request, entity_id: str = "") -> dict[str, Any]:
 
 @router.get("")
 def health_summary(request: Request) -> dict[str, Any]:
-    ws, _ = workspace_from_request(request)
+    """One health answer, not two.
+
+    ``/health`` described the service while ``/v1/health`` described connections,
+    so "the health endpoint" meant different things depending on the slash. The
+    v1 answer now leads with the service and adds this workspace's connections.
+    """
+    from . import __version__
+    from .catalog import catalog
+    from .db import DB_STATUS
+
+    base = {
+        "status": "ok",
+        "db": DB_STATUS.get("backend"),
+        "db_error": (DB_STATUS.get("error") or "")[:300],
+        "version": __version__,
+        "apps": catalog.stats()["apps"],
+        "actions": catalog.stats()["actions"],
+    }
+    try:
+        ws, demo = workspace_from_request(request)
+    except Exception:  # noqa: BLE001 - service health must not need a credential
+        return {**base, "connections": [], "total": 0, "auth_required": True,
+                "note": "Send an API key for connection health; the service block needs no credential."}
     with session() as s:
         rows = s.scalars(select(ConnectedAccount).where(ConnectedAccount.workspace_id == ws)).all()
     out = []
@@ -139,5 +161,5 @@ def health_summary(request: Request) -> dict[str, Any]:
         except Exception:  # noqa: BLE001
             meta = {}
         out.append({"app": r.app_slug, "status": r.status, "health": meta.get("health")})
-    return {"connections": out, "total": len(out),
+    return {**base, "demo": demo, "workspace": ws, "connections": out, "total": len(out),
             "note": "POST /v1/health/check probes each connection and stores the verdict."}

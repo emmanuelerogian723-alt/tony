@@ -263,9 +263,14 @@ def test_executor_sends_the_users_token_to_the_provider(client, wiring, monkeypa
 
     body = connect(client)
     finish(client, body["authorization_url"])
+    # The demo is private per visitor now, so scope the lookup to this client's
+    # own room instead of taking whichever mockapp row is first in the table.
+    ws = client.get("/v1/demo/session").json()["workspace_id"]
     with session() as s:
-        ws = s.scalars(select(ConnectedAccount).where(
-            ConnectedAccount.app_slug == "mockapp")).first().workspace_id
+        row = s.scalars(select(ConnectedAccount).where(
+            ConnectedAccount.app_slug == "mockapp",
+            ConnectedAccount.workspace_id == ws)).first()
+        assert row is not None, "connection was not stored in the caller's own workspace"
 
     from tony.power import _run_one
 

@@ -58,16 +58,14 @@ def test_connect_directory_app_stores_host(client):
 
 def test_missing_host_gives_actionable_error(client):
     """A token saved without a host (legacy rows) must explain the fix, not fail opaquely."""
-    from sqlalchemy import select
-
     from tony.db import session
-    from tony.models import Workspace
     from tony.oauth import store_api_key
 
     slug = a_directory_slug()
+    # The client's own private demo room: the demo is no longer one shared workspace.
+    ws_id = client.get("/v1/demo/session").json()["workspace_id"]
     with session() as s:
-        ws = s.scalar(select(Workspace).where(Workspace.is_demo.is_(True)))
-        store_api_key(ws.id, "default", catalog.get(slug), {"api_key": "sk-test"}, "legacy")
+        store_api_key(ws_id, "default", catalog.get(slug), {"api_key": "sk-test"}, "legacy")
     r = client.post("/v1/execute", json={"action": f"{slug}.request", "args": {"path": "/v1/me"},
                                          "approved": True})
     assert r.status_code == 200, r.text

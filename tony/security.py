@@ -29,6 +29,42 @@ def blocked(request: Request) -> dict[str, Any]:
                              "until": r.expires_at.isoformat(timespec="seconds")} for r in rows]}
 
 
+@router.get("/status")
+def status(request: Request) -> dict[str, Any]:
+    """Is this caller blocked, and for how much longer?
+
+    No credential is needed: a blocked visitor must be able to see why the API
+    stopped answering and clear it themselves. This endpoint is exempt from the
+    shield for exactly that reason.
+    """
+    subject = shield.subject_of(request)
+    left = shield.block_remaining(subject)
+    return {"subject": subject, "blocked": left > 0, "retry_after_seconds": left,
+            "clear": "POST /v1/security/unblock",
+            "note": "Blocks are per address, short, and self-healing."}
+
+
+@router.post("/unblock")
+def unblock_self(request: Request) -> dict[str, Any]:
+    """Lift this caller's own block immediately.
+
+    A behavioural block is a speed bump, not a sentence. Making people wait out a
+    timer (or email support) when one script tripped the shield is how a security
+    feature becomes an outage.
+    """
+    subject = shield.subject_of(request)
+    with session() as s:
+        rows = s.scalars(select(BlockedSubject).where(BlockedSubject.subject == subject)).all()
+        for row in rows:
+            s.delete(row)
+        s.commit()
+    shield._block_cache.pop(subject, None)
+    shield._score.pop(subject, None)
+    shield._recent_paths.pop(subject, None)
+    shield._recent_fail.pop(subject, None)
+    return {"unblocked": subject, "was_blocked": bool(rows)}
+
+
 @router.delete("/blocked/{subject}")
 def unblock(subject: str, request: Request) -> dict[str, Any]:
     workspace_from_request(request)

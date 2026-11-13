@@ -31,7 +31,7 @@ def test_credential_stuffing_is_blocked(client):
     for i in range(25):
         last = client.get("/v1/runs", headers={"authorization": f"Bearer tk_live_wrong{i:04d}",
                                                "x-forwarded-for": "7.7.7.7"}).status_code
-    assert last == 403
+    assert last == 429
 
 
 def test_normal_traffic_is_untouched(client):

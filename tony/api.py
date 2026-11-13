@@ -63,6 +63,29 @@ def stats() -> dict[str, Any]:
     return {**base, "runs": runs, "connections": conns, "version": __version__}
 
 
+@router.get("/demo/session")
+def demo_session(request: Request) -> dict[str, Any]:
+    """Claim (or look up) this caller's private demo room.
+
+    Anonymous use of the API is a room of one's own, not a shared lobby: a signed
+    cookie proves the room, and ``api_key`` lets a client without a cookie jar use
+    the same room by sending ``X-Tony-Demo-Session``. Nothing here is ever shared
+    with another visitor.
+    """
+    from . import demo
+
+    if not settings.demo_open:
+        raise HTTPException(403, detail="The demo is closed on this deployment. Sign up for a key.")
+    info = demo.current(request) or demo.provision(request)
+    return {"workspace_id": info["workspace_id"], "api_key": info["api_key"],
+            "token": info["token"], "expires_in": info["expires_in"],
+            "expires_at": info.get("expires_at", ""),
+            "private": True,
+            "header": "X-Tony-Demo-Session",
+            "note": ("Each visitor gets an empty workspace with its own key. Send the token in "
+                     "X-Tony-Demo-Session to stay in the same room without cookies.")}
+
+
 @router.get("/whoami")
 def whoami(request: Request) -> dict[str, Any]:
     """Which workspace, user and key is behind this call.
@@ -133,11 +156,20 @@ def meta() -> dict[str, Any]:
     }
 
 
+MAX_PAGE = 500
+_APP_TIERS = {"actions", "proxy", "directory"}
+
+
 @router.get("/apps")
 def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "", source: str = "",
               auth: str = "", strategy: str = "", with_actions: bool = False,
-              limit: int = 60, offset: int = 0, dedupe: bool = False) -> dict[str, Any]:
-    """Paginated catalogue search. `limit=0` returns everything (use with care).
+              limit: int = 60, offset: int = 0, dedupe: bool = True,
+              include_hidden: bool = False) -> dict[str, Any]:
+    """Paginated catalogue search. Pages are capped at 500 apps.
+
+    Duplicates of the same product (``google-calendar`` and ``google_calendar``)
+    and import artefacts named "API V1" are hidden by default; ``include_hidden``
+    brings them back, and any slug still resolves on ``/v1/apps/{slug}``.
 
     Filters work three ways: named parameters (``auth=none``, ``strategy=key``),
     or the same thing typed into ``q`` (``q=auth:none``), which is what people
@@ -145,6 +177,18 @@ def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "",
     the endpoint ignored it, so the answer is now the one the docs describe.
     """
     from . import appauth
+
+    if offset < 0:
+        raise HTTPException(400, detail="offset must be zero or greater")
+    if limit < 0:
+        raise HTTPException(400, detail="limit must be zero or greater (0 means the first page)")
+    tier_want = (tier or "").strip().lower()
+    if tier_want and tier_want not in _APP_TIERS:
+        raise HTTPException(400, detail=f"Unknown tier '{tier}'. Use one of: {', '.join(sorted(_APP_TIERS))}")
+    # A 5.7MB page is not a feature. Anything above the cap is clamped, and the
+    # response says so instead of silently truncating or melting the client.
+    capped = limit == 0 or limit > MAX_PAGE
+    page_limit = MAX_PAGE if capped else limit
 
     search = (search or q).strip()
     for prefix in ("auth", "strategy", "tier", "source"):
@@ -162,6 +206,19 @@ def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "",
             break
 
     matched = catalog.search(search, category, tier=tier, source=source, dedupe=dedupe)
+    if not include_hidden:
+        hidden = catalog.hidden
+        if search:
+            # An exact slug the catalogue hides still deserves an answer: point
+            # the caller at the canonical app instead of a confusing empty list.
+            wanted = search.strip().lower().replace(" ", "-")
+            keeper = catalog.alias_of.get(wanted) if hasattr(catalog, "alias_of") else None
+            if keeper and keeper in catalog.apps:
+                matched = [catalog.apps[keeper]]
+            else:
+                matched = [a for a in matched if a.slug not in hidden]
+        else:
+            matched = [a for a in matched if a.slug not in hidden]
     auth_want = (auth or "").strip().lower()
     strat_want = (strategy or "").strip().lower()
     if auth_want or strat_want:
@@ -178,7 +235,7 @@ def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "",
         matched = kept
 
     total = len(matched)
-    window = matched[offset: offset + limit] if limit else matched[offset:]
+    window = matched[offset: offset + page_limit]
 
     items = []
     for a in window:
@@ -196,8 +253,11 @@ def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "",
         "category_counts": catalog.category_counts(),
         "total": total,
         "offset": offset,
-        "limit": limit,
-        "has_more": bool(limit) and offset + limit < total,
+        "limit": page_limit,
+        "limit_capped": capped,
+        "max_limit": MAX_PAGE,
+        "has_more": offset + len(items) < total,
+        "next_offset": offset + len(items) if offset + len(items) < total else None,
         "stats": catalog.stats(),
     }
 
@@ -301,6 +361,14 @@ def app_auth(slug: str, access: str = "read") -> dict[str, Any]:
 def list_actions(search: str = "", q: str = "", app: str = "", tier: str = "", limit: int = 50,
                  offset: int = 0, ranked: bool = True) -> dict[str, Any]:
     """Action search. ``q`` and ``search`` are the same thing here, as on /v1/apps."""
+    if offset < 0:
+        raise HTTPException(400, detail="offset must be zero or greater")
+    if limit < 0:
+        raise HTTPException(400, detail="limit must be zero or greater")
+    limit = min(limit, MAX_PAGE) if limit else 50
+    tier_want = (tier or "").strip().lower()
+    if tier_want and tier_want not in {"read", "write", "destructive"}:
+        raise HTTPException(400, detail="Unknown tier. Use read, write or destructive")
     search = (search or q or "").strip()
     # natural-language search: rank ACTIONS by meaning, not substring luck
     if search and ranked:
@@ -534,7 +602,8 @@ def managed_providers() -> dict[str, Any]:
             "app": slug,
             "name": p.name,
             "category": p.category,
-            "logo": getattr(spec, "logo", "") if spec else "",
+            "logo": f"/v1/icon/{slug}",
+            "logo_source": getattr(spec, "logo", "") if spec else "",
             "scopes": list(p.scopes),
             "ready": managed.ready(slug),
             "managed_by": managed.managed_by_platform(slug),

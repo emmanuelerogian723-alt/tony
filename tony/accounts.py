@@ -21,7 +21,7 @@ from . import auth0
 from . import firebase
 from .auth import rate_limit
 from .config import settings
-from .crypto import new_api_key
+from .crypto import hash_api_key, new_api_key
 from .db import session
 from .models import ApiKey, User, UserSession, Workspace
 
@@ -83,7 +83,9 @@ def _start_session(s, user: User, request: Request, response: Response) -> None:
 def current_user(request: Request) -> User | None:
     token = request.cookies.get(COOKIE, "")
     if not token:
-        return None
+        # No browser session: a workspace key is still a credential, and it names
+        # its owner. This is what makes the key "universal" across the API.
+        return _user_from_api_key(request)
     with session() as s:
         row = s.scalar(select(UserSession).where(UserSession.token_hash == _hash_token(token)))
         if row is None:
@@ -93,6 +95,31 @@ def current_user(request: Request) -> User | None:
             s.delete(row)
             return None
         return s.get(User, row.user_id)
+
+
+def _user_from_api_key(request: Request) -> User | None:
+    """A workspace key minted in the console carries its owner.
+
+    Account endpoints used to answer "Sign in to continue" to a perfectly valid
+    ``tk_live_`` key, which made the key look broken on exactly the pages that
+    prove who it belongs to. The key is verified here (prefix + hash) before the
+    user is trusted, so a forged key still fails.
+    """
+    raw = (request.headers.get("x-api-key") or "").strip()
+    if not raw:
+        auth = (request.headers.get("authorization") or "").strip()
+        if auth.lower().startswith("bearer "):
+            raw = auth.split(" ", 1)[1].strip()
+    if not raw.startswith("tk_"):
+        return None
+    try:
+        with session() as s:
+            row = s.scalar(select(ApiKey).where(ApiKey.prefix == raw[:16], ApiKey.revoked.is_(False)))
+            if row is None or row.key_hash != hash_api_key(raw) or not row.user_id:
+                return None
+            return s.get(User, row.user_id)
+    except Exception:  # noqa: BLE001 - a broken lookup must not crash a page
+        return None
 
 
 def is_instance_owner(user: User) -> bool:
@@ -256,7 +283,15 @@ def google_login(body: GoogleIn, request: Request, response: Response) -> dict[s
 
 @router.get("/config")
 def public_config() -> dict[str, Any]:
-    return {"google_client_id": settings.google_client_id, "demo_open": settings.demo_open}
+    """Only sign-in methods this deployment can actually finish.
+
+    Auth0 used to be advertised here (and its route answered 503) while being
+    unconfigured, so a client could pick a door with no room behind it.
+    """
+    return {"google_client_id": settings.google_client_id,
+            "demo_open": settings.demo_open,
+            "auth0": auth0.configured(),
+            "firebase": firebase.enabled()}
 
 
 # ── session + profile ────────────────────────────────────────────────────
@@ -443,12 +478,15 @@ def _redirect_uri(request: Request) -> str:
     return f"{base}/v1/account/auth0/callback"
 
 
-@router.get("/auth0/login")
+@router.get("/auth0/login", include_in_schema=False)
 def auth0_login(request: Request, next: str = "/account", connection: str = ""):
     from fastapi.responses import RedirectResponse
 
     if not auth0.configured():
-        raise HTTPException(503, detail="Auth0 is not configured on this server")
+        # Not a broken endpoint, just one this deployment never enabled: say 404
+        # rather than advertising a 503 as if something were down.
+        raise HTTPException(404, detail="Auth0 sign-in is not enabled on this deployment. "
+                                        "Use email, Google or the demo instead.")
     state = auth0.make_state(next)
     return RedirectResponse(auth0.authorize_url(_redirect_uri(request), state, connection))
 

@@ -11,7 +11,7 @@ from sqlalchemy import select
 from .config import settings
 from .crypto import hash_api_key
 from .db import session
-from .models import ApiKey, Workspace
+from .models import ApiKey
 
 _WINDOW = 60.0
 _hits: dict[str, deque[float]] = defaultdict(deque)
@@ -77,10 +77,13 @@ def _workspace_from_request_inner(request: Request) -> tuple[str, bool]:
     except Exception:  # pragma: no cover - never block the demo path on a session bug
         pass
     if settings.demo_open:
-        with session() as s:
-            ws = s.scalar(select(Workspace).where(Workspace.is_demo.is_(True)))
-        if ws:
-            return ws.id, True
+        # A demo is private per visitor: the shared "demo workspace" meant every
+        # anonymous caller read every other caller's runs and connections. Each
+        # visitor now gets an empty room of their own, proven by a signed token.
+        from . import demo
+
+        info = demo.current(request) or demo.provision(request)
+        return info["workspace_id"], True
     raise HTTPException(401, detail="Missing API key (send Authorization: Bearer tk_live_...)")
 
 
@@ -91,6 +94,7 @@ async def require_workspace(
 ) -> str:
     ws, is_demo = workspace_from_request(request)
     if is_demo:
-        client = request.client.host if request.client else "unknown"
-        rate_limit(f"demo:{client}", settings.demo_rate_limit)
+        # Per room, not per address: on shared carrier NAT one visitor's traffic
+        # used to consume everyone else's budget.
+        rate_limit(f"demo:{ws}", settings.demo_rate_limit)
     return ws

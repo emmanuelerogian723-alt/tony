@@ -86,7 +86,9 @@ def test_posture_accepts_the_same_credential_as_execute(client):
 
 def test_stats_publish_the_honest_split(client):
     d = client.get("/v1/stats").json()
-    assert d["apps"] == d["callable_apps"] + d["directory_apps"]
+    # Three honest buckets: callable, directory-only, and imports whose host is a
+    # placeholder (.local) that need a base URL before anything can run.
+    assert d["apps"] == d["callable_apps"] + d["directory_apps"] + d["placeholder_apps"]
     assert d["headline"]["callable"] == d["callable_apps"]
     assert "directory" in d["headline"]["note"].lower()
 

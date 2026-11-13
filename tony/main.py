@@ -142,11 +142,61 @@ app.add_middleware(
 )
 
 
+def _openapi_with_auth():
+    """Publish the security schemes the API actually accepts.
+
+    The spec declared zero schemes across 132 paths, so Swagger's "Authorize"
+    button did nothing and every client generator emitted unauthenticated calls.
+    """
+    from fastapi.openapi.utils import get_openapi as _get_openapi
+
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = _get_openapi(title=app.title, version=app.version,
+                          description=app.description, routes=app.routes)
+    schemes = schema.setdefault("components", {}).setdefault("securitySchemes", {})
+    schemes.update({
+        "ApiKeyAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "tk_live_...",
+                       "description": "Workspace API key: Authorization: Bearer tk_live_..."},
+        "ApiKeyHeader": {"type": "apiKey", "in": "header", "name": "X-API-Key",
+                         "description": "The same workspace key, as a header."},
+        "DemoSession": {"type": "apiKey", "in": "header", "name": "X-Tony-Demo-Session",
+                        "description": "Private demo room token from GET /v1/demo/session."},
+    })
+    for path, ops in (schema.get("paths") or {}).items():
+        if not path.startswith("/v1"):
+            continue
+        for method, op in (ops or {}).items():
+            if method.lower() not in {"get", "post", "put", "patch", "delete"}:
+                continue
+            if not op.get("security"):
+                op["security"] = [{"ApiKeyAuth": []}, {"ApiKeyHeader": []}, {"DemoSession": []}]
+    schema["security"] = [{"ApiKeyAuth": []}]
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = _openapi_with_auth
+
+
 app.include_router(account_router)
 app.include_router(api_router)
 app.include_router(files_router)
 app.include_router(playground_router)
 app.include_router(mcp_router)
+
+
+@app.middleware("http")
+async def demo_session_mw(request, call_next):
+    """Hand a visitor their own demo room, and the cookie that proves it."""
+    response = await call_next(request)
+    if settings.demo_open:
+        from . import demo
+
+        demo.attach(request, response)
+    return response
+
+
 @app.middleware("http")
 async def shield_mw(request, call_next):
     from fastapi.responses import JSONResponse
@@ -154,14 +204,20 @@ async def shield_mw(request, call_next):
     try:
         shield.inspect(request)
     except HTTPException as exc:
-        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail},
+                            headers=dict(exc.headers or {}))
     response = await call_next(request)
-    if response.status_code in (401, 403) and request.url.path.startswith("/v1/") and \
+    # Only an actually rejected credential counts toward stuffing. A 403 from a
+    # missing scope or an approval gate is not a bad password.
+    if response.status_code == 401 and request.url.path.startswith("/v1/") and \
             request.headers.get("authorization", "").lower().startswith("bearer "):
         try:
             shield.note_auth_failure(request)
-        except HTTPException:
-            pass
+        except HTTPException as exc:
+            # The threshold was crossed on this very request: answer it with the
+            # throttle instead of a bare "bad key" so the client backs off.
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail},
+                                headers=dict(exc.headers or {}))
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
@@ -207,7 +263,8 @@ def manifest():
     return JSONResponse({
         "name": "Tony — every app, one port",
         "short_name": "Tony",
-        "description": "Open-source integration gateway. 9,877 apps, 22,107 actions.",
+        "description": ("Open-source integration gateway. "
+                        f"{catalog.stats()['apps']:,} apps, {catalog.stats()['actions']:,} actions."),
         "start_url": "/app",
         "display": "standalone",
         "background_color": "#F3F0E9",
@@ -255,14 +312,25 @@ async def oauth_callback(code: str = "", state: str = "", error: str = "", error
     return RedirectResponse(f"/app?connection=ok&{urlencode({'app': account.app_slug})}")
 
 
-@app.get("/providers", response_class=HTMLResponse)
+@app.get("/providers")
 def provider_setup(request: Request):
-    from .accounts import require_user
+    """One address, one answer per audience.
+
+    A browser gets the setup page; an API client asking for JSON gets the same
+    payload as ``/v1/providers`` instead of a redirect into HTML. The two used to
+    disagree, which made "/providers" look broken to anything without a cookie.
+    """
+    from .accounts import current_user
     from .providerui import provider_setup_html
 
-    try:
-        require_user(request)
-    except Exception:  # noqa: BLE001 - anonymous visitors go and sign in first
+    accept = (request.headers.get("accept") or "").lower()
+    wants_json = (request.query_params.get("format", "").lower() == "json"
+                  or ("application/json" in accept and "text/html" not in accept))
+    if wants_json:
+        from .api import managed_providers
+
+        return JSONResponse(managed_providers())
+    if current_user(request) is None:
         return RedirectResponse("/account", status_code=307)
     return HTMLResponse(provider_setup_html())
 
@@ -273,7 +341,17 @@ def account_page(request: Request):
     from .console import console_html
 
     user = current_user(request)
-    return HTMLResponse(console_html(user=user))
+    demo_info = None
+    if user is None and settings.demo_open:
+        # No shared demo: this visitor gets an empty room of their own, and the
+        # cookie proving it is set on this very response.
+        from . import demo
+
+        demo_info = demo.provision(request)
+    response = HTMLResponse(console_html(user=user, demo=demo_info))
+    if demo_info:
+        demo.attach(request, response)
+    return response
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)

@@ -30,6 +30,20 @@ _READ_ONLY_POST = {
 }
 
 
+# A catalogue entry called "API V1" is not a product anyone can choose; it is an
+# import artefact. They stay resolvable by slug but leave the browse list.
+_SOURCE_WEIGHT = {"curated": 4, "openapi": 3, "proxy": 2, "homeassistant": 1}
+
+
+def name_key(app: "AppSpec") -> str:
+    """Case- and punctuation-insensitive identity for de-duplicating listings."""
+    return "".join(ch for ch in (app.name or app.slug).lower() if ch.isalnum())
+
+
+_GENERIC_NAMES = {"api", "api v1", "api v2", "api v3", "api v4", "client",
+                  "default", "v1", "v2", "service", "web api"}
+
+
 def infer_tier(app: str, action: str, method: str) -> str:
     """Read/write tier for an action that does not declare one.
 
@@ -184,7 +198,11 @@ class AppSpec:
             "category": self.category,
             "description": self.description,
             "docs": self.docs,
-            "logo": self.logo,
+            # The upstream CDN (simple-icons, gstatic) answers 403 to datacenter
+            # IPs, so a client that trusted this field showed broken tiles. The
+            # served icon is local bytes; the raw source stays available.
+            "logo": f"/v1/icon/{self.slug}",
+            "logo_source": self.logo,
             "icon": f"/v1/icon/{self.slug}",
             "icon_tile": f"/v1/icon-tile/{self.slug}",
             "verified": self.verified,
@@ -441,6 +459,7 @@ class Catalog:
 
     # ── lookups ──────────────────────────────────────────────────────────
         self._mark_shadowed()
+        self._mark_low_quality()
         self._apply_managed_aliases()
 
     def _apply_managed_aliases(self) -> None:
@@ -493,6 +512,31 @@ class Catalog:
                 self.shadowed.add(dup.slug)
                 self.alias_of[dup.slug] = keeper.slug
 
+    def _mark_low_quality(self) -> None:
+        """Hide import artefacts from the browse list without deleting them.
+
+        Four entries were literally named "API V1" (one pointing at
+        ``change.local``), which is noise in any catalogue an agent has to pick
+        from. They still resolve by slug, so nothing that linked to them breaks.
+        """
+        self.low_quality: set[str] = set()
+        for a in self.apps.values():
+            name = (a.name or "").strip().lower()
+            host = (a.base_url or "").split("//")[-1].split("/")[0].lower()
+            if name in _GENERIC_NAMES:
+                self.low_quality.add(a.slug)
+            elif host.endswith(".local") or host in {"localhost", "example.com"}:
+                # An OpenAPI import that points at https://azure.local has no
+                # reachable base URL, so calling it was never possible. It is a
+                # directory listing, not a callable app, and the headline counts
+                # must not claim otherwise.
+                self.low_quality.add(a.slug)
+
+    @property
+    def hidden(self) -> set[str]:
+        """Entries kept out of browse: duplicates of a better import, plus junk."""
+        return getattr(self, "shadowed", set()) | getattr(self, "low_quality", set())
+
     def get(self, slug: str) -> AppSpec | None:
         return self.apps.get(slug)
 
@@ -522,7 +566,8 @@ class Catalog:
         tier = (tier or "").strip().lower()
         src = (source or "").strip().lower()
         out = []
-        hide = getattr(self, "shadowed", set())
+        # dedupe means "one row per product": duplicates and junk both drop out.
+        hide = self.hidden if dedupe else set()
         for app in self.apps.values():
             if dedupe and app.slug in hide and not q:
                 continue
@@ -537,6 +582,26 @@ class Catalog:
                 if not all(tok in text for tok in q.split()):
                     continue
             out.append(app)
+        if dedupe and not q:
+            # Two imports of the same product under different spellings
+            # ("Google Calendar" / "Google calendar") are one choice for an agent.
+            # Keep the best-quality entry, and let the rest stay resolvable by slug.
+            best: dict[str, AppSpec] = {}
+            order: list[str] = []
+            weight = _SOURCE_WEIGHT
+            for app in out:
+                key = name_key(app)
+                current = best.get(key)
+                if current is None:
+                    best[key] = app
+                    order.append(key)
+                    continue
+                score_new = (weight.get(app.source, 0), len(app.actions))
+                score_old = (weight.get(current.source, 0), len(current.actions))
+                if score_new > score_old:
+                    best[key] = app
+            out = [best[k] for k in order]
+
         def rank(a: AppSpec) -> tuple:
             name = a.name.lower()
             slug = a.slug.lower()
@@ -626,6 +691,19 @@ class Catalog:
         slug = naming.canonical(app, spoken)
         return app.action(slug) if slug else None
 
+    def browsable(self) -> int:
+        """How many apps the default browse shows: hidden slugs and duplicate names removed."""
+        hidden = self.hidden
+        best: dict[str, tuple[int, int]] = {}
+        for a in self.apps.values():
+            if a.slug in hidden:
+                continue
+            key = name_key(a)
+            score = (_SOURCE_WEIGHT.get(a.source, 0), len(a.actions))
+            if score > best.get(key, (-1, -1)):
+                best[key] = score
+        return len(best)
+
     def stats(self) -> dict[str, Any]:
         by_tier: dict[str, int] = {}
         by_source: dict[str, int] = {}
@@ -636,7 +714,17 @@ class Catalog:
             by_source[a.source] = by_source.get(a.source, 0) + 1
         total = len(self.apps)
         directory = by_tier.get("directory", 0)
-        callable_apps = total - directory
+        # An import pointing at https://azure.local has no reachable host, so it
+        # was never callable. Counting it inflated the claim; it needs a base URL
+        # exactly like a directory listing.
+        placeholder = 0
+        for slug in getattr(self, "low_quality", ()):
+            app = self.apps.get(slug)
+            if app is not None and app.tier != "directory":
+                host = (app.base_url or "").split("//")[-1].split("/")[0].lower()
+                if host.endswith(".local") or host in {"localhost", "example.com"}:
+                    placeholder += 1
+        callable_apps = total - directory - placeholder
         iot = by_source.get("homeassistant", 0)
         headline = {
             "catalogue": total,
@@ -645,7 +733,8 @@ class Catalog:
             "curated": by_source.get("curated", 0),
             "note": (f"{callable_apps:,} apps can be called today (curated, OpenAPI and proxy tiers). "
                      f"The remaining {directory:,} are directory listings that connect with a user key or "
-                     f"base URL, {iot:,} of them Home Assistant IoT brands with no public API of their own."),
+                     f"base URL, {iot:,} of them Home Assistant IoT brands with no public API of their own. "
+                     f"{placeholder:,} imports point at a placeholder host and need a base URL before any call."),
         }
         return {
             "apps": total,
@@ -655,6 +744,10 @@ class Catalog:
             "curated_apps": by_source.get("curated", 0),
             "categories": len({a.category for a in self.apps.values()}),
             "duplicates_hidden_in_browse": len(getattr(self, "shadowed", ())),
+            "low_quality_hidden_in_browse": len(getattr(self, "low_quality", ())),
+            "placeholder_apps": placeholder,
+            "placeholder_hosts_needing_base_url": placeholder,
+            "browsable_apps": self.browsable(),
             "by_tier": by_tier,
             "by_source": by_source,
             "headline": headline,

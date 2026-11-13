@@ -434,6 +434,8 @@ a{color:var(--accent-deep)}
 CONSOLE_JS = r"""
 const CFG = __CFG__;
 const ME = __ME__;
+const DEMO_MODE = !!(CFG.demo && !ME);
+const ACCOUNT_ONLY = ['keys','sessions','billing'];
 const S = { user: ME, page: 'overview', apps: [], total: 0, offset: 0, q: '', tier: '', cat: '',
             conns: [], keys: [], cur: null, act: null, loaded: {} };
 
@@ -453,7 +455,12 @@ async function api(path, opts){
   const r = await fetch(path, init);
   let d = {}; const txt = await r.text();
   try{ d = txt ? JSON.parse(txt) : {} }catch(e){ d = {raw:txt} }
-  if(r.status === 401){ showAuth(); throw new Error('Sign in to continue') }
+  if(r.status === 401){
+    if(DEMO_MODE && String(path).indexOf('/v1/account/')===0){
+      const e = new Error('Create an account to use this'); e.status = 401; throw e
+    }
+    showAuth(); throw new Error('Sign in to continue')
+  }
   if(!r.ok){ const e = new Error(d.detail || d.error || ('HTTP '+r.status)); e.status=r.status; e.body=d; throw e }
   return d;
 }
@@ -586,7 +593,11 @@ const MOBILE = ['apps','runs','sessions','billing','profile'];
 
 function iconNav(d){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="'+d+'"/></svg>'}
 function buildNav(){
-  el('rail-nav').innerHTML = NAV.map(([id,label,d])=>
+  // A demo room has no account, so keys, sessions and billing would only throw
+  // "sign in" at the visitor. Leave them out instead of showing dead doors.
+  const nav = DEMO_MODE ? NAV.filter(n=>ACCOUNT_ONLY.indexOf(n[0])<0) : NAV;
+  const mob = DEMO_MODE ? MOBILE.filter(id=>ACCOUNT_ONLY.indexOf(id)<0) : MOBILE;
+  el('rail-nav').innerHTML = nav.map(([id,label,d])=>
     '<button class="nav" data-p="'+id+'">'+iconNav(d)+'<span>'+label+'</span></button>').join('');
   el('rail-nav').querySelectorAll('.nav').forEach(b=>b.onclick=()=>go(b.dataset.p));
   // Two surfaces that stand alone as their own pages (plain links, so the
@@ -598,11 +609,12 @@ function buildNav(){
     iconNav('M10.5 3a7.5 7.5 0 105.3 12.9L21 21M10.5 7v7M7 10.5h7')+'<span>Queries</span></a>');
   const labels = {apps:'Apps', connections:'Links', runs:'Activity', keys:'Keys', sessions:'Sessions', billing:'Billing', profile:'You'};
   const icons = Object.fromEntries(NAV.map(([id,l,d])=>[id,d]));
-  el('tabbar').innerHTML = MOBILE.map(id=>
+  el('tabbar').innerHTML = mob.map(id=>
     '<button class="tab" data-p="'+id+'">'+iconNav(icons[id])+'<span>'+labels[id]+'</span></button>').join('');
   el('tabbar').querySelectorAll('.tab').forEach(b=>b.onclick=()=>go(b.dataset.p));
 }
 function go(page){
+  if(DEMO_MODE && ACCOUNT_ONLY.indexOf(page)>=0){ toast('Create an account to use this'); return }
   S.page = page; location.hash = '#' + page;
   document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on', p.id==='p-'+page));
   document.querySelectorAll('.nav,.tab').forEach(b=>b.classList.toggle('on', b.dataset.p===page));
@@ -901,7 +913,7 @@ function wireCode(){
 
 /* install */
 async function loadInstall(){
-  const key = (el('in-key')||{}).value || '';
+  const key = (el('in-key')||{}).value || ((CFG.demo && CFG.demo.api_key) || '');
   try{
     const d = await api('/v1/install' + (key ? '?key=' + encodeURIComponent(key.trim()) : ''));
     el('in-mcp').textContent = d.mcp_url;
@@ -1360,6 +1372,19 @@ function sendAsk(ev){
 /* ── profile ────────────────────────────────────────────── */
 function renderProfile(){
   const u = S.user||{};
+  if(CFG.demo && !ME){
+    // A demo visitor has a room, not an account. Showing password forms that
+    // cannot work (and ejecting them to the sign-in wall on a 401) is not calm.
+    el('pf-head').innerHTML =
+      '<span class="mono-b" style="width:64px;height:64px;font-size:22px;border-radius:50%;background:var(--slate);color:var(--ink)">··</span>'+
+      '<div style="min-width:0"><b style="font-family:var(--serif);font-size:20px;display:block">Private demo room</b>'+
+      '<span class="tiny muted">Only you can see what runs here.</span>'+
+      '<p class="tiny muted" style="margin:8px 0 0;max-width:46ch">Runs, connections and keys in this room belong to this browser alone and are never shared with another visitor. It expires on its own; create an account to keep what you build.</p>'+
+      '<button class="btn acc sm" style="margin-top:10px" onclick="authMode(\'signup\');showAuth()">Create an account</button></div>';
+    ['pf-name-card','pf-pw-card','pf-account-card'].forEach(id=>{ const n=el(id); if(n) n.style.display='none' });
+    return;
+  }
+  ['pf-name-card','pf-pw-card','pf-account-card'].forEach(id=>{ const n=el(id); if(n) n.style.display='' });
   const pic = u.picture ? '<img src="'+esc(u.picture)+'" alt="" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:1px solid var(--line)">'
     : '<span class="mono-b" style="width:64px;height:64px;font-size:22px;border-radius:50%;background:hsl('+hue(u.email)+',45%,38%)">'+esc(initials(u.name||u.email))+'</span>';
   el('pf-head').innerHTML = pic + '<div style="min-width:0"><b style="font-family:var(--serif);font-size:20px;display:block">'+esc(u.name||'You')+'</b>'+
@@ -1393,7 +1418,14 @@ async function deleteAccount(){
 /* ── start ──────────────────────────────────────────────── */
 wireSearch();
 el('more').onclick = ()=>loadApps(false);
-if(S.user){ showApp() } else { showAuth() }
+if(S.user){ showApp() }
+else if(CFG.demo && CFG.demo.workspace_id){
+  S.user = {name:'Private demo', email:'your own workspace'};
+  showApp();
+  const k = el('in-key'); if(k && !k.value) k.value = CFG.demo.api_key || '';
+  setTimeout(()=>{ try{ toast('Private demo room. Nothing here is shared.') }catch(e){} }, 600);
+}
+else { showAuth() }
 if(location.hash) { /* keep */ }
 el('sheet').addEventListener('click', e=>{ if(e.target.id==='sheet') closeSheet() });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeSheet() });
@@ -1413,10 +1445,13 @@ def _google_script(client_id: str) -> str:
     return ('<script src="https://accounts.google.com/gsi/client" async defer></script>')
 
 
-def console_html(user: Any = None) -> str:
+def console_html(user: Any = None, demo: Any = None) -> str:
     import json
 
     cfg = {"google_client_id": settings.google_client_id, "demo_open": settings.demo_open,
+           "demo": ({"workspace_id": demo.get("workspace_id", ""),
+                     "api_key": demo.get("api_key", ""),
+                     "expires_at": demo.get("expires_at", "")} if demo else None),
            "firebase": {"api_key": (os.getenv("FIREBASE_API_KEY") or ""),
                         "auth_domain": (os.getenv("FIREBASE_AUTH_DOMAIN") or f"{(os.getenv('FIREBASE_PROJECT_ID') or 'ominiassist-ai')}.firebaseapp.com"),
                         "project_id": (os.getenv("FIREBASE_PROJECT_ID") or "ominiassist-ai")},
@@ -1662,19 +1697,19 @@ def console_html(user: Any = None) -> str:
       <section class="pg" id="p-profile">
         <div class="hd"><div><h1>Profile</h1><p>Your account, password and workspace.</p></div></div>
         <div class="card pad" style="margin-bottom:12px"><div class="row" style="gap:14px;align-items:flex-start" id="pf-head"></div></div>
-        <div class="card pad" style="margin-bottom:12px">
+        <div class="card pad" id="pf-name-card" style="margin-bottom:12px">
           <b style="font-size:14px">Name</b>
           <div class="field" style="margin-top:10px"><label>Display name</label><input class="inp" id="pf-name"></div>
           <button class="btn sm" onclick="saveProfile()">Save</button>
         </div>
-        <div class="card pad" style="margin-bottom:12px">
+        <div class="card pad" id="pf-pw-card" style="margin-bottom:12px">
           <b style="font-size:14px">Password</b>
           <p class="tiny muted" id="pf-pw-hint" style="margin:6px 0 10px"></p>
           <div class="field"><label>Current password<span class="hint">leave blank if none</span></label><input class="inp" id="pf-cur" type="password" autocomplete="current-password"></div>
           <div class="field"><label>New password</label><input class="inp" id="pf-new" type="password" autocomplete="new-password" minlength="8"></div>
           <button class="btn sm" onclick="savePassword()">Update password</button>
         </div>
-        <div class="card pad">
+        <div class="card pad" id="pf-account-card">
           <div class="row wrap"><button class="btn ghost sm" onclick="signOut()">Sign out</button>
             <span class="sp"></span><button class="btn ghost sm" style="color:var(--bad);border-color:rgba(163,34,23,.3)" onclick="deleteAccount()">Delete account</button></div>
         </div>

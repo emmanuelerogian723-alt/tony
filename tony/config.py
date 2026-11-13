@@ -24,6 +24,8 @@ class Settings:
     # Behaviour
     demo_open: bool = field(default_factory=lambda: _bool("TONY_DEMO_OPEN", True))
     demo_rate_limit: int = field(default_factory=lambda: int(os.getenv("TONY_DEMO_RATE_LIMIT", "60")))
+    demo_ttl_hours: float = field(default_factory=lambda: float(os.getenv("TONY_DEMO_TTL_HOURS", "24")))
+    demo_gc_hours: float = field(default_factory=lambda: float(os.getenv("TONY_DEMO_GC_HOURS", "168")))
     require_approval: bool = field(default_factory=lambda: _bool("TONY_REQUIRE_APPROVAL", True))
     max_response_chars: int = field(default_factory=lambda: int(os.getenv("TONY_MAX_RESPONSE_CHARS", "12000")))
     http_timeout: float = field(default_factory=lambda: float(os.getenv("TONY_HTTP_TIMEOUT", "25")))

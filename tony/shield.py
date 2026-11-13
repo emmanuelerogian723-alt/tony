@@ -19,9 +19,11 @@ from sqlalchemy import select
 from .db import session
 from .models import BlockedSubject, SecurityEvent
 
-BLOCK_AT = 100          # score at which a subject is blocked
+BLOCK_AT = 100          # score at which a subject is blocked (hard signals only)
 HALF_LIFE = 120.0       # seconds for a score to halve
-BASE_BLOCK = 600        # first block lasts ten minutes, then doubles
+BASE_BLOCK = 600        # a genuine probe stays blocked for ten minutes
+SOFT_BLOCK = 240        # behaviour-only blocks are short: they exist to slow a bot, not jail a person
+MAX_BLOCK = 3600        # no block outlives an hour, however noisy the caller
 
 # Genuine attack tooling. These earn points on their own.
 BOT_UA = re.compile(
@@ -40,6 +42,13 @@ _API_PREFIXES = ("/v1", "/mcp", "/api")
 PROBE_PATHS = re.compile(
     r"(/\.env|/\.git|/wp-admin|/wp-login|/phpmyadmin|/admin\.php|/xmlrpc|/etc/passwd|"
     r"/cgi-bin|/vendor/phpunit|\.\./|%2e%2e|/actuator|/server-status|/\.aws|/id_rsa)", re.I)
+
+# A request carrying a credential the API will verify is never jailed for its
+# traffic shape. Only an unmistakable attack signal (probing for secrets, attack
+# tooling) can block it, because a valid key is the caller's identity.
+_HARD_REASONS = {"probe_path", "scanner_ua"}
+_SHIELD_EXEMPT = ("/health", "/favicon.ico", "/static", "/v1/icon", "/v1/hooks/",
+                  "/v1/security/unblock", "/v1/security/status", "/v1/demo/session")
 
 _score: dict[str, tuple[float, float]] = {}          # subject -> (score, last_update)
 _recent_paths: dict[str, deque] = defaultdict(lambda: deque(maxlen=40))
@@ -78,7 +87,13 @@ def _record(subject: str, kind: str, detail: str, score: int, blocked: bool) -> 
         pass
 
 
-def _block(subject: str, reason: str, now: float) -> None:
+def _block(subject: str, reason: str, now: float, hard: bool = True) -> int:
+    """Record a block and return how many seconds it lasts.
+
+    A soft block (bursts, sweeps) is deliberately short: on shared carrier NAT a
+    twenty-minute block takes out every customer behind one address. A hard block
+    (scanning for /.env, attack tooling) keeps the old escalator.
+    """
     with session() as s:
         row = s.scalar(select(BlockedSubject).where(BlockedSubject.subject == subject))
         prior = 0
@@ -86,10 +101,45 @@ def _block(subject: str, reason: str, now: float) -> None:
             prior = max(0, int((row.expires_at - row.created_at).total_seconds() // BASE_BLOCK).bit_length() - 1)
             s.delete(row)
             s.flush()
-        seconds = BASE_BLOCK * (2 ** min(prior + 1, 6)) if row is not None else BASE_BLOCK
+        if hard:
+            seconds = BASE_BLOCK * (2 ** min(prior + 1, 6)) if row is not None else BASE_BLOCK
+        else:
+            seconds = SOFT_BLOCK
+        seconds = min(seconds, MAX_BLOCK)
         until = datetime.now(timezone.utc) + timedelta(seconds=seconds)
         s.add(BlockedSubject(subject=subject, reason=reason[:200], expires_at=until))
     _block_cache[subject] = now + seconds
+    return seconds
+
+
+def _remaining(subject: str) -> int:
+    """Seconds left on a block, reading the cache first and the table once."""
+    cached = _block_cache.get(subject)
+    if cached is not None:
+        left = int(cached - time.time())
+        if left > 0:
+            return left
+        _block_cache.pop(subject, None)
+        return 0
+    try:
+        with session() as s:
+            row = s.scalar(select(BlockedSubject).where(BlockedSubject.subject == subject))
+            if row is None:
+                return 0
+            exp = row.expires_at if row.expires_at.tzinfo else row.expires_at.replace(tzinfo=timezone.utc)
+            left = int((exp - datetime.now(timezone.utc)).total_seconds())
+            if left > 0:
+                _block_cache[subject] = time.time() + left
+                return left
+            s.delete(row)
+            return 0
+    except Exception:  # noqa: BLE001 - the database cannot be the gate
+        return 0
+
+
+def block_remaining(subject: str) -> int:
+    """Seconds left on a block, 0 when clear. Used by the status endpoint."""
+    return _remaining(subject)
 
 
 def is_blocked(subject: str) -> bool:
@@ -114,69 +164,80 @@ def is_blocked(subject: str) -> bool:
         return False
 
 
+def has_credential(request: Request) -> bool:
+    """Does this request present something the API can verify?"""
+    if (request.headers.get("x-api-key") or "").strip():
+        return True
+    return (request.headers.get("authorization") or "").lower().startswith("bearer ")
+
+
 def inspect(request: Request) -> None:
-    """Call on every API request. Raises 403 when the caller is blocked or has just earned a block."""
+    """Call on every API request. Raises 403 when the caller has earned a block.
+
+    Behavioural scoring is a defence against anonymous abuse, not a tax on
+    developers. A caller presenting a credential is judged by that credential and
+    is only blocked for an unmistakable attack (probing for secrets, scanner
+    tooling). Reading is never scored. A burst of reads from a verification sweep
+    used to earn 4 points per request until the whole address was locked out for
+    twenty minutes, including callers holding a valid key.
+    """
     path = request.url.path
-    if path in {"/health", "/favicon.ico"} or path.startswith("/static"):
-        return
-    # Provider webhooks arrive in bursts, from shared provider IPs, signed and
-    # deduplicated. Behavioural scoring would frame them for their neighbours.
-    if path.startswith("/v1/hooks/"):
+    if path in {"/health", "/favicon.ico"} or path.startswith(_SHIELD_EXEMPT):
         return
     page_view = request.method in {"GET", "HEAD"} and not path.startswith(_API_PREFIXES)
     probed = bool(PROBE_PATHS.search(path) or PROBE_PATHS.search(request.url.query or ""))
-    # A visitor reading pages is never scored or blocked. Probing for /.env still is.
     if page_view and not probed:
         return
+
     subject = subject_of(request)
-    if is_blocked(subject):
-        raise HTTPException(403, detail="Blocked for suspicious activity. This clears on its own; "
-                                         "contact the workspace owner if you think it is a mistake.")
+    credentialed = has_credential(request)
+    remaining = _remaining(subject)
+    # A key holder is not serving a behaviour block: their key is the identity,
+    # and blocking the address would also punish everyone sharing it.
+    if remaining and not credentialed:
+        raise HTTPException(403, detail=(
+            f"Blocked for suspicious activity. Try again in {remaining} seconds, or call "
+            "POST /v1/security/unblock to lift it now."), headers={"Retry-After": str(remaining)})
+
     now = time.time()
     ua = request.headers.get("user-agent", "")
     is_write = request.method not in {"GET", "HEAD", "OPTIONS"}
     points, reasons = 0.0, []
 
-    if PROBE_PATHS.search(path) or PROBE_PATHS.search(request.url.query or ""):
+    if probed:
         points += 60; reasons.append("probe_path")
-    if BOT_UA.search(ua) and not page_view:
+    if BOT_UA.search(ua):
         points += 35; reasons.append("scanner_ua")
-    if not ua and path.startswith("/v1/"):
-        points += 4; reasons.append("no_ua")
 
-    paths = _recent_paths[subject]
-    paths.append((now, path))
-    window = [p for t, p in paths if now - t < 20]
-    distinct = len(set(window))
-    # Reading is not abuse: an app screen legitimately fires a dozen GETs at once,
-    # and a headless browser rendering it looks identical to a user. Writes earn
-    # sweep and burst points; a scripted client only reading gets a light nudge.
-    # Connecting several apps in a row looks like a sweep but is normal signup
-    # behaviour, and a caller presenting a credential is an authenticated
-    # developer, not an anonymous scanner. Those paths need a much higher bar.
-    connect_flow = path.startswith("/v1/connections/") or path.startswith("/v1/account/providers")
-    authenticated = bool(request.headers.get("x-api-key") or request.headers.get("authorization"))
-    if is_write:
-        if SOFT_UA.search(ua) and distinct >= 8 and not connect_flow:
-            points += 20; reasons.append("scripted_sweep")  # a script walking many routes
-        sweep_bar = 40 if (connect_flow or authenticated) else 18
-        sweep_distinct = 30 if (connect_flow or authenticated) else 15
-        if len(window) >= sweep_bar and distinct >= sweep_distinct:
-            points += 30; reasons.append("endpoint_sweep")  # walking many routes fast
-        burst_bar = 60 if (connect_flow or authenticated) else 30
-        if len(window) >= burst_bar:
-            points += 12; reasons.append("burst")
-    elif SOFT_UA.search(ua) and distinct >= 8:
-        points += 4; reasons.append("scripted_reads")
+    # Behaviour below the hard signals is only ever scored for anonymous
+    # callers, and only on writes. A headless browser rendering the catalogue and
+    # a scripted verification sweep both look like a "sweep" while doing nothing
+    # wrong.
+    if not credentialed:
+        connect_flow = path.startswith("/v1/connections/") or path.startswith("/v1/account/providers")
+        if is_write and not connect_flow:
+            paths = _recent_paths[subject]
+            paths.append((now, path))
+            window = [p for t, p in paths if now - t < 20]
+            distinct = len(set(window))
+            if SOFT_UA.search(ua) and distinct >= 10:
+                points += 15; reasons.append("scripted_sweep")
+            if len(window) >= 45 and distinct >= 20:
+                points += 25; reasons.append("endpoint_sweep")
+            if len(window) >= 80:
+                points += 10; reasons.append("burst")
 
     if not points:
         return
     total = _add(subject, points, now)
-    blocked = total >= BLOCK_AT
+    hard = bool(_HARD_REASONS.intersection(reasons))
+    blocked = total >= BLOCK_AT and (hard or not credentialed)
     _record(subject, ",".join(reasons), f"{request.method} {path[:120]}", total, blocked)
     if blocked:
-        _block(subject, ",".join(reasons), now)
-        raise HTTPException(403, detail="Blocked for suspicious activity.")
+        seconds = _block(subject, ",".join(reasons), now, hard=hard)
+        raise HTTPException(403, detail=(
+            f"Blocked for suspicious activity. Try again in {seconds} seconds, or call "
+            "POST /v1/security/unblock to lift it now."), headers={"Retry-After": str(seconds)})
 
 
 def note_auth_failure(request: Request, kind: str = "bad_key") -> None:
@@ -186,13 +247,15 @@ def note_auth_failure(request: Request, kind: str = "bad_key") -> None:
     fails = _recent_fail[subject]
     fails.append(now)
     recent = [t for t in fails if now - t < 300]
-    points = 8 + max(0, len(recent) - 3) * 6
+    points = 6 + max(0, len(recent) - 8) * 4
     total = _add(subject, points, now)
-    blocked = total >= BLOCK_AT
+    blocked = total >= BLOCK_AT or len(recent) >= 25
     _record(subject, kind, f"{len(recent)} failed credentials in 5 min", total, blocked)
     if blocked:
-        _block(subject, f"credential_stuffing:{len(recent)}", now)
-        raise HTTPException(403, detail="Too many rejected credentials. Try again later.")
+        seconds = _block(subject, f"credential_stuffing:{len(recent)}", now, hard=False)
+        raise HTTPException(429, detail=(
+            f"Too many rejected credentials. Try again in {seconds} seconds."),
+            headers={"Retry-After": str(seconds)})
 
 
 def reset() -> None:

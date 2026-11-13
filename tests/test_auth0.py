@@ -21,7 +21,9 @@ def test_configured_requires_three_values(monkeypatch):
     assert "response_type=code" in url
 
 
-def test_login_route_503_when_unconfigured(client, monkeypatch):
+def test_login_route_404_when_unconfigured(client, monkeypatch):
+    """An unconfigured provider is absent, not broken: no 503 that looks like an outage."""
     monkeypatch.delenv("AUTH0_DOMAIN", raising=False)
     r = client.get("/v1/account/auth0/login", follow_redirects=False)
-    assert r.status_code == 503
+    assert r.status_code == 404
+    assert "not enabled" in r.json()["detail"].lower()

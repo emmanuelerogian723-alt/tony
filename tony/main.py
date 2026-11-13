@@ -90,6 +90,17 @@ async def lifespan(app: FastAPI):
     if catalog.errors:
         for err in catalog.errors:
             log.warning("manifest: %s", err)
+    # Warm the action-search index once, off the request path. Building it lazily
+    # made the first /v1/actions?q= call pay for the whole catalogue (seconds).
+    try:
+        import asyncio as _aio2
+
+        from . import toolsearch as _ts
+
+        app.state.search_warm = _aio2.create_task(
+            _aio2.to_thread(_ts.index().build, catalog), name="toolsearch-warm")
+    except Exception as exc:  # a cold index is slow, not broken
+        log.warning("search warm skipped: %s", exc)
     _poller_task = asyncio.create_task(poller())
     # Durable flow + sync workers: the half of Tony that wakes up on its own.
     from .flows import runner as _flow_runner

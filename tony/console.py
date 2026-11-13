@@ -731,7 +731,14 @@ async function loadApps(reset){
   try{
     const d = await api('/v1/apps?'+q.toString());
     S.apps = S.apps.concat(d.apps||[]); S.total = d.total||0; S.offset = S.apps.length;
-    el('app-count').textContent = n(S.total)+' apps';
+    // The header is the catalogue size, the same number Overview shows. When a
+    // filter is on it says "x of total" instead of quietly reporting a smaller
+    // catalogue than the Overview card.
+    const all = d.catalogue_total || S.total;
+    const filtered = !!(S.q || S.tier || S.cat);
+    el('app-count').textContent = filtered ? n(S.total)+' of '+n(all)+' apps' : n(all)+' apps';
+    el('app-count').title = (d.browsable_total && d.browsable_total < all)
+      ? n(d.browsable_total)+' browsable · '+n(all)+' in the catalogue' : '';
     renderCats(d.categories||[]);
     renderApps();
   }catch(e){ el('app-grid').innerHTML='<div class="empty">'+esc(e.message)+'</div>' }

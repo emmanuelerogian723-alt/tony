@@ -152,6 +152,7 @@ class ToolIndex:
         self._postings: dict[str, list[int]] = {}
         self._vocab: dict[str, list[str]] = {}
         self._cache: dict[Any, list[dict[str, Any]]] = {}
+        self._docsets: list[frozenset[str]] = []
 
     # ── building ───────────────────────────────────────────────────────────
     def build(self, catalog: Any, force: bool = False) -> "ToolIndex":
@@ -216,6 +217,7 @@ class ToolIndex:
         except Exception:
             pass
         self.docs = docs
+        self._docsets = [frozenset(d["tokens"]) for d in docs]
         postings: dict[str, list[int]] = defaultdict(list)
         vocab: dict[str, list[str]] = defaultdict(list)
         for i, d in enumerate(docs):
@@ -263,7 +265,23 @@ class ToolIndex:
                         cand.update(self._postings.get(vt, ()))
         if not cand:
             return []
-        pool = [self.docs[i] for i in sorted(cand)]
+
+        # A long natural-language query expands into enough tokens that almost the
+        # whole catalogue becomes a candidate, and the fuzzy pass then does
+        # pool x tokens work (12 s on a small instance). Cheap prefilter first:
+        # keep the documents that actually share query words, then score in full.
+        pool_idx = sorted(cand)
+        if len(pool_idx) > 2500:
+            qset = set(q_tokens)
+            shortlist = []
+            for i in pool_idx:
+                shared = len(qset & self._docsets[i]) if i < len(self._docsets) else 0
+                if shared:
+                    shortlist.append((shared, i))
+            if shortlist:
+                shortlist.sort(reverse=True)
+                pool_idx = [i for _, i in shortlist[:1200]]
+        pool = [self.docs[i] for i in pool_idx]
         scored: list[tuple[float, dict[str, Any]]] = []
 
         for d in pool:

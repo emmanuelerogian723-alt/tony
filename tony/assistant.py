@@ -18,6 +18,17 @@ def _app_line() -> str:
         return "2,600+"
 
 
+def _counts_line() -> str:
+    """Live catalogue numbers, never a number typed into a prompt months ago."""
+    try:
+        from .catalog import catalog
+        st = catalog.stats()
+        return (f"{st['apps']:,} apps and {st['actions']:,} typed actions, "
+                f"{st.get('callable_apps', 0):,} of them callable today")
+    except Exception:
+        return "5,900+ apps and 41,000+ typed actions"
+
+
 import json
 import os
 import re
@@ -304,14 +315,99 @@ def _suggestions(topic: str) -> list[str]:
     return pool.get(topic, ["How do I connect an app?", "What are my limits?", "How do I use this in Claude?"])
 
 
-async def _llm_reply(question: str, grounding: str, history: list[dict[str, str]]) -> str | None:
+SHAPES = (
+    "Response shapes (never describe fields outside these): "
+    "GET /v1/tools -> {format, count, tools[], total, offset, limit, has_more, next_offset, apps_in_page, filters, base_url}; "
+    "GET /v1/apps -> {apps[], total, catalogue_total, browsable_total, categories, has_more, next_offset}; "
+    "GET /v1/actions -> {actions[], total, offset, has_more, ranked}; "
+    "GET /v1/connections -> {connections[], total}; "
+    "POST /v1/execute -> {run_id, status, data, latency_ms}; "
+    "POST /v1/agent -> {answer, steps[], apps_used, needs_connection[], engine, elapsed_ms}; "
+    "POST /v1/chain -> {ok, status, steps[], steps_ok, steps_total, apps_used[], elapsed_ms}. "
+    "/v1/tools has no category filter and returns an object with a tools array, not a bare list; "
+    "category exists on /v1/apps only."
+)
+
+
+def _route_lines(app: Any) -> list[str]:
+    """Every API path that actually exists, so the assistant cannot invent one.
+
+    Routers are mounted, so ``app.routes`` holds included routers rather than
+    flat routes. The OpenAPI document is the one place that lists what is real.
+    """
+    out: list[str] = []
+    try:
+        spec = app.openapi()
+        for path, ops in (spec.get("paths") or {}).items():
+            for method in ops:
+                if method.lower() in {"get", "post", "put", "patch", "delete"}:
+                    out.append(f"{method.upper()} {path}")
+    except Exception:
+        return []
+    out.append("POST /mcp (JSON-RPC: list tools, call a tool)")
+    out.append("GET /openapi.json")
+    # The prompt is finite; the routes people actually ask about come first.
+    priority = ("/v1/agent", "/v1/chain", "/v1/execute", "/v1/tools", "/v1/apps", "/v1/actions",
+                "/v1/connections", "/v1/connect", "/v1/agent-tokens", "/v1/proxy", "/v1/memory",
+                "/v1/usage", "/v1/audit", "/v1/batch", "/v1/sessions", "/v1/custom-tools",
+                "/v1/flows", "/v1/syncs", "/v1/events", "/mcp")
+    uniq = sorted(set(out))
+
+    def _rank(line: str) -> int:
+        for i, p in enumerate(priority):
+            if p in line:
+                return i
+        return len(priority)
+
+    head = sorted([line for line in uniq if any(p in line for p in priority)], key=_rank)
+    rest = [line for line in uniq if line not in head]
+    return head + rest
+
+
+_FAKE_HOST = re.compile(r"\b(?:https?://)?(?:api\.)?tony(?:api)?\.(?:ai|com|dev|io|app)\b", re.I)
+
+
+def _fix_urls(answer: str, base: str) -> str:
+    """Rewrite an invented host to the real one, and nothing else.
+
+    The assistant once told a user to call https://api.tony.ai/v1/tools - a host
+    that does not exist. Grounding now includes the real base, and this is the
+    belt to that braces: a Tony-looking host becomes the real base, and an
+    absolute URL that points at a /v1 path on any other host is re-rooted.
+    """
+    if not answer:
+        return answer
+    answer = _FAKE_HOST.sub(base, answer)
+    from urllib.parse import urlsplit
+
+    real_host = urlsplit(base).netloc.lower()
+
+    def repl(match: re.Match[str]) -> str:
+        url = match.group(0)
+        try:
+            parts = urlsplit(url)
+        except ValueError:
+            return url
+        if not parts.scheme or not parts.netloc:
+            return url
+        if parts.netloc.lower() == real_host:
+            return url
+        if parts.path.startswith(("/v1", "/mcp", "/openapi")):
+            return base + parts.path + (f"?{parts.query}" if parts.query else "")
+        return url
+
+    return re.sub(r"https?://[^\s)\]}`\"'<>]+", repl, answer)
+
+
+async def _llm_reply(question: str, grounding: str, history: list[dict[str, str]],
+                     base: str = "", routes: list[str] | None = None) -> str | None:
     """Optional polish layer. Without a key the curated answer stands alone."""
     key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
     if not key:
         return None
     if os.getenv("GROQ_API_KEY"):
         url, model, hdr = ("https://api.groq.com/openai/v1/chat/completions",
-                           os.getenv("TONY_ASSISTANT_MODEL", "llama-3.3-70b-versatile"),
+                           os.getenv("TONY_ASSISTANT_MODEL", "openai/gpt-oss-120b"),
                            {"Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}"})
     elif os.getenv("OPENAI_API_KEY"):
         url, model, hdr = ("https://api.openai.com/v1/chat/completions",
@@ -338,6 +434,19 @@ async def _llm_reply(question: str, grounding: str, history: list[dict[str, str]
            "say so plainly and give the most useful next step. Be direct and concrete, up to 180 words when the "
            "question deserves it, no markdown headings. Ground Tony-specific claims in the reference text and "
            "point to Console → Docs when it does not cover something.")
+    if base:
+        sys += (f" The API base URL is exactly {base} (no other host exists; api.tony.ai is not real). "
+                "When you name an endpoint, write the method and the exact path from this list and nothing else: ")
+        if routes:
+            sys += "; ".join(routes[:70]) + "."
+        sys += " " + SHAPES
+        sys += (" A query parameter that is not documented there is ignored rather than rejected, so never tell "
+                "someone a filter works unless it appears in this reference. Filters that are real today: "
+                "/v1/apps takes search, q, category, tier, source, auth, strategy, with_actions, limit, offset "
+                "(tier=all means every shelf); /v1/tools takes apps, app, q, include_writes, format, limit, offset, "
+                "auth_type (none, key, oauth2), tier; /v1/actions takes search or q, app, tier, limit, offset. "
+                "If you are not certain a parameter exists, say what the reference shows and offer the call that "
+                "is certain to work.")
     msgs = [{"role": "system", "content": sys},
             {"role": "user", "content": f"Reference:\n{grounding}\n\nQuestion: {question}"}]
     for turn in history[-4:]:
@@ -369,29 +478,40 @@ async def ask(body: AskIn, request: Request) -> dict[str, Any]:
         with session() as s:
             s.add(AssistantGap(workspace_id=ws, question=body.message[:500]))
         grounding = (
-            "No curated entry matched this question, so answer from your own knowledge as Tony's assistant. "
-            "Be concrete, and say plainly when you are unsure. Runtime facts you may rely on: " + _app_line() + " apps and "
-            "40,692 typed actions; POST /v1/agent to plan and execute; POST /v1/execute for a single action; "
-            "GET /v1/tools for tool schemas, paged with offset/total so every action is reachable; "
-            "GET /v1/apps?auth=none or ?q=auth:none to list apps that need no credential (q= and the named "
-            "parameter are the same filter); GET /v1/actions?q= to rank actions rather than apps; "
-            "/mcp for MCP clients; POST /v1/agent-tokens gives an AI its own "
-            "token with named apps, tiers (read/write/destructive) and ttl_days, sent as Bearer tony_at_... and "
-            "enforced on every call; "
-            "with app names, tiers and expiry; authenticator two-factor and Firebase sign-in on accounts; "
-            "/v1/proxy for raw endpoints."
+            "No curated entry matched this question, so answer from the live reference below. "
+            "Be concrete, and say plainly when you are unsure.\n"
+            "Runtime facts you may rely on:\n"
+            f"- {_counts_line()}\n"
+            "- POST /v1/agent plans and executes across apps; POST /v1/chain runs one ordered plan over up to 5 apps; "
+            "POST /v1/execute runs one action.\n"
+            "- GET /v1/tools exports tool schemas, paged with total/next_offset. It filters with auth_type=none "
+            "(apps that need no sign-in), auth_type=key or auth_type=oauth2, plus apps, app, q, tier.\n"
+            "- GET /v1/apps lists apps; search/q, category, tier (tier=all means every shelf), auth, strategy. "
+            "auth=none is the no-credential filter and q=auth:none is the same filter typed as a prefix.\n"
+            "- GET /v1/actions ranks ACTIONS; search or q, app, tier.\n"
+            "- /mcp speaks MCP; POST /v1/agent-tokens mints a scoped Bearer tony_at_... token with named apps, "
+            "tiers and ttl_days; /v1/proxy reaches raw endpoints.\n"
+            "A parameter that is not in that list is ignored, so never present an invented filter as working."
         )
     else:
         grounding = curated
 
-    polished = await _llm_reply(body.message, grounding, body.history)
+    base = str(request.base_url).rstrip("/")
+    routes = _route_lines(request.app)
+    polished = await _llm_reply(body.message, grounding, body.history, base=base, routes=routes)
     answer = polished if (polished and len(polished) > 40) else (curated or (
         "I can help with Tony itself (plans, quotas, connecting apps, keys, sessions, custom tools, batch, "
         "approvals, MCP, SDKs, triggers, errors, security) and with general developer or writing work. "
         "Ask again in a moment, or open Console then Docs for the full reference."))
 
+    answer = _fix_urls(answer, base)
+    # A polished answer can drop the one thing the curated one guaranteed: where
+    # to look. Keep the pointer, whichever layer wrote the prose.
+    if topic == "usage" and "billing" not in answer.lower():
+        answer += "\n\nConsole → Billing shows the same meter live."
     return {
         "answer": answer,
+        "base_url": base,
         "topic": topic,
         "confidence": round(min(1.0, best_score / 3), 2),
         "grounded": topic != "fallback",

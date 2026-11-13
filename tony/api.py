@@ -207,6 +207,10 @@ def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "",
     if limit < 0:
         raise HTTPException(400, detail="limit must be zero or greater (0 means the first page)")
     tier_want = (tier or "").strip().lower()
+    # "All" is a real answer, not a bad request: it means no shelf filter. The
+    # console's All tab and every model that tried ?tier=all were getting a 400.
+    if tier_want in {"all", "any", "*", "everything", "full"}:
+        tier_want = ""
     # Old names for the same shelves: imported OpenAPI apps are the "curated"
     # tier, and everything else that is not a listing proxies a real host.
     tier_want = {"curated": "actions", "openapi": "actions", "rest": "proxy",
@@ -267,8 +271,12 @@ def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "",
         row["keyless_via"] = p.get("keyless_via", "")
         row["can_write"] = p.get("can_write", row.get("writes", 0) > 0)
         items.append(row)
+    browsable = int(catalog.stats().get("browsable_apps", len(catalog.apps)))
     return {
         "apps": items,
+        "catalogue_total": len(catalog.apps),
+        "browsable_total": browsable,
+        "hidden_in_browse": max(0, len(catalog.apps) - browsable),
         "categories": catalog.categories(),
         "category_counts": catalog.category_counts(),
         "total": total,

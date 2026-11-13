@@ -308,15 +308,32 @@ def meta_tools(fmt: str = "", format: str = "openai") -> dict[str, Any]:
     }
 
 
+_AUTH_FILTERS: dict[str, set[str]] = {
+    "none": {"none"}, "public": {"none"}, "keyless": {"none"},
+    "key": {"api_key", "bearer", "basic", "path", "custom"},
+    "api_key": {"api_key"}, "apikey": {"api_key"}, "bearer": {"bearer"},
+    "basic": {"basic"}, "oauth": {"oauth2"}, "oauth2": {"oauth2"},
+    "any": set(), "all": set(), "": set(),
+}
+_APP_TIERS = {"actions", "proxy", "directory", "homeassistant"}
+
+
 @router.get("/tools")
 def tools(request: Request, apps: str = "", app: str = "", q: str = "", include_writes: bool = False,
-          fmt: str = "", format: str = "openai", limit: int = 2000, offset: int = 0) -> dict[str, Any]:
+          fmt: str = "", format: str = "openai", limit: int = 2000, offset: int = 0,
+          auth_type: str = "", auth: str = "", tier: str = "") -> dict[str, Any]:
     """Tool definitions your model can call, page by page over the whole catalogue.
 
     The first page used to be the whole story: a hard 2,000-tool ceiling across
     48,000 actions, so an agent never saw most of the catalogue and had no way to
     ask for the rest. Every response now carries ``total`` and ``next_offset``,
     and ``q`` ranks actions, so coverage is a paging loop, not a lottery.
+
+    ``auth_type`` (alias ``auth``) filters to apps you can call with that kind of
+    credential: ``none`` for apps that need no sign-in at all, ``key`` for the
+    key family, ``oauth2`` for sign-in apps. ``tier`` picks a shelf
+    (actions / proxy / directory / homeassistant). Both are echoed back in
+    ``filters`` so a caller can see the filter was applied instead of guessing.
     """
     format = (fmt or format or "openai").lower()
     limit = max(1, min(int(limit or 2000), 2000))
@@ -331,6 +348,17 @@ def tools(request: Request, apps: str = "", app: str = "", q: str = "", include_
         spec = catalog.resolve(app.strip()) or catalog.get(app.strip())
         if spec and spec.slug not in wanted_apps:
             wanted_apps.append(spec.slug)
+
+    auth_want = (auth_type or auth or "").strip().lower()
+    if auth_want not in _AUTH_FILTERS:
+        raise HTTPException(400, detail=(f"Unknown auth_type '{auth_type or auth}'. Use one of: "
+                                         f"none, key, api_key, bearer, basic, oauth2, any"))
+    auth_set = _AUTH_FILTERS[auth_want]
+    tier_want = (tier or "").strip().lower()
+    if tier_want in {"all", "any", "*"}:
+        tier_want = ""
+    if tier_want and tier_want not in _APP_TIERS:
+        raise HTTPException(400, detail=(f"Unknown tier '{tier}'. Use one of: {', '.join(sorted(_APP_TIERS))}"))
 
     query = (q or "").strip().lower()
 
@@ -347,6 +375,17 @@ def tools(request: Request, apps: str = "", app: str = "", q: str = "", include_
         specs = [s for s in specs if s]
     else:
         specs = sorted(catalog.apps.values(), key=_rank)
+
+    if auth_set or tier_want:
+        def _keep(spec: Any) -> bool:
+            if tier_want and getattr(spec, "tier", "") != tier_want:
+                return False
+            if auth_set and (getattr(spec.auth, "type", "") or "none").lower() not in auth_set:
+                return False
+            return True
+        specs = [sp for sp in specs if _keep(sp)]
+    elif auth_want in {"none", "public", "keyless"}:
+        specs = [sp for sp in specs if (getattr(sp.auth, "type", "") or "none").lower() == "none"]
 
     matched: list[tuple[str, Any]] = []
     for spec in specs:
@@ -388,6 +427,10 @@ def tools(request: Request, apps: str = "", app: str = "", q: str = "", include_
         "next_offset": next_offset if next_offset < total else None,
         "has_more": next_offset < total,
         "next_offset": next_offset if next_offset < total else None,
+        "filters": {"auth_type": auth_want or None, "tier": tier_want or None,
+                    "apps": wanted_apps or None, "q": query or None,
+                    "include_writes": bool(include_writes)},
+        "base_url": str(request.base_url).rstrip("/"),
         "apps_in_page": seen,
         "apps_total": len(catalog.apps),
         "actions_total": sum(len(a.actions) for a in catalog.apps.values()),

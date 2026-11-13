@@ -6,22 +6,49 @@ Auth: `Authorization: Bearer tk_…` or `X-API-Key: tk_…`. Interactive docs at
 ## Catalogue
 
 ### `GET /v1/apps`
-Query: `search`, `category`.
+Query: `search` (or `q`), `category`, `tier`, `source`, `auth`, `strategy`,
+`with_actions`, `limit` (max 500), `offset`.
+
+`tier` takes `actions`, `proxy`, `directory`, `homeassistant`, or `all` (every
+shelf, the same as omitting it). `auth` takes `none`, `key`, `oauth`/`oauth2`,
+or a raw type. The same filters can be typed into `q` (`q=auth:none`).
 
 ```json
 {"apps": [{"slug": "github", "name": "GitHub", "category": "Developer",
            "auth": "oauth2", "actions": 8, "verified": false,
-           "connected": true}], "total": 65}
+           "connected": true}],
+ "total": 5780, "catalogue_total": 5932, "browsable_total": 5780,
+ "hidden_in_browse": 152, "has_more": true, "next_offset": 60}
 ```
+
+`total` is the filtered count. `catalogue_total` is the whole catalogue, so a
+header can show the same number as `/v1/stats`.
 
 ### `GET /v1/apps/{slug}`
 Full manifest including the action list and JSON-Schema parameters.
 
-### `GET /v1/actions?search=&app=`
-Flat list of every action.
+### `GET /v1/actions?q=&app=&tier=`
+Ranked action search. `q` and `search` are the same parameter; `ranked=false`
+switches to plain substring matching. The ranking index is built at boot, so the
+first query is fast rather than paying for the whole catalogue.
 
 ### `GET /v1/tools?format=openai|anthropic|mcp`
-Tool schemas for the major agent runtimes.
+Tool schemas for the major agent runtimes, paged with `limit` (max 2000),
+`offset`, `total` and `next_offset`.
+
+Auth and shelf filters are real, not decorative:
+
+| Parameter | Values | Meaning |
+|---|---|---|
+| `auth_type` (alias `auth`) | `none`, `key`, `api_key`, `bearer`, `basic`, `oauth2`, `any` | Filter by the credential the app needs. `none` returns tools you can call with no sign-in at all |
+| `tier` | `actions`, `proxy`, `directory`, `homeassistant` | Filter by catalogue shelf |
+| `apps` / `app` | comma-separated slugs | Restrict to named apps |
+| `q` | free text | Rank actions by meaning |
+| `include_writes` | bool | Include write and destructive tools |
+
+Every response echoes `filters` and `base_url`, so a caller can confirm the
+filter was applied instead of guessing. An unknown `auth_type` is a `400`, never
+a silently ignored parameter.
 
 ## Accounts
 

@@ -1,0 +1,35 @@
+slug: coinbase
+name: Coinbase
+description: >-
+  Public cryptocurrency spot prices - bitcoin, ethereum, BTC, ETH and any crypto pair -
+  keyless and reachable from datacenters. Use for "price of bitcoin" style questions.
+category: Finance
+base_url: https://api.coinbase.com
+auth:
+  type: none
+actions:
+- slug: price
+  tier: read
+  name: Spot price
+  description: Latest spot price for a pair, e.g. BTC-USD or ETH-USD.
+  method: GET
+  path: /v2/prices/{pair}/spot
+  params:
+    pair:
+      type: string
+      description: Trading pair, e.g. BTC-USD
+      default: BTC-USD
+      in: path
+  response:
+    path: data
+- slug: exchange_rates
+  tier: read
+  name: Exchange rates
+  description: All Coinbase rates for one currency.
+  method: GET
+  path: /v2/exchange-rates
+  params:
+    currency:
+      type: string
+      description: Base currency, e.g. USD
+      default: USD

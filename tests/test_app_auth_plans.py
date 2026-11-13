@@ -45,8 +45,10 @@ def test_dynamic_registration_uses_declared_endpoint(client, monkeypatch):
 
     monkeypatch.setattr(oauth, "_post_registration", fake_post)
 
-    spec = __import__("tony.catalog", fromlist=["catalog"]).catalog.get("notion-mcp")
-    assert spec and spec.auth.registration_url.startswith("https://mcp.notion.com")
+    # An MCP twin now folds into its product, and a managed provider keeps its own
+    # curated OAuth app, so the one-click MCP route belongs to non-managed vendors.
+    spec = __import__("tony.catalog", fromlist=["catalog"]).catalog.get("attio")
+    assert spec and spec.auth.registration_url.startswith("https://")
     import asyncio
     cid, secret = asyncio.run(oauth.dynamic_client(spec))
     assert cid == "dcr_client_123" and secret == "dcr_secret_456"

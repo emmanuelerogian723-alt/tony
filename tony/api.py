@@ -496,7 +496,21 @@ async def connect_start(app_slug: str, request: Request, entity_id: str = "defau
                            "then everyone just signs in. A personal token also works."),
             "docs": spec.docs or "",
         })
-    return {"mode": "oauth", "auth_session_id": session_id, "authorization_url": url}
+    # Bind the flow to this browser. Without it the state is only a database row,
+    # so an attacker could mint an authorize URL and drop a victim's provider token
+    # into the attacker's workspace (account-linking CSRF).
+    state = ""
+    try:
+        state = (urlsplit(url).query and dict(
+            p.split("=", 1) for p in urlsplit(url).query.split("&") if "=" in p).get("state", "")) or ""
+    except Exception:  # noqa: BLE001
+        state = ""
+    resp = JSONResponse(content={"mode": "oauth", "auth_session_id": session_id,
+                                 "authorization_url": url})
+    if state:
+        resp.set_cookie("tony_oauth_state", state, max_age=1200, httponly=True,
+                        secure=bool(settings.base_url.startswith("https")), samesite="lax", path="/")
+    return resp
 
 
 PRIVATE_HOST_RE = re.compile(
@@ -635,8 +649,38 @@ def managed_providers() -> dict[str, Any]:
             "setup_endpoint": f"/v1/account/providers/{slug}",
             "connect_url": f"/connect/{slug}",
         })
+    # Every app whose vendor runs an MCP server is a one-click sign-in too: the
+    # server registers Tony itself (RFC 7591), so no client id or secret is ever
+    # needed. They are listed alongside the platform-managed providers so one
+    # connect screen covers both routes.
+    seen = {x["app"] for x in out}
+    for slug, info in getattr(catalog, "mcp", {}).items():
+        if slug in seen:
+            continue
+        spec = catalog.get(slug)
+        if spec is None:
+            continue
+        out.append({
+            "app": slug,
+            "name": spec.name,
+            "category": spec.category,
+            "logo": getattr(spec, "logo", ""),
+            "scopes": list(info.get("scopes") or []),
+            "ready": True,
+            "managed_by": "mcp",
+            "env": [],
+            "docs": getattr(spec, "docs", ""),
+            "google": False,
+            "authorize_url": info.get("authorize_url", ""),
+            "mcp_url": info.get("url", ""),
+            "one_click": True,
+            "pkce": True,
+            "setup_endpoint": "",
+            "connect_url": f"/connect/{slug}",
+        })
     return {"providers": out, "total": len(out),
-            "ready": sum(1 for x in out if x["ready"])}
+            "ready": sum(1 for x in out if x["ready"]),
+            "mcp": len(getattr(catalog, "mcp", {}))}
 
 
 @router.get("/connections/events")
@@ -785,8 +829,13 @@ async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
     check_run(ws)
     entity = _entity(ws, sess.entity_id if sess else body.entity_id)
 
+    # The verb used to be taken from the caller's own args, so sending {"method": "GET"}
+    # skipped approval on a write. A tier is declared by the catalogue and cannot be
+    # argued with, so the tier alone decides now.
+    if isinstance(body.args, dict) and action.tier != "read":
+        body.args.pop("method", None)
     if (action.tier != "read" and settings.require_approval and not body.approved
-            and not body.dry_run and _effective_verb(action, body.args) != "GET"):
+            and not body.dry_run and _effective_verb(action, None) != "GET"):
         run_id = _log_run(ws, entity, spec, action, "pending_approval",
                           request_payload={"args": body.args, "action": body.action})
         touch_session(sess)
@@ -1318,10 +1367,12 @@ class WorkspaceIn(BaseModel):
 
 @router.post("/workspaces")
 def create_workspace_api(body: WorkspaceIn, request: Request) -> dict[str, Any]:
-    if not settings.demo_open:
-        token = request.headers.get("x-admin-token", "")
-        if not settings.admin_token or token != settings.admin_token:
-            raise HTTPException(401, detail="Set X-Admin-Token to create workspaces")
+    # Always authorised. While this sat behind `demo_open` (the default) any
+    # anonymous caller could mint unlimited live keys, and every key carried its
+    # own fresh free quota - a complete bypass of metering and of per-workspace limits.
+    token = request.headers.get("x-admin-token", "")
+    if not settings.admin_token or token != settings.admin_token:
+        raise HTTPException(401, detail="Set X-Admin-Token to create workspaces")
     from .db import create_workspace
     ws, key = create_workspace(body.name)
     return {"workspace_id": ws.id, "api_key": key, "note": "Store this key now, it is not shown again."}

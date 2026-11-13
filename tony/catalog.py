@@ -168,6 +168,49 @@ def attach_universal(spec: "AppSpec") -> "AppSpec":
     return spec
 
 
+
+def _mcp_info(store: dict, slug: str) -> dict:
+    """The MCP sign-in facts for one app: server URL plus its OAuth endpoints."""
+    from . import appauth
+
+    p = appauth.plan(slug) or {}
+    url = (p.get("mcp_url") or "").strip()
+    if not url:
+        return {}
+    return {
+        "url": url,
+        "authorize_url": p.get("authorize_url", ""),
+        "token_url": p.get("token_url", ""),
+        "registration_url": p.get("registration_url", ""),
+        "scopes": list(p.get("scopes") or []),
+        "source": p.get("provider_key") or slug,
+        "strategy": p.get("strategy", ""),
+    }
+
+
+def _adopt_mcp(spec: "AppSpec", info: dict) -> None:
+    """Give the product its MCP server as the preferred sign-in route.
+
+    An app that needed the owner to paste a client id and secret becomes a
+    one-click sign-in, because the vendor's MCP server registers Tony itself
+    (RFC 7591). The existing API-key route stays as the fallback.
+    """
+    auth = spec.auth
+    if not info.get("registration_url"):
+        return
+    auth.registration_url = info["registration_url"]
+    if info.get("authorize_url"):
+        auth.authorize_url = info["authorize_url"]
+    if info.get("token_url"):
+        auth.token_url = info["token_url"]
+    if not list(getattr(auth, "scopes", []) or []) and info.get("scopes"):
+        auth.scopes = list(info["scopes"])
+    if auth.type != "oauth2":
+        auth.type = "oauth2"
+    auth.pkce = True
+    spec.mcp_url = info["url"]
+
+
 @dataclass
 class AppSpec:
     slug: str
@@ -183,6 +226,8 @@ class AppSpec:
     verified: bool = True
     notes: str = ""
     path: str = ""
+    mcp_url: str = ""
+    mcp: dict = field(default_factory=dict)
     source: str = "curated"
     tier: str = "actions"
     haystack: str = ""
@@ -428,6 +473,10 @@ class Catalog:
                         spec.base_url = infer_base_url(spec)
                     self.apps[spec.slug] = attach_universal(spec)
         self._apply_managed_auth()
+        self._mark_shadowed()
+        self._mark_low_quality()
+        self._apply_managed_aliases()
+        self._curate()
 
     def _apply_managed_auth(self) -> None:
         """Give the core providers their real OAuth metadata, once per load."""
@@ -457,10 +506,52 @@ class Catalog:
             self.errors.append(f"app auth plans: {type(exc).__name__}")
 
 
+    # ── curation ─────────────────────────────────────────────────────────
+    def _curate(self) -> None:
+        """Present one honest entry per product, and never count a shell as an app.
+
+        Runs last: the managed registry and the per-app auth plans have already
+        had their say, so a merged ``<product>-mcp`` twin can hand its real MCP
+        OAuth endpoints to the product it belongs to.
+        """
+        from . import curation
+
+        before = dict(self.apps)
+        kept, report = curation.curate(before)
+        self.curation = report
+        # Fold an MCP twin into its product: the vendor's MCP server is the
+        # one-click sign-in route, and it needs no client secret at all.
+        self.mcp: dict[str, dict] = {}
+        for dup, winner in report.merged.items():
+            src = before.get(dup)
+            if src is None or not (dup.endswith("-mcp") or "-mcp-" in dup):
+                continue
+            target = kept.get(winner)
+            if target is None or getattr(target, "mcp", None):
+                continue
+            info = _mcp_info(before, dup)
+            if not info:
+                continue
+            target.mcp = info
+            self.mcp[winner] = info
+            try:
+                _adopt_mcp(target, info)
+                # The product just gained a real host, so it is no longer a shell.
+                if getattr(target, "mcp_url", "") and target.tier == "directory":
+                    target.tier = "actions"
+                    if winner in report.directory:
+                        report.directory.remove(winner)
+            except Exception:  # noqa: BLE001 - a bad plan must not lose the app
+                pass
+        self.apps = kept
+        self.alias_of = {**getattr(self, "alias_of", {}), **report.merged}
+        self.alias_of = {k: v for k, v in self.alias_of.items() if k not in kept}
+        self.shadowed = set(report.merged)
+        for slug in report.merged:
+            self.apps.pop(slug, None)
+        self.directory = set(report.directory)
+
     # ── lookups ──────────────────────────────────────────────────────────
-        self._mark_shadowed()
-        self._mark_low_quality()
-        self._apply_managed_aliases()
 
     def _apply_managed_aliases(self) -> None:
         """Duplicate imports of a managed app resolve to the managed one.
@@ -568,8 +659,14 @@ class Catalog:
         out = []
         # dedupe means "one row per product": duplicates and junk both drop out.
         hide = self.hidden if dedupe else set()
+        directory = getattr(self, "directory", set())
         for app in self.apps.values():
             if dedupe and app.slug in hide and not q:
+                continue
+            # A shell with no endpoint is not an app Tony can connect and call. It stays
+            # searchable (so "connect to Confluence" still finds the product) but never
+            # clutters an unfiltered browse and is never counted as an app.
+            if not tier and not q and app.slug in directory:
                 continue
             if cat and app.category.lower() != cat:
                 continue
@@ -705,9 +802,12 @@ class Catalog:
         return len(best)
 
     def stats(self) -> dict[str, Any]:
+        """Honest counts: an app Tony can call is an app, a shell is a directory row."""
+        from . import curation
+
         by_tier: dict[str, int] = {}
         by_source: dict[str, int] = {}
-        actions = 0
+        actions = callable_apps = 0
         for a in self.apps.values():
             actions += len(a.actions)
             by_tier[a.tier] = by_tier.get(a.tier, 0) + 1
@@ -737,7 +837,14 @@ class Catalog:
                      f"{placeholder:,} imports point at a placeholder host and need a base URL before any call."),
         }
         return {
-            "apps": total,
+            # "apps" is what Tony can actually call. Everything else is a listing.
+            "apps": callable_apps,
+            "catalogue_total": total,
+            "connectable": callable_apps,
+            "directory_only": directory + placeholder,
+            "duplicates_merged": len(getattr(self, "shadowed", ())),
+            "non_apps_removed": len(getattr(getattr(self, "curation", None), "junk", ()) or ()),
+            "mcp_sign_in": len(getattr(self, "mcp", ())),
             "actions": actions,
             "callable_apps": callable_apps,
             "directory_apps": directory,

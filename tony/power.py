@@ -346,10 +346,10 @@ STOPWORDS = {"the", "and", "for", "with", "from", "this", "that", "into", "then"
 # Plain-language words people use that never appear in an app's name. Without this,
 # "price of bitcoin" matched a VTEX pricing API instead of CoinGecko.
 INTENT_ALIASES: dict[str, tuple[str, ...]] = {
-    "bitcoin": ("binance", "coingecko"), "btc": ("binance", "coingecko"),
-    "ethereum": ("binance", "coingecko"), "eth": ("binance",),
-    "crypto": ("binance", "coingecko"), "cryptocurrency": ("binance", "coingecko"),
-    "coin": ("binance", "coingecko"), "price": ("binance", "coingecko"),
+    "bitcoin": ("coinbase", "coingecko"), "btc": ("coinbase", "coingecko"),
+    "ethereum": ("coinbase", "coingecko"), "eth": ("coinbase", "coingecko"),
+    "crypto": ("coinbase", "coingecko"), "cryptocurrency": ("coinbase", "coingecko"),
+    "coin": ("coinbase", "coingecko"), "price": ("coinbase", "coingecko"),
     "email": ("gmail",), "emails": ("gmail",), "inbox": ("gmail",), "mail": ("gmail",),
     "calendar": ("google_calendar",), "meeting": ("google_calendar",), "meetings": ("google_calendar",),
     "schedule": ("google_calendar",), "events": ("google_calendar",),

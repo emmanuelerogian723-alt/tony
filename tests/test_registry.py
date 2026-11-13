@@ -2,9 +2,19 @@
 from tony.catalog import catalog
 
 
-def test_registry_reaches_seven_thousand_apps():
+def test_registry_is_honest_about_what_it_can_call():
+    """The catalogue used to advertise ~7,900 "apps", most of them shells.
+
+    Now an app only counts when Tony can reach its API, duplicates are merged, and
+    non-products are dropped. The invariants below are what keep that honest.
+    """
     stats = catalog.stats()
-    assert stats["apps"] >= 7000, stats
+    assert stats["apps"] >= 2000, stats
+    assert stats["connectable"] == stats["apps"]
+    assert stats["directory_only"] > 0
+    assert stats["duplicates_merged"] > 0
+    assert stats["non_apps_removed"] > 0
+    assert stats["apps"] + stats["directory_only"] == len(catalog.apps)
     assert stats["actions"] >= 15000, stats
 
 

@@ -224,7 +224,7 @@ $('#go').onclick=async()=>{
   const text=$('#q').value.trim(); if(!text){$('#q').focus();return}
   $('#go').disabled=true; $('#hint').textContent='Tony is thinking…';
   const d=await post('/v1/queries',{text,source:'signup'});
-  let html='<div class="step"><b>1</b><div>Got it. Searching 7,900 apps for the right action…</div></div>';
+  let html='<div class="step"><b>1</b><div>Got it. Searching the catalogue for the right action…</div></div>';
   if(d.action){html+='<div class="step"><b>2</b><div>Best match: <b>'+d.action+'</b> '
     +(d.app?'in '+d.app.name+' ':'')+'<span class="muted">('+d.confidence+'% confident)</span></div></div>'}
   else{html+='<div class="step"><b>2</b><div>Nothing certain yet. Tony will keep this on record and keep looking.</div></div>'}

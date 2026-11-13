@@ -10,8 +10,9 @@ from tony.main import app
 
 
 def a_directory_slug() -> str:
+    """A real product Tony knows but whose host the user must supply."""
     for spec in catalog.apps.values():
-        if spec.tier == "directory":
+        if spec.tier == "directory" and not (spec.base_url or "").strip():
             return spec.slug
     raise AssertionError("no directory apps in the registry")
 

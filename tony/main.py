@@ -296,11 +296,18 @@ def openapi_alias():
 
 
 @app.get("/oauth/callback")
-async def oauth_callback(code: str = "", state: str = "", error: str = "", error_description: str = ""):
+async def oauth_callback(request: Request, code: str = "", state: str = "", error: str = "",
+                         error_description: str = ""):
     if error:
         return RedirectResponse(f"/app?connection=error&{urlencode({'reason': error_description or error})}")
     if not code or not state:
         return RedirectResponse("/app?connection=error&reason=missing_code")
+    # The flow is bound to the browser that started it: a state that arrives without
+    # its cookie was started somewhere else, which is exactly the CSRF pattern that
+    # lets an attacker plant a victim's token in their own workspace.
+    bound = request.cookies.get("tony_oauth_state", "")
+    if not bound or bound != state:
+        return RedirectResponse("/app?connection=error&reason=Start+the+connection+again+from+Tony")
     try:
         account = await complete_oauth(state, code)
     except OAuthError as exc:

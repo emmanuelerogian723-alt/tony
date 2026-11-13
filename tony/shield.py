@@ -54,6 +54,19 @@ _score: dict[str, tuple[float, float]] = {}          # subject -> (score, last_u
 _recent_paths: dict[str, deque] = defaultdict(lambda: deque(maxlen=40))
 _recent_fail: dict[str, deque] = defaultdict(lambda: deque(maxlen=30))
 _block_cache: dict[str, float] = {}                  # subject -> expiry epoch
+_MAX_SUBJECTS = 20_000
+
+
+def _trim() -> None:
+    """Keep the per-address maps bounded; the address is caller-controlled."""
+    for store in (_score, _block_cache):
+        if len(store) > _MAX_SUBJECTS:
+            for k in list(store)[: _MAX_SUBJECTS // 4]:
+                store.pop(k, None)
+    for store in (_recent_paths, _recent_fail):
+        if len(store) > _MAX_SUBJECTS:
+            for k in list(store)[: _MAX_SUBJECTS // 4]:
+                store.pop(k, None)
 
 
 def _decayed(subject: str, now: float) -> float:
@@ -63,6 +76,7 @@ def _decayed(subject: str, now: float) -> float:
 
 def _add(subject: str, points: float, now: float) -> float:
     total = _decayed(subject, now) + points
+    _trim()
     _score[subject] = (total, now)
     return total
 
@@ -108,6 +122,7 @@ def _block(subject: str, reason: str, now: float, hard: bool = True) -> int:
         seconds = min(seconds, MAX_BLOCK)
         until = datetime.now(timezone.utc) + timedelta(seconds=seconds)
         s.add(BlockedSubject(subject=subject, reason=reason[:200], expires_at=until))
+    _trim()
     _block_cache[subject] = now + seconds
     return seconds
 

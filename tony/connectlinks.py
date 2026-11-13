@@ -44,11 +44,25 @@ def _base(request: Request) -> str:
 
 
 def _safe_redirect(url: str) -> str:
-    """Only http(s) destinations, so a link cannot be turned into a javascript: redirect."""
+    """Same-origin destinations only.
+
+    Accepting any http(s) host turned connect completion into an open redirect that
+    could bounce a freshly-consented user to an attacker's lookalike page.
+    """
     if not url:
         return ""
-    parts = urlsplit(url.strip())
-    return url.strip() if parts.scheme in {"http", "https"} and parts.netloc else ""
+    from .config import settings as _settings
+
+    raw = url.strip()
+    if raw.startswith("/") and not raw.startswith("//") and "\\" not in raw:
+        return raw
+    parts = urlsplit(raw)
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        return ""
+    base = urlsplit(_settings.base_url or "")
+    if parts.netloc.lower() == (base.netloc or "").lower():
+        return raw
+    return ""
 
 
 class LinkIn(BaseModel):
@@ -288,8 +302,10 @@ class _GoogleBody(BaseModel):
 
 def _live_link(token: str) -> tuple[ConnectLink, Any]:
     row = _load(token)
-    if row is None or _expired(row) or row.status in {"expired", "denied"}:
-        raise HTTPException(410, detail="This link has expired. Ask for a new one.")
+    # "connected" is terminal: a link that already stored a credential must never
+    # accept another one, or whoever holds the URL could rewrite it for up to 24h.
+    if row is None or _expired(row) or row.status in {"expired", "denied", "connected"}:
+        raise HTTPException(410, detail="This link has already been used or has expired. Ask for a new one.")
     spec = catalog.get(row.app_slug)
     if spec is None:
         raise HTTPException(404, detail="Unknown app")

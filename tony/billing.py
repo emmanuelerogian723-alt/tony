@@ -64,7 +64,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "write": True,
         "support": "Community",
         "highlights": [
-            "All 7,900+ apps and 40,000+ actions",
+            "Every connectable app in Tony's catalogue and 40,000+ actions",
             "5,000 action runs a month",
             "Write actions with the approval gate",
             "15 connected accounts, 5 end-user identities",

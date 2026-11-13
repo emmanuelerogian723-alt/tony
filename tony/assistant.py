@@ -8,6 +8,16 @@ are rolled up into a weekly fix list, which is how Tony learns.
 """
 from __future__ import annotations
 
+
+def _app_line() -> str:
+    """The catalogue's real, callable app count - never a padded number."""
+    try:
+        from .catalog import catalog
+        return f"{catalog.stats()['apps']:,}"
+    except Exception:
+        return "2,600+"
+
+
 import json
 import os
 import re
@@ -360,7 +370,7 @@ async def ask(body: AskIn, request: Request) -> dict[str, Any]:
             s.add(AssistantGap(workspace_id=ws, question=body.message[:500]))
         grounding = (
             "No curated entry matched this question, so answer from your own knowledge as Tony's assistant. "
-            "Be concrete, and say plainly when you are unsure. Runtime facts you may rely on: 7,923 apps and "
+            "Be concrete, and say plainly when you are unsure. Runtime facts you may rely on: " + _app_line() + " apps and "
             "40,692 typed actions; POST /v1/agent to plan and execute; POST /v1/execute for a single action; "
             "GET /v1/tools for tool schemas, paged with offset/total so every action is reachable; "
             "GET /v1/apps?auth=none or ?q=auth:none to list apps that need no credential (q= and the named "

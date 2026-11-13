@@ -17,8 +17,17 @@ _WINDOW = 60.0
 _hits: dict[str, deque[float]] = defaultdict(deque)
 
 
+_MAX_BUCKETS = 20_000
+
+
 def rate_limit(bucket: str, limit: int, window: float = _WINDOW) -> None:
     now = time.time()
+    # Evict before growing: this map is keyed by caller address, and an address can
+    # be invented per request, so without a ceiling it is a cheap memory DoS.
+    if len(_hits) > _MAX_BUCKETS:
+        cutoff = now - window
+        for k in [k for k, q in _hits.items() if not q or q[-1] < cutoff][: _MAX_BUCKETS // 4]:
+            _hits.pop(k, None)
     q = _hits[bucket]
     while q and now - q[0] > window:
         q.popleft()

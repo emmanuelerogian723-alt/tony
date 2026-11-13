@@ -628,6 +628,6 @@ def playground_page() -> str:
  </div><div class="sec">{_I["lock"]} Secured by Tony · encrypted at rest</div></div></div>
 <aside class="drawer" id="drawer"><h4>Connections<button class="btn-s" id="dX">Close</button></h4>
  <a href="/connections" style="display:block;margin:8px 12px 0;font-size:12.5px;color:#6b6a63;text-decoration:none">Manage all accounts and permissions →</a>
- <input class="search" id="dSearch" placeholder="Search 7,900 apps to connect…" autocomplete="off">
+ <input class="search" id="dSearch" placeholder="Search every app to connect…" autocomplete="off">
  <div class="list"><div id="dRes"></div><div id="dList"></div></div></aside>
 <script>const LOGO28={json.dumps(logo(28,'m'))};const LOGO60={json.dumps(logo(60,'mp'))};{_JS}</script></body></html>"""

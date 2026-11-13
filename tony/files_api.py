@@ -96,8 +96,14 @@ def download(handle: str, request: Request, sig: str = "", exp: str = "") -> Res
         f = engine.get(handle, ws)
     except engine.FileEngineError as exc:
         raise HTTPException(exc.status, detail={"code": exc.code, "message": exc.message}) from exc
+    # A filename is attacker-controlled text; unquoted it could inject header syntax.
+    from urllib.parse import quote
+
+    name = (f.filename or "download").replace('"', "").replace("\\", "").replace("\r", "").replace("\n", "")
+    ascii_name = name.encode("ascii", "ignore").decode() or "download"
     return Response(content=data, media_type=f.mime,
-                    headers={"Content-Disposition": f'attachment; filename="{f.filename}"'})
+                    headers={"Content-Disposition":
+                             f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{quote(name)}'})
 
 
 @router.delete("/{handle}")

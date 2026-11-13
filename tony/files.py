@@ -37,7 +37,19 @@ from .models import Base, now, uid
 DEFAULT_MAX_BYTES = int(os.environ.get("TONY_FILE_MAX_BYTES", str(2 * 1024**3)))  # 2 GiB
 DEFAULT_TTL_HOURS = int(os.environ.get("TONY_FILE_TTL_HOURS", "72"))
 STORAGE_ROOT = Path(os.environ.get("TONY_FILE_ROOT", "/tmp/tony_files"))
-SIGNING_SECRET = os.environ.get("TONY_FILE_SECRET") or os.environ.get("SECRET_KEY") or "tony-file-dev"
+def _signing_secret() -> str:
+    """Never a published literal: derive from the instance secret, else a per-boot random."""
+    import secrets as _secrets
+
+    env = (os.environ.get("TONY_FILE_SECRET") or os.environ.get("SECRET_KEY")
+           or os.environ.get("TONY_SECRET_KEY") or "").strip()
+    if env:
+        return env
+    return _BOOT_SECRET or _secrets.token_urlsafe(32)
+
+
+_BOOT_SECRET = ""
+SIGNING_SECRET = _signing_secret()
 
 
 # ── storage model ──────────────────────────────────────────────────────────

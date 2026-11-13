@@ -115,7 +115,7 @@ def catalog_page() -> str:
 <div class="head"><div><h1>Catalog</h1><p>Every app Tony can act on, with its real action count and auth type.</p></div></div>
 <div class="tools">
   <label class="srch"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
-   <input id="q" placeholder="Search 7,900 apps — github, stripe, notion…" autocomplete="off"></label>
+   <input id="q" placeholder="Search the catalogue — github, stripe, notion…" autocomplete="off"></label>
   <select class="f" id="cat"><option value="">All categories</option></select>
   <select class="f" id="tier"><option value="">Any access</option><option value="read">Read</option><option value="write">Write</option><option value="destructive">Destructive</option></select>
 </div>

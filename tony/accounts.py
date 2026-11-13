@@ -49,8 +49,16 @@ def check_password(pw: str, hashed: str) -> bool:
 
 
 def _client_ip(request: Request) -> str:
+    # The first element is whatever the caller typed. Behind Render's proxy the
+    # last element is the hop the edge appended, which is the same rule the
+    # firewall uses - one subject everywhere, so throttles cannot be dodged by
+    # inventing a header, and an innocent IP cannot be framed into a block.
     fwd = request.headers.get("x-forwarded-for", "")
-    return fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "?")
+    if fwd:
+        parts = [p.strip() for p in fwd.split(",") if p.strip()]
+        if parts:
+            return parts[-1][:80]
+    return request.client.host if request.client else "?"
 
 
 def public_user(u: User) -> dict[str, Any]:

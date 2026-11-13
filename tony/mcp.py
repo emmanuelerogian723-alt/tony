@@ -10,7 +10,7 @@ import asyncio
 import json
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from . import __version__
@@ -309,6 +309,14 @@ async def _handle(msg: dict[str, Any], request: Request) -> dict[str, Any]:
             return err(-32001, "Missing or invalid API key")
         sess = resolve_session(request, ws)
         enforce_session(sess, spec.slug, action.tier)
+        try:
+            from .auth import enforce_key_scope
+
+            enforce_key_scope(request, spec.slug, action.tier)
+        except HTTPException as exc:  # a scoped key is refused here exactly as on /v1
+            return ok({"content": [{"type": "text", "text": json.dumps(
+                {"ok": False, "error": exc.detail, "status": exc.status_code})}],
+                "isError": True})
         rate_limit(f"ws:{ws}", rate_for(ws))
         check_run(ws)
         if sess:

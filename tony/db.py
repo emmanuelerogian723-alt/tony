@@ -75,12 +75,16 @@ def _migrate(backend: str) -> None:
     """Additive, idempotent schema upgrades for existing deployments."""
     stmts = [
         "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS user_id VARCHAR(32)",
+        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS scope_apps VARCHAR(800) DEFAULT ''",
+        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS mode VARCHAR(16) DEFAULT 'full'",
         "ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS new_account BOOLEAN DEFAULT FALSE",
         "ALTER TABLE read_pages ADD COLUMN IF NOT EXISTS attempts INTEGER DEFAULT 0",
     ]
     if backend != "postgres":
         stmts = [
             "ALTER TABLE api_keys ADD COLUMN user_id VARCHAR(32)",
+            "ALTER TABLE api_keys ADD COLUMN scope_apps VARCHAR(800) DEFAULT ''",
+            "ALTER TABLE api_keys ADD COLUMN mode VARCHAR(16) DEFAULT 'full'",
             "ALTER TABLE auth_sessions ADD COLUMN new_account BOOLEAN DEFAULT 0",
             "ALTER TABLE read_pages ADD COLUMN attempts INTEGER DEFAULT 0",
         ]

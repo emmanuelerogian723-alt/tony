@@ -435,11 +435,29 @@ class Catalog:
         self.apps: dict[str, AppSpec] = {}
         self.errors: list[str] = []
         self._act_cache: dict[str, str] = {}
+        self._flat: list[tuple[str, str, object, str]] | None = None
         self.reload()
+
+    def flat_actions(self) -> list[tuple[str, str, object, str]]:
+        """Every (app_slug, app_name, action, haystack) once, built on first use.
+
+        Unfiltered /v1/actions rebuilt a full dict for all ~41,000 actions on
+        every request to keep 50 of them, which cost seconds. The flat list is
+        built once and dropped whenever the catalogue reloads.
+        """
+        if self._flat is None:
+            flat = []
+            for spec in self.apps.values():
+                for act in spec.actions:
+                    hay = f"{act.slug} {act.name} {act.description}".lower()
+                    flat.append((spec.slug, spec.name, act, hay))
+            self._flat = flat
+        return self._flat
 
     def reload(self) -> None:
         self.apps = {}
         self.errors = []
+        self._flat = None
         for path in sorted(self.apps_dir.rglob("*.y*ml")):
             try:
                 spec = parse_manifest(path)

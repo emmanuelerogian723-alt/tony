@@ -50,8 +50,17 @@ class ApiKey(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+    # A dashboard key used to be all-or-nothing over the whole workspace. These
+    # two columns let a key be tied to named apps and to reads only.
+    scope_apps: Mapped[str] = mapped_column(String(800), default="")
+    mode: Mapped[str] = mapped_column(String(16), default="full")
 
     workspace: Mapped[Workspace] = relationship(back_populates="keys")
+
+    def scope(self) -> dict:
+        apps = [a.strip().lower() for a in (self.scope_apps or "").split(",") if a.strip()]
+        return {"apps": apps, "read_only": (self.mode or "full") == "read_only",
+                "mode": self.mode or "full"}
 
 
 class Entity(Base):

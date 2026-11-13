@@ -20,7 +20,8 @@ from sqlalchemy import select
 
 from . import __version__
 from . import agenttokens
-from .auth import rate_limit, workspace_from_request
+from .auth import (enforce_key_scope, rate_limit, require_workspace,
+                   workspace_from_request)
 from .billing import (check_capacity, check_run, enforce_session, rate_for, read_budget_left,
                       read_page_limit, resolve_session, touch_session)
 from .catalog import catalog
@@ -429,22 +430,26 @@ def list_actions(search: str = "", q: str = "", app: str = "", tier: str = "", l
         return {"actions": page, "total": len(payload), "offset": offset,
                 "has_more": bool(limit) and offset + limit < len(payload), "ranked": True,
                 "query": search}
-    out = []
-    for spec in catalog.apps.values():
-        if app and spec.slug != app:
+    # Plain scan over the prebuilt flat index: count, then serialise only the
+    # page window. Building a full dict per action (48,000 of them) to keep 50
+    # was the 3 second answer on a small instance.
+    q = search.lower()
+    app_want = (app or "").strip().lower()
+    total = 0
+    page: list[dict[str, Any]] = []
+    for slug, app_name, act, hay in catalog.flat_actions():
+        if app_want and slug != app_want:
             continue
-        for act in spec.actions:
-            if tier and act.tier != tier:
-                continue
-            if search:
-                q = search.lower()
-                if q not in act.slug and q not in act.name.lower() and q not in act.description.lower():
-                    continue
-            out.append({"app": spec.slug, "app_name": spec.name, **act.to_public(),
-                        "tool_name": f"{spec.slug}__{act.slug}"})
-    matched = out[offset: offset + limit] if limit else out[offset:]
-    return {"actions": matched, "total": len(out), "offset": offset,
-            "has_more": bool(limit) and offset + limit < len(out)}
+        if tier_want and act.tier != tier_want:
+            continue
+        if q and q not in hay:
+            continue
+        if total >= offset and len(page) < limit:
+            page.append({"app": slug, "app_name": app_name, **act.to_public(),
+                         "tool_name": f"{slug}__{act.slug}"})
+        total += 1
+    return {"actions": page, "total": total, "offset": offset,
+            "has_more": bool(limit) and offset + len(page) < total}
 
 
 @router.get("/connections/health")
@@ -557,9 +562,13 @@ def normalise_base_url(raw: str) -> str:
     host = (parsed.hostname or "").strip().lower()
     if not host or "." not in host.replace("[", "").replace("]", "") and host != "localhost":
         raise HTTPException(400, detail="That does not look like a host, e.g. https://api.example.com")
-    allow_private = os.getenv("TONY_ALLOW_PRIVATE_BASE_URLS", "").strip() in {"1", "true", "yes"}
-    if not allow_private and PRIVATE_HOST_RE.match(host):
-        raise HTTPException(400, detail="Private and loopback hosts are blocked. Set TONY_ALLOW_PRIVATE_BASE_URLS=1 to allow them.")
+    from . import netguard
+
+    try:
+        netguard.check_url(value)
+    except netguard.Blocked as exc:
+        raise HTTPException(400, detail=(f"{exc}. Set TONY_ALLOW_PRIVATE_URLS=1 "
+                                         "to allow internal hosts on your own network.")) from None
     path = parsed.path.rstrip("/")
     query = f"?{parsed.query}" if parsed.query else ""
     return f"{parsed.scheme}://{parsed.netloc}{path}{query}"
@@ -845,6 +854,7 @@ async def execute_action(body: ExecuteIn, request: Request) -> dict[str, Any]:
             f"{spec.slug}.{action.slug} ({action.tier})"))
     sess = resolve_session(request, ws)
     enforce_session(sess, spec.slug, action.tier)
+    enforce_key_scope(request, spec.slug, action.tier)
     rate_limit(f"ws:{ws}", rate_for(ws))
     check_run(ws)
     entity = _entity(ws, sess.entity_id if sess else body.entity_id)
@@ -937,6 +947,7 @@ async def _execute_custom(body: ExecuteIn, request: Request, ws: str) -> dict[st
         raise HTTPException(404, detail=f"No custom tool '{slug}' in this workspace. Create one at POST /v1/custom-tools.")
     sess = resolve_session(request, ws)
     enforce_session(sess, "custom", tool.tier)
+    enforce_key_scope(request, "custom", tool.tier)
     rate_limit(f"ws:{ws}", rate_for(ws))
     check_run(ws)
     entity = _entity(ws, sess.entity_id if sess else body.entity_id)
@@ -1071,6 +1082,25 @@ async def read_create(body: ReadIn, request: Request) -> dict[str, Any]:
     if body.urls and not body.site and not body.sitemap and body.depth > 1:
         body.site = body.urls[0]
         body.urls = []
+    # Refuse private, loopback and metadata targets before a job exists. A job
+    # pointed at 169.254.169.254 used to be accepted, never answer, and hold a
+    # worker slot in "running" until the process died.
+    from . import netguard
+
+    for candidate in [*body.urls, body.site, body.sitemap]:
+        if not (candidate or "").strip():
+            continue
+        try:
+            netguard.check_url(candidate)
+        except netguard.Blocked as exc:
+            raise HTTPException(400, detail=f"Refused target {candidate}: {exc}") from None
+    for candidate in [body.site or (body.urls[0] if body.urls else ""), body.sitemap]:
+        if not (candidate or "").strip():
+            continue
+        try:
+            await asyncio.to_thread(netguard.check_url_resolved_sync, candidate)
+        except netguard.Blocked as exc:
+            raise HTTPException(400, detail=f"Refused target {candidate}: {exc}") from None
     try:
         job_id = reader.create_job(
             ws, urls=body.urls, site=body.site, sitemap=body.sitemap, depth=body.depth,

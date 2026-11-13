@@ -377,6 +377,8 @@ def list_keys(request: Request) -> dict[str, Any]:
                                               ApiKey.revoked.is_(False))).all()
         return {"keys": [{"id": k.id, "name": k.name, "prefix": k.prefix,
                           "owner": u.email, "owner_id": k.user_id or u.id,
+                          "apps": k.scope()["apps"], "mode": k.scope()["mode"],
+                          "read_only": k.scope()["read_only"],
                           "created_at": k.created_at.isoformat() if k.created_at else None,
                           "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None}
                          for k in rows]}
@@ -384,6 +386,32 @@ def list_keys(request: Request) -> dict[str, Any]:
 
 class KeyNameIn(BaseModel):
     name: str = "default"
+    # Blank = the whole catalogue. A list = only those app slugs.
+    apps: list[str] = Field(default_factory=list)
+    read_only: bool = False
+
+
+def _clean_apps(apps: list[str] | None) -> str:
+    """Normalise an allowlist: known slugs only, deduped, capped."""
+    from .catalog import catalog
+
+    wanted, unknown = [], []
+    for raw in apps or []:
+        slug = (raw or "").strip().lower()
+        if not slug:
+            continue
+        if catalog.get(slug) is None:
+            unknown.append(slug)
+            continue
+        if slug not in wanted:
+            wanted.append(slug)
+    if unknown:
+        raise HTTPException(400, detail=(
+            f"Unknown app(s): {', '.join(sorted(unknown)[:8])}. "
+            "Use a slug from /v1/apps, e.g. gmail or github."))
+    if len(wanted) > 40:
+        raise HTTPException(400, detail="A key can be limited to 40 apps at most")
+    return ",".join(wanted)
 
 
 @router.post("/keys")
@@ -391,14 +419,47 @@ def create_key(body: KeyNameIn, request: Request) -> dict[str, Any]:
     u = require_user(request)
     plain, prefix, hashed = new_api_key()
     check_capacity(u.workspace_id, "keys")
+    apps = _clean_apps(body.apps)
     with session() as s:
         k = ApiKey(workspace_id=u.workspace_id, name=(body.name or "key")[:120],
-                   prefix=prefix, key_hash=hashed, user_id=u.id)
+                   prefix=prefix, key_hash=hashed, user_id=u.id,
+                   scope_apps=apps, mode="read_only" if body.read_only else "full")
         s.add(k)
         s.flush()
         return {"key": plain, "id": k.id, "name": k.name, "prefix": prefix,
                 "owner": u.email, "workspace_id": u.workspace_id,
+                "apps": k.scope()["apps"], "mode": k.scope()["mode"],
+                "read_only": k.scope()["read_only"],
+                "scope": ("all apps" if not k.scope()["apps"] else ", ".join(k.scope()["apps"]))
+                         + (", reads only" if k.scope()["read_only"] else ""),
                 "note": "Copy it now. It is shown once."}
+
+
+class KeyScopeIn(BaseModel):
+    name: str | None = None
+    apps: list[str] | None = None
+    read_only: bool | None = None
+
+
+@router.patch("/keys/{key_id}")
+def update_key(key_id: str, body: KeyScopeIn, request: Request) -> dict[str, Any]:
+    """Narrow or widen an existing key without handing out a new secret."""
+    u = require_user(request)
+    with session() as s:
+        k = s.get(ApiKey, key_id)
+        if k is None or k.workspace_id != u.workspace_id or k.revoked:
+            raise HTTPException(404, detail="Key not found")
+        if body.name is not None:
+            k.name = (body.name or "key")[:120]
+        if body.apps is not None:
+            k.scope_apps = _clean_apps(body.apps)
+        if body.read_only is not None:
+            k.mode = "read_only" if body.read_only else "full"
+        s.flush()
+        return {"ok": True, "id": k.id, "name": k.name, "apps": k.scope()["apps"],
+                "mode": k.scope()["mode"], "read_only": k.scope()["read_only"],
+                "scope": ("all apps" if not k.scope()["apps"] else ", ".join(k.scope()["apps"]))
+                         + (", reads only" if k.scope()["read_only"] else "")}
 
 
 @router.delete("/keys/{key_id}")
@@ -417,10 +478,48 @@ class ProviderIn(BaseModel):
     client_secret: str = ""
 
 
+def account_from_any(request: Request):
+    """The account behind this call: a signed-in cookie, or an API key's owner.
+
+    The API declares bearer/X-API-Key globally, so a key that can run actions has
+    to be able to read this list. It used to demand an owner cookie and answer
+    403 to a perfectly valid key.
+    """
+    u = current_user(request)
+    if u is not None:
+        return u
+    from .auth import key_row
+    from .models import ApiKey
+
+    raw = request.headers.get("x-api-key") or ""
+    if not raw:
+        auth = request.headers.get("authorization") or ""
+        if auth.lower().startswith("bearer "):
+            raw = auth.split(" ", 1)[1].strip()
+    found = key_row(raw) if raw else None
+    if not found:
+        return None
+    with session() as s:
+        row = s.get(ApiKey, found.get("key_id"))
+        if row is None or not row.user_id:
+            return None
+        return s.get(User, row.user_id)
+
+
+def require_account(request: Request):
+    u = account_from_any(request)
+    if u is None:
+        raise HTTPException(401, detail=("Sign in, or send a workspace API key: "
+                                         "Authorization: Bearer tk_live_..."))
+    return u
+
+
 @router.get("/providers")
 def list_providers(request: Request) -> dict[str, Any]:
     """Which OAuth apps are ready, so users can just click Connect."""
-    require_owner(request)
+    # Read-only readiness data: any authenticated caller may see it. Adding or
+    # removing provider credentials below stays owner-only.
+    require_account(request)
     from .catalog import catalog
     from .oauth import provider_ready
     from . import provider_registry as _pr

@@ -45,6 +45,9 @@ MAX_PAGES_HARD = int(os.getenv("TONY_READ_MAX_PAGES", "20000"))
 DEFAULT_TIMEOUT = float(os.getenv("TONY_READ_TIMEOUT", "20"))
 USER_AGENT = os.getenv("TONY_READ_UA", "TonyReader/1.0 (+https://tony-7su0.onrender.com)")
 WORKERS = int(os.getenv("TONY_READ_WORKERS", "8"))
+# A job that cannot finish still has to end: the state used to be whatever the
+# last fetch left behind, so a target that never answers held "running" forever.
+JOB_SECONDS = float(os.getenv("TONY_READ_JOB_SECONDS", "900"))
 THROTTLE_REQUEUES = int(os.getenv("TONY_READ_THROTTLE_REQUEUES", "6"))
 COOLDOWN_MAX = float(os.getenv("TONY_READ_COOLDOWN_MAX", "30"))
 THROTTLE_CODES = {429, 503}
@@ -430,13 +433,24 @@ async def _fetch_one(client: httpx.AsyncClient, job: dict[str, Any], page: dict[
     parts = urlsplit(url)
     started = asyncio.get_running_loop().time()
 
+    # Every fetch is re-checked, not just the seed: a public name that resolves
+    # inward, or a redirect into a LAN, must die with a reason instead of hanging.
+    from . import netguard
+
+    try:
+        await netguard.check_url_resolved(url)
+    except netguard.Blocked as exc:
+        _save_page(page["id"], status="failed", error=f"blocked: {exc}"[:300], title="",
+                   content="", word_count=0, content_hash=_hash(url))
+        return {"blocked": str(exc)}
+
     if page["kind"] == "sitemap":
         seeds = await _expand_sitemap(client, job, url, job["id"])
         _save_page(page["id"], status="done", http_status=200,
                    title=f"sitemap: {len(seeds)} urls", content="", word_count=0,
                    content_hash=_hash(url))
         for seed_url, depth in seeds:
-            if _total(job["id"]) < job["max_pages"]:
+            if _total(job["id"]) < job["max_pages"] and netguard.safe(seed_url):
                 _add_page(job["id"], seed_url, depth + 1)
         return {"expanded": len(seeds)}
 
@@ -507,6 +521,8 @@ async def _fetch_one(client: httpx.AsyncClient, job: dict[str, Any], page: dict[
                 for link in data["links"][:60]:
                     if not same_site(link["url"], job["seed_url"] or url):
                         continue
+                    if not netguard.safe(link["url"]):
+                        continue
                     if _total(job["id"]) >= job["max_pages"]:
                         break
                     _add_page(job["id"], link["url"], page["depth"] + 1)
@@ -542,6 +558,7 @@ async def _run_job(job_id: str) -> None:
     if job.status in {"done", "cancelled"}:
         return
     _set_status(job_id, "running")
+    deadline = time.monotonic() + JOB_SECONDS
     meta = {
         "id": job_id, "workspace_id": job.workspace_id, "seed_url": job.seed_url or "",
         "depth": job.depth, "max_pages": job.max_pages, "follow_links": job.follow_links,
@@ -554,6 +571,10 @@ async def _run_job(job_id: str) -> None:
                 fresh = _job_row(job_id)
                 if fresh is None or fresh.status in {"cancelled"}:
                     return
+                if time.monotonic() > deadline:
+                    _set_status(job_id, "failed",
+                                error=f"timed out after {int(JOB_SECONDS)}s; pages fetched so far are saved")
+                    break
                 batch = _next_pending(job_id, limit=WORKERS * 3)
                 if not batch:
                     break

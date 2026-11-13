@@ -480,6 +480,11 @@ async def ask(body: AskIn, request: Request) -> dict[str, Any]:
         grounding = (
             "No curated entry matched this question, so answer from the live reference below. "
             "Be concrete, and say plainly when you are unsure.\n"
+            "Stay in scope. This assistant answers questions about Tony itself and about API, "
+            "integration and developer work you can ground in the reference. For anything else "
+            "(news, sport, trivia, general knowledge), do not answer it: say in one sentence that "
+            "Tony only answers questions about its own API and connected apps, name the closest "
+            "thing it can help with here, and stop. Never present outside knowledge as a Tony answer.\n"
             "Runtime facts you may rely on:\n"
             f"- {_counts_line()}\n"
             "- POST /v1/agent plans and executes across apps; POST /v1/chain runs one ordered plan over up to 5 apps; "

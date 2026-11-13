@@ -97,8 +97,12 @@ async def lifespan(app: FastAPI):
 
         from . import toolsearch as _ts
 
+        def _warm_indexes() -> None:
+            _ts.index().build(catalog)
+            catalog.flat_actions()
+
         app.state.search_warm = _aio2.create_task(
-            _aio2.to_thread(_ts.index().build, catalog), name="toolsearch-warm")
+            _aio2.to_thread(_warm_indexes), name="toolsearch-warm")
     except Exception as exc:  # a cold index is slow, not broken
         log.warning("search warm skipped: %s", exc)
     _poller_task = asyncio.create_task(poller())
@@ -206,6 +210,73 @@ async def demo_session_mw(request, call_next):
         from . import demo
 
         demo.attach(request, response)
+    return response
+
+
+CSP_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com "
+    "https://www.gstatic.com https://cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' data: https://fonts.gstatic.com; "
+    "img-src 'self' data: blob: https:; "
+    "connect-src 'self' https: wss:; "
+    "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com; "
+    "frame-ancestors 'self'; base-uri 'self'; form-action 'self' https://accounts.google.com"
+)
+
+
+@app.middleware("http")
+async def headers_mw(request, call_next):
+    """Security and budget headers on every response, including errors.
+
+    The app had none: no HSTS, so a first http hit could be stripped; no CSP, so
+    an injected string ran. Rate limits were also invisible to every client.
+    """
+    from . import auth as _auth
+
+    # Catalogue reads never met a limiter, so a client had no way to see its
+    # budget. One generous bucket here publishes the headers on every /v1 read.
+    cat_paths = ("/v1/apps", "/v1/actions", "/v1/tools", "/v1/categories",
+                 "/v1/providers", "/v1/account/providers")
+    if request.method == "GET" and request.url.path.startswith(cat_paths):
+        from . import shield as _shield
+
+        key = request.headers.get("authorization") or request.headers.get("x-api-key") or ""
+        who = ("key:" + key[-12:]) if key else _shield.subject_of(request)
+        try:
+            _auth.rate_limit(f"read:{who}", 3000, 60.0, request)
+        except HTTPException as exc:
+            from fastapi.responses import JSONResponse as _JR
+
+            return _JR(status_code=exc.status_code, content={"detail": exc.detail},
+                       headers={**(exc.headers or {}),
+                                "X-RateLimit-Limit": "3000", "X-RateLimit-Remaining": "0"})
+
+    token = _auth.bind_request(request)
+    try:
+        response = await call_next(request)
+    finally:
+        _auth.unbind_request(token)
+    h = response.headers
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    h.setdefault("X-Frame-Options", "SAMEORIGIN")
+    h.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    h.setdefault("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
+    # Render serves https end to end; a self-hoster on plain http must not be
+    # pinned to a scheme they do not run.
+    if (request.url.scheme == "https" or (settings.base_url or "").startswith("https://")
+            or request.headers.get("x-forwarded-proto", "").lower() == "https"):
+        h.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    if not request.url.path.startswith(("/v1/icon", "/static/fonts")):
+        h.setdefault("Content-Security-Policy", CSP_POLICY)
+    rate = getattr(request.state, "rate", None)
+    if rate:
+        h.setdefault("X-RateLimit-Limit", str(rate["limit"]))
+        h.setdefault("X-RateLimit-Remaining", str(rate["remaining"]))
+        h.setdefault("X-RateLimit-Reset", str(rate["retry_after"]))
+        h.setdefault("RateLimit-Policy", f"{rate['limit']};w=60")
     return response
 
 

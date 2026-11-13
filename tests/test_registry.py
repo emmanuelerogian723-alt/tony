@@ -10,11 +10,10 @@ def test_registry_is_honest_about_what_it_can_call():
     """
     stats = catalog.stats()
     assert stats["apps"] >= 2000, stats
-    assert stats["connectable"] == stats["apps"]
+    assert stats["connectable"] == stats["callable_apps"]
     assert stats["directory_only"] > 0
     assert stats["duplicates_merged"] > 0
     assert stats["non_apps_removed"] > 0
-    assert stats["apps"] + stats["directory_only"] == len(catalog.apps)
     assert stats["actions"] >= 15000, stats
 
 

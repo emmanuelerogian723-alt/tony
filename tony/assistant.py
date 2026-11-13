@@ -13,7 +13,7 @@ def _app_line() -> str:
     """The catalogue's real, callable app count - never a padded number."""
     try:
         from .catalog import catalog
-        return f"{catalog.stats()['apps']:,}"
+        return f"{catalog.stats()['callable_apps']:,}"
     except Exception:
         return "2,600+"
 

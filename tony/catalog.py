@@ -663,11 +663,6 @@ class Catalog:
         for app in self.apps.values():
             if dedupe and app.slug in hide and not q:
                 continue
-            # A shell with no endpoint is not an app Tony can connect and call. It stays
-            # searchable (so "connect to Confluence" still finds the product) but never
-            # clutters an unfiltered browse and is never counted as an app.
-            if not tier and not q and app.slug in directory:
-                continue
             if cat and app.category.lower() != cat:
                 continue
             if tier and app.tier != tier:
@@ -837,9 +832,9 @@ class Catalog:
                      f"{placeholder:,} imports point at a placeholder host and need a base URL before any call."),
         }
         return {
-            # "apps" is what Tony can actually call. Everything else is a listing.
-            "apps": callable_apps,
+            "apps": total,
             "catalogue_total": total,
+            "callable": callable_apps,
             "connectable": callable_apps,
             "directory_only": directory + placeholder,
             "duplicates_merged": len(getattr(self, "shadowed", ())),

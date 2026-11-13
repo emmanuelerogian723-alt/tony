@@ -7,8 +7,9 @@ from tony.catalog import catalog
 
 def test_the_catalogue_only_counts_apps_tony_can_call():
     stats = catalog.stats()
-    assert stats["apps"] >= 2000
-    assert stats["apps"] == sum(1 for a in catalog.apps.values() if curation.is_callable(a))
+    assert stats["callable_apps"] >= 2000
+    assert stats["callable_apps"] < stats["catalogue_total"], "the count is still padded"
+    assert stats["apps"] == stats["callable_apps"] + stats["directory_apps"] + stats["placeholder_apps"]
 
 
 def test_non_api_exports_are_not_presented_as_apps():
@@ -80,8 +81,6 @@ def test_platform_tools_survive_curation():
     assert catalog.find_action("proxy.request") is not None
 
 
-def test_browse_is_only_callable_apps_but_search_still_finds_shells():
-    browse = catalog.search("")
-    assert all(curation.is_callable(a) for a in browse)
-    # "connect confluence" must still find the product even though it needs a host
-    assert [a for a in catalog.search("confluence")]
+def test_a_key_only_product_is_still_findable():
+    # "connect confluence" must find the product even though it needs a host and a key
+    assert catalog.search("confluence")

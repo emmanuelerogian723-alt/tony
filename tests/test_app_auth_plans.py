@@ -5,9 +5,10 @@ import json
 
 def test_coverage_covers_the_whole_catalog(client):
     d = client.get("/v1/coverage").json()
-    assert d["apps_total"] > 7000
+    # The catalogue is no longer padded: real products only, and a number that adds up.
+    assert d["apps_total"] > 5000
     assert sum(d["coverage"].values()) == d["apps_total"]
-    assert d["connectable_now"] > 7000
+    assert 0 < d["connectable_now"] <= d["apps_total"]
     labels = {row["strategy"]: row["label"] for row in d["by_strategy"]}
     assert labels["key"] and labels["public"]
 

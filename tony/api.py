@@ -327,10 +327,22 @@ def auth_coverage() -> dict[str, Any]:
         strategy = str(plan.get("strategy")
                        or ("public" if getattr(spec.auth, "type", "none") == "none" else "key"))
         cov[strategy] = cov.get(strategy, 0) + 1
-    registered = sum(registry_cov.values())
+    # "registered" means apps the auth registry has a plan for. Summing the strategy
+    # buckets instead counted rows that no longer exist, so registered could exceed
+    # the catalogue and the two numbers argued with each other.
+    live = list(catalog.apps)
+    registered = sum(1 for slug in live if appauth.plan(slug))
+    # Every derived number has to be recomputed from the same live split, or the
+    # endpoint repeats the old disagreement one field lower down.
+    connectable_now = sum(v for k, v in cov.items()
+                          if k in {"public", "key", "oauth_ready", "oauth_dcr", "mcp_dcr"})
+    labelled = [{"strategy": k, "label": appauth.STRATEGY_LABEL.get(k, k), "apps": v}
+                for k, v in cov.items()]
     data.update({
         "apps_total": catalog_total,
         "coverage": cov,
+        "by_strategy": labelled,
+        "connectable_now": connectable_now,
         "catalog_apps": catalog_total,
         "registry_apps": registered,
         "registry_coverage": registry_cov,

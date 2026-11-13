@@ -61,6 +61,68 @@ Runs the stored call and returns the same shape as `/v1/execute`.
 ### `GET /v1/runs?limit=50&entity_id=&app=`
 Audit log: status, latency, bytes, character budget used, error detail.
 
+## Chains (up to five apps in one call)
+
+Agents do not fail on one API call; they fail on the third app. `/v1/chain` runs an
+ordered plan across **at most five connected apps** and returns one trace.
+
+### `POST /v1/chain`
+```json
+{"apps": ["gmail", "notion", "slack"],
+ "entity_id": "default",
+ "approve_writes": true,
+ "on_error": "stop",
+ "steps": [
+   {"app": "gmail", "action": "search_emails", "args": {"query": "invoice"}, "as": "mail"},
+   {"app": "notion", "action": "create_page",
+    "args": {"title": "Invoice digest", "content": "{{mail.data.0.snippet}}"}, "as": "page"},
+   {"app": "slack", "action": "post_message", "args": {"text": "{{page.data.url}}"},
+    "if": "{{page.ok}}"}
+ ]}
+```
+
+```json
+{"ok": true, "status": "succeeded",
+ "apps": ["gmail", "notion", "slack"], "apps_used": ["gmail", "notion", "slack"],
+ "steps_total": 3, "steps_run": 3, "steps_ok": 3,
+ "steps": [{"step": 0, "as": "mail", "app": "gmail", "action": "search_emails",
+            "ok": true, "latency_ms": 412, "status_code": 200, "data": {"...": "..."}}],
+ "needs_connection": [], "elapsed_ms": 1580}
+```
+
+Rules that make it safe to hand to an agent:
+
+1. **The plan is resolved before anything runs.** Every app, action and required argument
+   is checked first. A typo returns HTTP 400 with `suggestions`; a missing connection
+   returns `status: "needs_connection"` with one `connect_url` per app and `steps: []`.
+   Nothing is sent to a provider in either case, so a chain never half-runs.
+2. **Five apps is the cap.** A wider plan is a workflow: split it, or use `/v1/flows`.
+3. **Outputs flow forward.** `{{name.data.items.0.id}}` reaches into an earlier step's real
+   response. `name` is the step's `as`; `{{prev.***}}` and `{{steps.0.***}}` also work. A
+   lone placeholder keeps its JSON type instead of becoming a string.
+4. **Conditions and failure policy.** `if` skips a step cleanly. `on_error: "stop"` (default)
+   halts at the first failure and returns the partial trace; `"continue"` keeps going.
+   `status` is then `partial` if anything succeeded, `failed` if nothing did.
+5. **No blind retries.** Reads retry on network, 5xx and 429 with backoff. Writes are never
+   retried, so a chain cannot send the same email twice.
+6. **Writes need `approve_writes: true`.** Without it the step is skipped and the trace says
+   which flag to send.
+
+`GET /v1/chain` returns the same contract as a machine-readable document.
+
+### `POST /v1/agent`
+Goal in, answer out. Tony ranks the catalogue (or uses your `apps` allow-list of up to five),
+builds a tool belt that deals **one tool per app before a second**, runs the loop and answers
+from the evidence. The response carries `steps`, `apps_used`, `apps_blocked`,
+`unknown_apps`, `needs_connection` and `resume_after_connect`, so a client can connect an app
+and re-send the same goal. Without a model key it still executes the best matching action.
+
+### `GET /v1/tools/meta`
+Five orchestration tools instead of 40,000 action tools: `tony_find_apps`,
+`tony_app_actions`, `tony_execute`, `tony_chain`, `tony_agent`. Each carries an
+`x-tony-route` describing the HTTP call it maps to, so any runtime (OpenAI, Anthropic, MCP)
+can drive Tony as infrastructure without loading the catalogue into context.
+
 ## MCP
 
 `POST /mcp` speaks JSON-RPC 2.0 — `initialize`, `tools/list`, `tools/call`, `ping`.

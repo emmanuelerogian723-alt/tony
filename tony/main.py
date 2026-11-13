@@ -35,6 +35,7 @@ from .install import router as install_router
 from .sessions import router as sessions_router
 from .events import router as events_router
 from .flows import router as flows_router
+from .chain import router as chain_router
 from .syncs import router as syncs_router
 from .firewall import router as firewall_router
 from .pages import router as pages_router
@@ -238,6 +239,7 @@ app.include_router(ecosystem_router)
 app.include_router(power_router)
 app.include_router(events_router)
 app.include_router(flows_router)
+app.include_router(chain_router)
 app.include_router(syncs_router)
 app.include_router(firewall_router)
 app.include_router(pages_router)

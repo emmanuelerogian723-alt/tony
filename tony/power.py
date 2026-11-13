@@ -45,6 +45,14 @@ router = APIRouter(prefix="/v1")
 
 MAX_TOOL_RESULT_CHARS = 6000
 
+# One agent run can reach five apps. Past that it is a workflow, not a chain:
+# the tool belt stops being a belt and becomes a haystack, and the model picks
+# worse tools the more it has. Five is the point where breadth still helps.
+MAX_CHAIN_APPS = 5
+TOOLS_PER_APP = 6
+MAX_BELT_TOOLS = 30
+MAX_STEPS_CAP = 12
+
 
 def _entity(ws: str, entity_id: str) -> str:
     from .api import _entity as api_entity
@@ -105,7 +113,7 @@ def _tool_schema(app_slug: str, action: Any) -> dict[str, Any]:
     }
 
 
-def _pick_apps(names: list[str], limit: int = 40) -> list[Any]:
+def _pick_apps(names: list[str], limit: int = MAX_CHAIN_APPS) -> list[Any]:
     out = []
     for raw in names:
         key = raw.strip()
@@ -115,6 +123,60 @@ def _pick_apps(names: list[str], limit: int = 40) -> list[Any]:
         if len(out) >= limit:
             break
     return out
+
+
+def _usable_actions(spec: Any, approve_writes: bool) -> list[Any]:
+    """The actions worth putting in front of a model for this app.
+
+    Reads first, then the ones that need no arguments, then the shortest names.
+    A 41-action vendor spec otherwise spends the whole belt on GET /health
+    variants and never shows the one call the goal needs.
+    """
+    acts = [a for a in spec.actions if a.tier == "read" or approve_writes]
+    acts.sort(key=lambda a: (a.tier != "read", len(a.required or []), len(a.slug or "")))
+    return acts
+
+
+def _build_belt(specs: list[Any], approve_writes: bool) -> tuple[list[dict[str, Any]], dict[str, tuple[str, str]], list[str]]:
+    """One tool belt for up to five apps, dealt round-robin.
+
+    The old belt was filled app by app and then cut at twelve, so with five apps
+    the last three were unreachable: the model could not call an app that was
+    not in the list, and the chain silently became a one-app run. Dealing
+    round-robin guarantees every app gets its first tool before any app gets a
+    second, so a five-app belt is genuinely five apps wide.
+    """
+    queues: list[tuple[Any, list[Any]]] = [(spec, _usable_actions(spec, approve_writes)[:TOOLS_PER_APP])
+                                           for spec in specs]
+    belt: list[dict[str, Any]] = []
+    index: dict[str, tuple[str, str]] = {}
+    starved: list[str] = [spec.slug for spec, acts in queues if not acts]
+    while len(belt) < MAX_BELT_TOOLS:
+        dealt = False
+        for spec, acts in queues:
+            if not acts or len(belt) >= MAX_BELT_TOOLS:
+                continue
+            action = acts.pop(0)
+            tool = _tool_schema(spec.slug, action)
+            name = tool["name"]
+            if name in index:          # same app, two actions, same 64-char name
+                continue
+            belt.append({"type": "function", "function": tool})
+            index[name] = (spec.slug, action.slug)
+            dealt = True
+        if not dealt:
+            break
+    return belt, index, starved
+
+
+def _connect_link(spec: Any, entity: str) -> dict[str, Any]:
+    """Where a human (or an agent's client) goes to unblock this app."""
+    from urllib.parse import quote
+
+    target = (f"/connect/{spec.slug}?entity_id={quote(entity)}&next=/playground"
+              if spec.auth.type == "oauth2" else f"/connections?app={spec.slug}&mode=key")
+    return {"app": spec.slug, "name": getattr(spec, "name", spec.slug),
+            "connect_url": target, "mode": "oauth2" if spec.auth.type == "oauth2" else "key"}
 
 
 @router.get("/tools/connected")
@@ -136,6 +198,114 @@ def connected_tools(request: Request, include_writes: bool = False, fmt: str = "
                 fmt=fmt, format=format, limit=limit)
     out["apps"] = live
     return out
+
+
+META_TOOLS: list[dict[str, Any]] = [
+    {
+        "name": "tony_find_apps",
+        "description": ("Find apps Tony can call. Use this before guessing a slug. Returns slug, name, auth "
+                        "mode and action count for each match."),
+        "parameters": {"type": "object", "properties": {
+            "query": {"type": "string", "description": "What the app does, e.g. 'send email' or 'github'"},
+            "limit": {"type": "number", "description": "How many results, default 10, max 50"}},
+            "required": ["query"]},
+        "route": {"method": "GET", "path": "/v1/apps", "query": {"q": "{{query}}", "limit": "{{limit}}"}},
+    },
+    {
+        "name": "tony_app_actions",
+        "description": ("List the callable actions of one app, with the exact action slug, HTTP verb and "
+                        "required arguments. Read before calling tony_execute."),
+        "parameters": {"type": "object", "properties": {
+            "app": {"type": "string", "description": "App slug from tony_find_apps"},
+            "query": {"type": "string", "description": "Optional filter, e.g. 'create'"}},
+            "required": ["app"]},
+        "route": {"method": "GET", "path": "/v1/apps/{{app}}"},
+    },
+    {
+        "name": "tony_execute",
+        "description": ("Run one action on one connected app. Tony adds the stored credentials, so the "
+                        "agent never holds a provider token. Returns the provider's real response."),
+        "parameters": {"type": "object", "properties": {
+            "app": {"type": "string"}, "action": {"type": "string"},
+            "args": {"type": "object", "description": "Action arguments"},
+            "entity_id": {"type": "string", "description": "Which connected account, default 'default'"},
+            "approved": {"type": "boolean", "description": "Required for write and destructive actions"},
+            "dry_run": {"type": "boolean", "description": "Validate without sending"}},
+            "required": ["app", "action"]},
+        "route": {"method": "POST", "path": "/v1/execute", "body": {
+            "app": "{{app}}", "action": "{{action}}", "args": "{{args}}",
+            "entity_id": "{{entity_id}}", "dry_run": "{{dry_run}}"}},
+    },
+    {
+        "name": "tony_chain",
+        "description": (f"Run one ordered chain across up to {MAX_CHAIN_APPS} connected apps in a single call. "
+                        "Each step names app, action and args; {{name.data.field}} passes an earlier step's "
+                        "output forward. The whole plan is validated before anything runs, so a bad step or a "
+                        "missing connection returns a clean answer instead of a half-finished side effect. "
+                        "Use this when the job spans several apps."),
+        "parameters": {"type": "object", "properties": {
+            "apps": {"type": "array", "items": {"type": "string"},
+                     "description": f"At most {MAX_CHAIN_APPS} app slugs this chain may touch"},
+            "steps": {"type": "array", "description": "Ordered steps: {app, action, args, as, if, on_error}",
+                      "items": {"type": "object"}},
+            "entity_id": {"type": "string"},
+            "approve_writes": {"type": "boolean", "description": "Required for write or destructive steps"},
+            "dry_run": {"type": "boolean"},
+            "on_error": {"type": "string", "enum": ["stop", "continue"]}},
+            "required": ["steps"]},
+        "route": {"method": "POST", "path": "/v1/chain"},
+    },
+    {
+        "name": "tony_agent",
+        "description": ("Hand Tony a goal in plain language and let it plan across apps, run the calls and "
+                        "answer with a trace. Use when the sequence is not known in advance."),
+        "parameters": {"type": "object", "properties": {
+            "goal": {"type": "string"},
+            "apps": {"type": "array", "items": {"type": "string"},
+                     "description": f"Optional allow-list, at most {MAX_CHAIN_APPS} apps"},
+            "entity_id": {"type": "string"},
+            "approve_writes": {"type": "boolean"},
+            "dry_run": {"type": "boolean"}},
+            "required": ["goal"]},
+        "route": {"method": "POST", "path": "/v1/agent"},
+    },
+]
+
+
+@router.get("/tools/meta")
+def meta_tools(fmt: str = "", format: str = "openai") -> dict[str, Any]:
+    """Five orchestration tools instead of 40,000 action tools.
+
+    A model handed the whole catalogue picks worse tools and burns context. These
+    five let it discover an app, read its actions, call one, chain up to five,
+    and hand over a goal - the same infrastructure Tony runs internally, with the
+    provider credentials staying on Tony's side.
+    """
+    format = (fmt or format or "openai").lower()
+    shaped: list[dict[str, Any]] = []
+    for tool in META_TOOLS:
+        if format == "anthropic":
+            entry = {"name": tool["name"], "description": tool["description"],
+                     "input_schema": tool["parameters"]}
+        elif format == "mcp":
+            entry = {"name": tool["name"], "description": tool["description"],
+                     "inputSchema": tool["parameters"]}
+        else:
+            entry = {"type": "function", "function": {
+                "name": tool["name"], "description": tool["description"],
+                "parameters": tool["parameters"]}}
+        entry["x-tony-route"] = tool["route"]
+        shaped.append(entry)
+    return {
+        "format": format,
+        "count": len(shaped),
+        "tools": shaped,
+        "base": "/v1",
+        "apps_per_chain": MAX_CHAIN_APPS,
+        "note": ("Call tony_find_apps, then tony_app_actions, then tony_execute or tony_chain. "
+                 "An app that is not connected returns a connect_url; send the human there once and "
+                 "the chain resumes unchanged. Write and destructive actions need approve_writes=true."),
+    }
 
 
 @router.get("/tools")
@@ -228,10 +398,16 @@ def tools(request: Request, apps: str = "", app: str = "", q: str = "", include_
 
 # ── agent runtime ─────────────────────────────────────────────────────────
 class AgentIn(BaseModel):
+    """A goal, plus the scope the caller is willing to grant.
+
+    ``apps`` names up to ``MAX_CHAIN_APPS`` apps to chain; leave it empty and
+    Tony ranks the catalogue itself. ``max_steps`` counts model turns, not app
+    calls, so one turn that fires three tool calls still counts once.
+    """
     goal: str
     apps: list[str] = Field(default_factory=list)
     entity_id: str = "default"
-    max_steps: int = 6
+    max_steps: int = 10
     approve_writes: bool = False
     dry_run: bool = False
     history: list[dict[str, str]] = Field(default_factory=list)
@@ -451,14 +627,12 @@ async def _run_one(ws: str, entity: str, app_slug: str, action_slug: str | None,
         return {"ok": False, "error": "no actions"}
     creds = credentials_for(ws, entity, spec)
     if spec.auth.type != "none" and creds is None and not action.public:
-        from urllib.parse import quote as _q
-        link = (f"/connect/{spec.slug}?entity_id={_q(entity)}&next=/playground"
-                if spec.auth.type == "oauth2" else f"/connections?app={spec.slug}&mode=key")
+        link = _connect_link(spec, entity)
         return {"ok": False, "app": spec.slug, "action": action.slug,
                 "error": f"{spec.name} is not connected",
                 "needs_connection": spec.slug,
-                "connect_url": link,
-                "connect_mode": "oauth2" if spec.auth.type == "oauth2" else "key"}
+                "connect_url": link["connect_url"],
+                "connect_mode": link["mode"]}
     check_run(ws)
     started = time.perf_counter()
     status, code, error, body = "error", 0, "", None
@@ -658,8 +832,11 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
                 "elapsed_ms": int((time.perf_counter() - started) * 1000)}
 
     # 1. choose candidate apps
+    unknown_apps: list[str] = []
     if body.apps:
         specs = _pick_apps(body.apps)
+        unknown_apps = [a for a in body.apps
+                        if str(a).strip() and not (catalog.resolve(str(a).strip()) or catalog.get(str(a).strip()))]
     else:
         ranked = sorted(catalog.apps.values(),
                         key=lambda s: (_score_app(goal, s), -len(s.slug)), reverse=True)
@@ -672,7 +849,7 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
                 continue
             seen.add(canon.slug)
             specs.append(canon)
-            if len(specs) >= 3:
+            if len(specs) >= MAX_CHAIN_APPS:
                 break
         if not specs:
             text = await _direct_answer(goal, body.history)
@@ -683,21 +860,19 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
         return {"answer": text, "steps": [],
                 "elapsed_ms": int((time.perf_counter() - started) * 1000), "engine": "chat"}
 
-    # 2. build the tool belt
-    belt: list[dict[str, Any]] = []
-    index: dict[str, tuple[str, str]] = {}
+    # 2. build the tool belt, wide enough for every app in the chain
+    blocked: list[dict[str, Any]] = []
+    runnable: list[Any] = []
     for spec in specs:
-        taken = 0
-        for action in spec.actions:
-            if action.tier != "read" and not body.approve_writes:
-                continue
-            t = _tool_schema(spec.slug, action)
-            belt.append({"type": "function", "function": t})
-            index[t["name"]] = (spec.slug, action.slug)
-            taken += 1
-            if taken >= 8:
-                break
-    belt = belt[:12]
+        if (spec.auth.type != "none" and credentials_for(ws, entity, spec) is None
+                and not any(a.public for a in spec.actions)):
+            blocked.append(_connect_link(spec, entity))
+        else:
+            runnable.append(spec)
+    # if nothing is connected yet, keep the belt intact so each call comes back
+    # carrying its own connect link rather than a vague "not connected"
+    belt_specs = runnable or specs
+    belt, index, starved = _build_belt(belt_specs, body.approve_writes)
 
     # 3. run the loop
     engine = "heuristic"
@@ -715,14 +890,19 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
                     "error, adjust, and retry at most twice before explaining the blocker. Prefer the fewest calls "
                     "that satisfy the goal. If the goal needs a write and writes are not approved, name the exact "
                     "app.action and the arguments you would send, then stop. You may also draft, rewrite, plan or "
-                    "explain when that is what was asked. Lead with the answer, then the evidence that supports it; "
+                    "explain when that is what was asked. You may chain across every app in your belt: "
+                    "one app's output is the next app's argument, and a tool name is prefixed with [app] so "
+                    "you always know which app you are calling. If one app fails or is not connected, keep "
+                    "working the rest of the plan and say which app blocked. "
+                    "Lead with the answer, then the evidence that supports it; "
                     "under 200 words; no markdown headings."),
     }, {"role": "user", "content": goal}]
     for turn in (body.history or [])[-4:]:
         messages.insert(-1, {"role": turn.get("role", "user"), "content": turn.get("content", "")})
 
     if belt:
-        for _ in range(max(1, min(body.max_steps, 6))):
+        budget = max(1, min(body.max_steps, MAX_STEPS_CAP))
+        for _ in range(budget):
             reply = await _chat(messages, belt)
             if reply is None:
                 break
@@ -830,13 +1010,23 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
                 "connect_url": st.get("connect_url", f"/connect/{slug}"),
                 "mode": st.get("connect_mode", "oauth2"),
             })
+    for entry in blocked:
+        if entry["app"] not in seen:
+            seen.add(entry["app"])
+            missing.append(entry)
     elapsed = int((time.perf_counter() - started) * 1000)
+    attempted = [st.get("app") for st in steps if st.get("app")]
     return {
         "answer": answer,
         "steps": steps,
         "needs_connection": missing,
         "resume_after_connect": bool(missing),
         "apps_considered": [s.slug for s in specs],
+        "apps_used": sorted({a for a in attempted}),
+        "apps_chain_limit": MAX_CHAIN_APPS,
+        "apps_blocked": [b["app"] for b in blocked],
+        "apps_without_tools": starved,
+        "unknown_apps": unknown_apps,
         "engine": engine,
         "elapsed_ms": elapsed,
         "version": __version__,

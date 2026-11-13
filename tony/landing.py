@@ -539,7 +539,8 @@ BODY = """
       <div class="run"><span class="dot"></span> writes gated &middot; <b>2 tools called</b> &middot; audit id recorded</div>
     </div>
     <div class="grid3">
-      <div class="tile"><div class="mono t">POST /v1/agent</div><h3>Goal, not script</h3><p>Multi-step execution across apps with a visible trace. Falls back to a deterministic call if the model is unavailable.</p></div>
+      <div class="tile"><div class="mono t">POST /v1/agent</div><h3>Goal, not script</h3><p>Multi-step execution across up to five apps with a visible trace. Falls back to a deterministic call if the model is unavailable.</p></div>
+      <div class="tile"><div class="mono t">POST /v1/chain</div><h3>Five apps, one call</h3><p>One ordered plan across five connected apps, validated before anything runs. Outputs flow forward, failures come back with the exact step and connect link.</p></div>
       <div class="tile"><div class="mono t">POST /v1/execute</div><h3>Exact action</h3><p>Typed arguments, dry-run previews, approval gates, 30 second deadline, typed error codes.</p></div>
       <div class="tile"><div class="mono t">GET /v1/tools</div><h3>Model-ready schemas</h3><p>Any slice of the catalogue, reads by default, writes on request, in three tool dialects.</p></div>
       <div class="tile"><div class="mono t">POST /v1/batch</div><h3>Twenty in one trip</h3><p>Fan out reads or writes, get ordered results with per-call status instead of partial silence.</p></div>

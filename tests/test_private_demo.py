@@ -192,7 +192,8 @@ def test_auth_and_tier_filters_accept_the_words_people_type(client):
     assert client.get("/v1/apps?q=auth:none").json()["total"] > 0
     assert client.get("/v1/apps?auth=oauth").json()["total"] > 0
     assert client.get("/v1/apps?q=auth:key").json()["total"] > 0
-    assert client.get("/v1/apps?q=tier:curated").status_code == 200      # alias for actions
+    curated = client.get("/v1/apps?q=tier:curated").json()               # alias for actions
+    assert curated["total"] > 1000
     assert client.get("/v1/apps?tier=proxy").status_code == 200
     assert client.get("/v1/apps?auth=nonsense").status_code == 400
     assert client.get("/v1/apps?q=tier:nonsense").status_code == 400

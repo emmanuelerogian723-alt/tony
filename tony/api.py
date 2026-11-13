@@ -219,7 +219,7 @@ def list_apps(search: str = "", q: str = "", category: str = "", tier: str = "",
     capped = limit == 0 or limit > MAX_PAGE
     page_limit = MAX_PAGE if capped else limit
 
-    matched = catalog.search(search, category, tier=tier, source=source, dedupe=dedupe)
+    matched = catalog.search(search, category, tier=tier_want, source=source, dedupe=dedupe)
     if not include_hidden:
         hidden = catalog.hidden
         if search:

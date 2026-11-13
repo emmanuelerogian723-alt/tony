@@ -726,12 +726,51 @@ def _flat(d: Any, prefix: str = "", out: list[str] | None = None, depth: int = 0
     return out
 
 
+def _app_line(slug: str, step: dict[str, Any]) -> list[str]:
+    """One app's contribution to a multi-app answer: a name and a real value."""
+    items = _items_of(step)
+    raw = _raw_items(step)
+    inner = (step.get("data") or {})
+    if isinstance(inner, dict) and isinstance(inner.get("data"), dict):
+        inner = inner["data"]
+    if items:
+        head = _headline(items[0])
+        return [f"• {slug}: {head}" if head else f"• {slug}: {len(items)} result(s)"]
+    if raw and isinstance(raw[0], (int, str, float)):
+        return [f"• {slug}: {len(raw)} item(s), first {raw[0]}"[:200]]
+    if isinstance(inner, dict):
+        for key, value in inner.items():
+            if isinstance(value, (str, int, float)) and value not in ("", None):
+                return [f"• {slug}: {key} {str(value)[:80]}"]
+        head = _headline(inner)
+        if head:
+            return [f"• {slug}: {head}"]
+    return [f"• {slug}: {step.get('action')} ran in {step.get('latency_ms', 0)} ms"]
+
+
 def _summarise(goal: str, steps: list[dict[str, Any]]) -> str:
     good = [s for s in steps if s.get("ok")]
     if not good:
         err = steps[-1].get("error") if steps else "nothing ran"
         return (f"I could not finish that: {err}. The plan is still on record, so you can retry with a "
                 f"connected app or a narrower goal.")
+
+    # A chain that touched several apps must show several apps. Picking only the
+    # fattest step made a five-app run read like a one-app run.
+    apps: list[str] = []
+    for step in good:
+        if step.get("app") and step["app"] not in apps:
+            apps.append(step["app"])
+    if len(apps) > 1:
+        lines = []
+        for slug in apps:
+            mine = [st for st in good if st.get("app") == slug]
+            best = max(mine, key=lambda st: (len(_items_of(st)),
+                                             len(json.dumps(st.get("data"), default=str))))
+            lines.extend(_app_line(slug, best))
+        if lines:
+            return "\n".join(lines[:10])
+
     # prefer the step that returned the most useful data
     last = max(good, key=lambda s: (len(_items_of(s)), len(json.dumps(s.get("data"), default=str))))
     lines: list[str] = []
@@ -961,7 +1000,9 @@ async def run_agent(ws: str, body: AgentIn) -> dict[str, Any]:
                 values = [i.get(id_key) for i in items if i.get(id_key) not in (None, "")]
         elif raw and isinstance(raw[0], (int, str, float)):
             values = list(raw)
-        values = [v for v in values if v not in (None, "")][:5]
+        # with several apps in play, one detail fetch per app is plenty; five is
+        # for a single-app list where the ids are the whole answer
+        values = [v for v in values if v not in (None, "")][: 2 if len(specs) > 2 else 5]
         if values:
             follow = next((a for a in spec.actions
                            if a.tier == "read" and a.slug != first["action"]
